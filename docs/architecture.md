@@ -12,7 +12,7 @@
 │   │   API URL / key / secret    │     │ kompajler → jedan JSON payload   │                        │
 │   │   [Sync now]  (stub)        │────▶│ keš: transient + ETag            │                        │
 │   │ Tab 2: Opcije               │     └──────────────┬───────────────────┘                        │
-│   │   CRUD nad 8 grupa opcija   │                    │                                            │
+│   │   CRUD nad 7 grupa opcija   │                    │                                            │
 │   │   available / stock toggle  │                    ▼                                            │
 │   └────────────────────────────┘     ┌── REST API  /wp-json/zs/v1/ ─────┐                         │
 │                                      │  GET  /config?model=slug         │                         │

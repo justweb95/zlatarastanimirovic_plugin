@@ -4,9 +4,12 @@ Faze su inkrementalne; svaka se može demonstrirati. Acceptance = merljiv kriter
 
 ## Faza 0 — Temelji
 - [x] Dev WP + tema (sandbox)
-- [x] Docs (`architecture`, `data-model`, `3d`, `decisions`, `roadmap`)
+- [x] Docs (`architecture`, `data-model`, `3d`, `decisions`, `roadmap`, `design-system`)
+- [x] Dizajn sistem iz Figme izvučen (paleta, Fraunces+Inter, komponente, grid) → `design-system.md` + `docs/reference/`
+- [ ] `tokens.css` (CSS custom properties iz `design-system.md`) + Fraunces/Inter self-host ili Google Fonts
+- [ ] Tačne px veličine tipografije iz Figma Dev Mode → zaključati u tokene (pitanje H)
 - [ ] Plugin skeleton: `zs-configurator.php` header, folderi, lenja hook registracija
-- [ ] Zaseban git repo za plugin + `.gitignore` (`app/node_modules`, `app/dist`, `vendor`)
+- [x] Zaseban git repo za plugin + `.gitignore` (`app/node_modules`, `app/dist`, `vendor`)
 - [ ] `app/` Vite projekat (prazan mount u div)
 - [ ] CDN bucket + upload skripta (posle odluke C)
 
@@ -14,7 +17,7 @@ Faze su inkrementalne; svaka se može demonstrirati. Acceptance = merljiv kriter
 
 ## Faza 1 — Data layer
 - [ ] `wp_zs_options` tabela + migracija (dbDelta)
-- [ ] Admin stranica, **Tab 2 "Opcije"**: CRUD nad 8 grupa, `enabled`/`available`/`stock`, sort, `price_json`/`params_json`/`compat_json` editori
+- [ ] Admin stranica, **Tab 2 "Opcije"**: CRUD nad 7 grupa, `enabled`/`available`/`stock`, sort, `price_json`/`params_json`/`compat_json` editori
 - [ ] `zs_settings` (spot cene metala po finoći, HDRI URL, CDN baza, email primaoci)
 - [ ] Kompajler: opcije → normalizovan JSON (razrešena kompatibilnost + `available`)
 - [ ] `GET /wp-json/zs/v1/config?model=slug` + transient keš + ETag/304
@@ -26,7 +29,8 @@ Faze su inkrementalne; svaka se može demonstrirati. Acceptance = merljiv kriter
 - [ ] three.js scena: renderer (`frameloop=demand`), kamera, OrbitControls (damped)
 - [ ] HDRI + PMREM + tone mapping + contact shadows
 - [ ] Proceduralni shank: profil `d-comfort`, sweep, klizači width/thickness/size (live regen, debounce)
-- [ ] Materijali: 4 metala kao PBR setovi; završna obrada kao roughness override; glatki cross-fade
+- [ ] Materijali: 5 metala (Belo/Žuto/Roze zlato 14K, Platina 950, Palladium 950) kao PBR setovi; 4 završne obrade (Polirano/Mat/Brušeno/Čekićano) kao roughness/normal override; glatki cross-fade
+- [ ] PROFIL: 4 profila poprečnog preseka (Okrugli/D/Ravni/Komfort); tabovi Njena/Njegova (2 stanja)
 - [ ] Fallback (nema WebGL → slika), dispose na unmount, DPR cap
 - [ ] Threepipe evaluacija (1 dan) — odluka pre početka faze
 
@@ -42,7 +46,7 @@ Faze su inkrementalne; svaka se može demonstrirati. Acceptance = merljiv kriter
 
 ## Faza 4 — UI shell
 - [ ] Framework (odluka B) + state store
-- [ ] Paneli za 8 grupa, disabled stanje za `available=0` + auto-fallback
+- [ ] Paneli za 7 grupa, disabled stanje za `available=0` + auto-fallback
 - [ ] **Live cena** (jedno polje) iz formule + masa iz shank volumena
 - [ ] Deep-link: konfiguracija ↔ URL (query/hash), restore na load
 - [ ] Skeleton/loader (brend shimmer), mikro-animacije, mobilni layout

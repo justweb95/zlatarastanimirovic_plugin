@@ -10,7 +10,7 @@ Real-time WebGL (three.js). Uzor kvaliteta: ijewel3d.com/products/ring-configura
    - Admin JS/CSS samo na plugin admin ekranima (`load-{hook}` guard).
    - Bez teških PHP zavisnosti. Bez ACF-a — sopstveni lagan admin. Bez Composer autoload bloata.
    - PHP: hookovi se registruju lenjo; admin-only kod iza `is_admin()`.
-2. **Premium.** Vidi `docs/3d.md` → "Premium feel checklist". 60fps, instant switch opcija (sve preload-ovano), damped kontrole, HDRI studio svetlo, bez layout shift-a.
+2. **Premium.** Vidi `docs/3d.md` → "Premium feel checklist" i `docs/design-system.md` (paleta, Fraunces+Inter, 7 karakteristika brenda, komponente, grid 220/1fr/300). 60fps, instant switch opcija, damped kontrole, HDRI studio svetlo, bez layout shift-a. Selektovano = zelena `#1F3D2E`, nikad samo senka.
 3. **Real-time WebGL.** Nikad pre-render. Geometrija: shank proceduralno, glave iz komponenti/proceduralno, dijamanti instancirani. Vidi `docs/3d.md`.
 4. **Bez Gutenberg-a.** Mount = shortcode `[zs_configurator model="slug"]` + `zs_configurator_render( $args )` template tag.
 5. **Srpski UI.**
@@ -50,7 +50,8 @@ Plugin verzija u `zs-configurator.php` header-u = cache-bust za enqueue.
 ## Docs
 
 - `docs/architecture.md` — sistem, tok podataka, stack, performance budžet, scope
-- `docs/data-model.md` — 8 grupa opcija, polja, stock, REST payload, cena
+- `docs/design-system.md` — paleta, tipografija (Fraunces + Inter), ličnost brenda, komponente, spacing/grid; `docs/reference/` screenshotovi iz Figme
+- `docs/data-model.md` — 7 grupa opcija, polja, stock, REST payload, cena
 - `docs/3d.md` — rendering, proceduralni shank, glave, materijali, gravura, asset budžet, premium checklist
 - `docs/decisions.md` — sve odluke + razlozi + otvorena pitanja
 - `docs/roadmap.md` — faze isporuke sa acceptance kriterijumima

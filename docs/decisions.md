@@ -48,17 +48,32 @@ Sve odluke donete 2026-08-31 osim gde je drugačije navedeno. Format: odluka →
 
 15. **3D asseti na CDN-u** (GLB Draco + KTX2 + HDRI). Nikad kroz PHP, nikad u plugin zip-u.
 
+## Dizajn sistem (iz Figme, 2026-08-31) — vidi `design-system.md`
+
+16. **Paleta zaključana.** Topla bela `#FBF9F4` pozadina (55–60%), slonovača `#F5F0E6` površine, tamnozelena `#1F3D2E` = jedina primarna/CTA boja, braon `#8B5A34` sekundarna. 75–85% neutralno; zelena/braon samo kao akcenti. Selektovano stanje = zelena, nikad samo senka.
+
+17. **Dva fonta: Fraunces (serif) + Inter (sans).** Fraunces = display/H1–H3, cena, imena modela. Inter = sve tehničke opcije, body, labele, dugmad. Oba Google Fonts.
+
+18. **Layout grid `220px / 1fr / 300px`**, max 1440px. Spacing skala 4/8/12/16/24/32/48/64. Radius 8–12px, border 1px `#E2DBCB`.
+
+19. **7 koraka, ne 8**: MODEL · MATERIJAL · PROFIL · ŠIRINA · ZAVRŠNA OBRADA · DIJAMANTI · GRAVURA. PROFIL = diskretan (Okrugli/D/Ravni/Komfort), ŠIRINA = klizač (2–6 mm). "8. tačka" (veličina) otpada iz koraka — veličina se bira drugde (npr. u ŠIRINA sekciji ili pri upitu).
+
+20. **Par prstenova sa tabovima**: "Njena burma" / "Njegova burma" = dve nezavisne konfiguracije; cena je "ZA PAR". Konfigurator mora držati 2 stanja + tab UI.
+
+21. **Valuta: RSD.** Format `89.500 RSD` (tačka kao hiljadarski separator).
+
 ## Otvorena pitanja (blokiraju procenu obima)
 
 | # | Pitanje | Zašto je bitno |
 |---|---|---|
-| A | **Tip prstenja**: glatke burme / verenički sa setom / unikati? | Određuje da li ima CAD posla i koliko (0, biblioteka ~20–40, ili po modelu). Najveći rizik/nepoznanica. |
+| A | **Tip prstenja**: glatke burme / verenički sa setom / unikati? | Mockup pokazuje burme (par, Njena/Njegova) → verovatno **malo/nimalo CAD-a**. Potvrditi da nema vereničkih sa setom u v1. |
 | B | **Finalni frontend framework**: Svelte / SolidJS / React / Preact? | Ne blokira arhitekturu, ali treba pre Faze 4. Lean: Svelte ili Solid (mali runtime). |
 | C | **CDN provider**: Bunny / Cloudflare R2 / S3+CloudFront? | Treba pre Faze 3 (upload pipeline za asseti). |
-| D | **8. tačka** = veličina prstena? Klizač ili diskretni brojevi? | Potvrda modela podataka. Pretpostavka: veličina, klizač. |
-| E | **Broj oblika dijamanata u v1.** | Obim GLB biblioteke kamenja. Odloženo — nije blokirajuće za arhitekturu. |
+| D | **Debljina prstena** = zaseban parametar ili implicirana profilom? Gde se bira **veličina** (obim prsta)? | Tipografski list pominje "širinu i debljinu"; mockup nema eksplicitnu debljinu ni veličinu. |
+| E | **Broj oblika dijamanata u v1** + kako izgleda DIJAMANTI korak za burme (utisnut kamen? koliko?). | Obim GLB biblioteke kamenja. |
 | F | **Email**: primalac(ci)? kopija kupcu? slika client-side ili server-side? | Faza 5. Odloženo. |
 | G | **MODEL/glave kao CPT ili tabela?** | Zavisi koliko bogat editor klijentu treba (slike, opisi). |
+| H | **Tačne px veličine/weight-ovi tipografije** — izvući iz Figma Dev Mode. | Zaključati type scale u tokene. |
 
 ## Za reviziju kasnije
 - Threepipe evaluacija (1 dan) pre nego što se krene sa scene bootstrap-om (Faza 2).

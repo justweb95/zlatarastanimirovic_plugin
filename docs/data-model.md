@@ -1,19 +1,23 @@
 # Model podataka
 
-## 8 grupa opcija
+## 7 grupa opcija (iz mockup-a)
+
+Koraci: `MODEL · MATERIJAL · PROFIL · ŠIRINA · ZAVRŠNA OBRADA · DIJAMANTI · GRAVURA`.
+Konfigurator drži **dve nezavisne konfiguracije** — "Njena burma" / "Njegova burma" (tabovi), cena je "ZA PAR".
 
 | # | Grupa | Tip u UI | Uticaj na cenu | Uticaj na 3D | Stock? |
 |---|---|---|---|---|---|
-| 1 | **MODEL** | izbor (kartice) | bazna cena modela | učitava glavu (GLB komponenta ili proceduralni set) + socket na shank | da (model može biti povučen) |
-| 2 | **MATERIJAL** | swatch dugmad | `masa × spot_cena × faktor_finoće` | runtime PBR set (baseColor, metalness, roughness, clearcoat) | opciono (npr. platina po porudžbini) |
-| 3 | **DEBLJINA** | **klizač** | ulazi u masu → cena | parametar proceduralnog shank profila (radijalna dubina) | ne |
-| 4 | **ŠIRINA** | **klizač** | ulazi u masu → cena | parametar shank profila (duž ose prstena) | ne |
-| 5 | **ZAVRŠNA OBRADA** | dugmad | fiksna doplata po obradi | roughness/normal varijanta (polirano ~0.05, mat ~0.35, brušeno = anizotropna normal mapa) | ne |
-| 6 | **DIJAMANTI** | oblik + karat + kvalitet | `cena(oblik, karat, kvalitet) × broj` | swap na "Gem" slotovima; instancirani pavé; MeshPhysicalMaterial transmission | **da — glavni slučaj**: 0 na stanju → opcija disabled |
+| 1 | **MODEL** | kartice (leva lista) | bazna cena modela | učitava base geometriju / proceduralni preset | da (model može biti povučen) |
+| 2 | **MATERIJAL** | swatch dugmad | `masa × spot_cena × faktor_finoće` | runtime PBR set. Opcije: Belo zlato 14K, Žuto zlato 14K, Roze zlato 14K, Platina 950, Palladium 950 | opciono |
+| 3 | **PROFIL** | chip-ovi (diskretno) | fiksna doplata (opc.) | bira profil poprečnog preseka proceduralnog shank-a. Opcije: Okrugli, D-profil, Ravni, Komfort | ne |
+| 4 | **ŠIRINA** | **klizač 2–6 mm** | ulazi u masu → cena | skalira profil duž ose prstena | ne |
+| 5 | **ZAVRŠNA OBRADA** | dugmad | fiksna doplata po obradi | roughness/normal varijanta. Opcije: Polirano, Mat, Brušeno, Čekićano | ne |
+| 6 | **DIJAMANTI** | oblik + karat + kvalitet | `cena(oblik, karat, kvalitet) × broj` | utisnut kamen na bendu (burme) / gem slotovi; MeshPhysicalMaterial transmission | **da — glavni slučaj**: 0 na stanju → opcija disabled |
 | 7 | **GRAVURA** | tekst + font + strana | fiksna doplata (ili 0) | canvas → height → normal (+ blagi displacement) na segmentu shank-a | ne |
-| 8 | **VELIČINA** *(tentativno)* | klizač ili izbor | utiče na masu → cena | `innerDiameter` proceduralnog shank-a + skala glave | ne |
 
-> "8. tačka" nije potvrđena — najverovatnije VELIČINA prstena. Vidi `decisions.md`.
+**Debljina** i **veličina (obim prsta)**: nisu zaseban korak u mockup-u. Debljina je verovatno implicirana profilom; veličina se bira u ŠIRINA sekciji ili pri upitu. → otvoreno pitanje D u `decisions.md`.
+
+Boje/tipografija/komponente za sve ovo: vidi `design-system.md`.
 
 ## Skladištenje
 
