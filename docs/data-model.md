@@ -1,0 +1,112 @@
+# Model podataka
+
+## 8 grupa opcija
+
+| # | Grupa | Tip u UI | Uticaj na cenu | Uticaj na 3D | Stock? |
+|---|---|---|---|---|---|
+| 1 | **MODEL** | izbor (kartice) | bazna cena modela | učitava glavu (GLB komponenta ili proceduralni set) + socket na shank | da (model može biti povučen) |
+| 2 | **MATERIJAL** | swatch dugmad | `masa × spot_cena × faktor_finoće` | runtime PBR set (baseColor, metalness, roughness, clearcoat) | opciono (npr. platina po porudžbini) |
+| 3 | **DEBLJINA** | **klizač** | ulazi u masu → cena | parametar proceduralnog shank profila (radijalna dubina) | ne |
+| 4 | **ŠIRINA** | **klizač** | ulazi u masu → cena | parametar shank profila (duž ose prstena) | ne |
+| 5 | **ZAVRŠNA OBRADA** | dugmad | fiksna doplata po obradi | roughness/normal varijanta (polirano ~0.05, mat ~0.35, brušeno = anizotropna normal mapa) | ne |
+| 6 | **DIJAMANTI** | oblik + karat + kvalitet | `cena(oblik, karat, kvalitet) × broj` | swap na "Gem" slotovima; instancirani pavé; MeshPhysicalMaterial transmission | **da — glavni slučaj**: 0 na stanju → opcija disabled |
+| 7 | **GRAVURA** | tekst + font + strana | fiksna doplata (ili 0) | canvas → height → normal (+ blagi displacement) na segmentu shank-a | ne |
+| 8 | **VELIČINA** *(tentativno)* | klizač ili izbor | utiče na masu → cena | `innerDiameter` proceduralnog shank-a + skala glave | ne |
+
+> "8. tačka" nije potvrđena — najverovatnije VELIČINA prstena. Vidi `decisions.md`.
+
+## Skladištenje
+
+**Custom tabela `wp_zs_options`** (lakše i brže od CPT-a za enumerabilne opcije; bez ACF zavisnosti):
+
+```
+id            BIGINT PK
+group_key     VARCHAR(32)   -- 'model' | 'material' | 'finish' | 'diamond' | 'engraving' | ...
+slug          VARCHAR(64)
+label_sr      VARCHAR(191)
+sort          INT
+enabled       TINYINT(1)    -- klijent ručno pali/gasi
+available     TINYINT(1)    -- ima na stanju (ručno sad, ERPNext kasnije)
+stock_qty     INT NULL      -- opciono, iz ERPNext-a
+price_json    JSON          -- doprinos ceni: {type:'flat'|'per_gram'|'matrix', ...}
+params_json   JSON          -- 3D/prezentacija: PBR set, GLB URL, profil parametri, opseg klizača, roughness...
+compat_json   JSON          -- allow-liste: {materials:[...], models:[...]} (prazno = sve dozvoljeno)
+erp_id        VARCHAR(64) NULL   -- external ID za rekonsilijaciju sa ERPNext-om
+updated_at    DATETIME
+```
+
+Globalna podešavanja (spot cena metala po finoći, email primaoci, HDRI URL, CDN baza) → jedan `wp_option` `zs_settings` (JSON).
+
+MODEL i (ako ih bude) jedinstvene GLAVE mogu biti CPT `zs_ring_model` / `zs_head` ako klijentu treba bogatiji editor (slike, opis) — odluka u `decisions.md`. Ostatak ostaje u tabeli.
+
+## Dostupnost / stock ponašanje u konfiguratoru
+
+- `enabled = 0` → opcija se **ne prikazuje**.
+- `enabled = 1, available = 0` → prikazana ali **disabled**: zasivljena, ne može se kliknuti, tooltip "Trenutno nedostupno".
+- Ako je trenutno izabrana opcija postala `available = 0` (npr. posle ERPNext sync-a) → konfigurator automatski prebaci na najbližu dostupnu i obavesti korisnika.
+- Za DIJAMANTE: filtriranje po oblik/karat/kvalitet kombinaciji — ako nijedna kombinacija tog oblika nije na stanju, ceo oblik je disabled.
+
+## Pravila kompatibilnosti
+
+- Data-driven, u `compat_json` po opciji (allow-liste).
+- Razrešavaju se **server-side** u kompajleru → payload nosi finalno `available`/`compatible` po opciji za dati model.
+- UI samo poštuje flagove; nema hardkodovane logike.
+
+## REST payload (`GET /wp-json/zs/v1/config?model=slug`)
+
+```jsonc
+{
+  "version": "2026-08-31T23:00:00Z",     // ETag izvor
+  "currency": "RSD",
+  "model": {
+    "slug": "aurora-solitaire",
+    "label": "Aurora Solitaire",
+    "basePrice": 48000,
+    "head": { "type": "gltf", "url": "https://cdn.../heads/aurora.glb", "socket": "shank_top" },
+    "shank": {
+      "profile": "d-comfort",
+      "width":     { "min": 1.6, "max": 3.4, "step": 0.1, "default": 2.0, "unit": "mm" },
+      "thickness": { "min": 1.2, "max": 2.2, "step": 0.1, "default": 1.6, "unit": "mm" },
+      "size":      { "min": 44,  "max": 66,  "step": 1,   "default": 54,  "unit": "EU" }
+    }
+  },
+  "groups": {
+    "material": [
+      { "slug": "yg18", "label": "Žuto zlato 18k", "available": true,
+        "pbr": { "color": "#E6C063", "metalness": 1, "roughness": 0.18 },
+        "price": { "type": "per_gram", "pricePerGram": 7600, "purity": 0.75, "density": 15.6 } }
+    ],
+    "finish":   [ { "slug": "polished", "label": "Polirano", "available": true,
+                    "pbr": { "roughness": 0.05 }, "price": { "type": "flat", "amount": 0 } } ],
+    "diamond":  [ { "slug": "round-0_30-vs-f", "label": "Rund 0.30ct VS/F", "shape": "round",
+                    "carat": 0.30, "quality": "VS/F", "available": false,
+                    "price": { "type": "flat", "amount": 61000 } } ],
+    "engraving": { "maxLen": 20, "fonts": ["serif","script"], "sides": ["inside","outside"],
+                   "price": { "type": "flat", "amount": 3000 } }
+  }
+}
+```
+
+## Cena — formula (skica)
+
+```
+masa_g   = zapremina_shank(width, thickness, size) * density(material) * purity(material)
+           + masa_glave(model, material)
+cena =  model.basePrice
+      + masa_g * material.pricePerGram
+      + finish.amount
+      + Σ diamond.amount * count
+      + engraving.amount
+```
+
+- Zapremina shank-a: proceduralna geometrija je već u three.js → izračunaj mesh volumen (signed tetrahedra), pošalji nazad ili duplo računaj i na serveru.
+- `masa_glave` po materijalu: izvezi iz CAD-a kao grame, čuvaj u `params_json` glave.
+- Prikaz: **live, jedno polje** u konfiguratoru.
+- Autoritativno: `POST /inquiry` ponovo izračuna na serveru (ne veruj klijentu).
+- Spot cena metala: `zs_settings` polje + ručni "osveži" ili cron na besplatni gold-price API; kasnije iz ERPNext-a.
+
+## Keširanje / verzionisanje
+
+- Kompajlovani payload u `transient` (`zs_config_{model}_{hash}`), TTL 12h, obrisati na svaku izmenu opcija/podešavanja.
+- REST odgovor nosi `ETag: "<version>"`; klijent šalje `If-None-Match` → `304`.
+- Frontend keš u `sessionStorage` po verziji.

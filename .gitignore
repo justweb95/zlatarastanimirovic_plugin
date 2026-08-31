@@ -1,0 +1,26 @@
+# Node / frontend build
+app/node_modules/
+app/dist/
+app/.vite/
+npm-debug.log*
+yarn-error.log*
+
+# PHP
+vendor/
+
+# 3D assets (idu na CDN, ne u repo)
+assets/3d/
+*.glb
+*.hdr
+*.ktx2
+
+# Env / local
+.env
+.env.*
+*.local
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
