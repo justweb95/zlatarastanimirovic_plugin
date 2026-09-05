@@ -1,0 +1,16 @@
+/* ZS Configurator — admin screen only (enqueued solely on the plugin page). */
+
+.zs-admin .zs-muted { color: #646970; }
+.zs-admin .zs-group-h { margin-top: 2em; padding-bottom: .4em; border-bottom: 1px solid #dcdcde; }
+.zs-admin .zs-opt-table { margin-top: .6em; }
+.zs-admin .zs-opt-table code { font-size: 12px; }
+.zs-admin .zs-row-actions { white-space: nowrap; }
+.zs-admin .zs-row-actions form { display: inline; }
+.zs-admin .zs-link-danger { color: #b32d2e; }
+
+.zs-admin .zs-toggle { min-width: 44px; text-align: center; }
+.zs-admin .zs-toggle.is-on { background: #1F3D2E; border-color: #1F3D2E; color: #fff; }
+.zs-admin .zs-toggle.is-off { background: #fff; }
+
+.zs-admin form.inline, .zs-admin td form { display: inline-block; margin: 0; }
+.zs-admin textarea.code { font-family: Menlo, Consolas, monospace; font-size: 12px; }

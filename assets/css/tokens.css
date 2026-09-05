@@ -1,0 +1,51 @@
+/* ZS Configurator — design tokens (docs/design-system.md, Figma "Stanimirović - konfigurator").
+   px type sizes are still estimates until pulled from Figma Dev Mode (question H). */
+
+:root {
+  /* Palette — locked (decisions.md #16). 75–85% neutral; green/bronze are accents only. */
+  --zs-green:        #1F3D2E;
+  --zs-green-hover:  #16291F;
+  --zs-success:      #3E6E52;
+  --zs-bronze:       #8B5A34;
+  --zs-gold:         #B8974F;
+  --zs-bg:           #FBF9F4;
+  --zs-surface:      #F5F0E6;
+  --zs-surface-2:    #EAE3D4;
+  --zs-border:       #E2DBCB;
+  --zs-text:         #221F1B;
+  --zs-text-muted:   #7C7568;
+  --zs-disabled:     #C7C0B0;
+
+  /* Type — Fraunces (display/H1–H3, price, model names) + Inter (everything technical) */
+  --zs-font-serif: "Fraunces", Georgia, "Times New Roman", serif;
+  --zs-font-sans:  "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --zs-fs-display: 48px;
+  --zs-fs-h2:      30px;
+  --zs-fs-h3:      22px;
+  --zs-fs-price:   28px;
+  --zs-fs-body-lg: 18px;
+  --zs-fs-body:    16px;
+  --zs-fs-button:  15px;
+  --zs-fs-label:   12px;
+  --zs-fs-micro:   13px;
+  --zs-ls-label:   0.08em;
+
+  /* Spacing scale — 4 · 8 · 12 · 16 · 24 · 32 · 48 · 64 */
+  --zs-space-1: 4px;  --zs-space-2: 8px;  --zs-space-3: 12px; --zs-space-4: 16px;
+  --zs-space-5: 24px; --zs-space-6: 32px; --zs-space-7: 48px; --zs-space-8: 64px;
+
+  --zs-radius: 10px;
+  --zs-radius-pill: 999px;
+  --zs-radius-swatch: 50%;
+  --zs-border-w: 1px;
+
+  --zs-maxw: 1440px;
+  /* left model list · 3D viewport · right options panel */
+  --zs-grid: 220px 1fr 300px;
+
+  --zs-shadow-sm: 0 1px 2px rgba(34, 31, 27, 0.05);
+  --zs-shadow-md: 0 6px 24px rgba(34, 31, 27, 0.08);
+
+  --zs-ease: cubic-bezier(0.4, 0, 0.2, 1);
+}

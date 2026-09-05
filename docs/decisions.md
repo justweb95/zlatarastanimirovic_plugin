@@ -62,15 +62,36 @@ Sve odluke donete 2026-08-31 osim gde je drugačije navedeno. Format: odluka →
 
 21. **Valuta: RSD.** Format `89.500 RSD` (tačka kao hiljadarski separator).
 
+22. **Tip prstenja = glatke burme (par), v1** (odgovor na pitanje A, 2026-09-03).
+    Klijent dao Rhino fajlove: `Ravna_4mm.3dm`, `Zaobljena_4mm.3dm` + iste sa utisnutim kamenom Ø1.5 mm. Nema vereničkih sa setom u v1 → **nula CAD glava**, sve proceduralno (shank + mali flush kamen).
+
+23. **Debljina = zaseban klizač** (odgovor na pitanje D, 2026-09-03).
+    ŠIRINA korak drži 3 kontrole: **Širina** 3.0–8.0 mm korak 0.5, **Debljina** od 1.0 mm korak 0.1 (max ~2.5, podesivo u adminu), **Veličina (EU)**.
+
+24. **Masa/cena — formula klijenta** (2026-09-03):
+    ```
+    meanCircumference_mm = size + PI * thickness
+    area_mm2             = width * thickness * fill        // fill = fill-faktor profila (Ravni 1.0, zaobljeni < 1)
+    volume_cm3           = area_mm2 * meanCircumference_mm / 1000
+    weight_g            = volume_cm3 * density(finoća)     // specifična težina, podesiva
+    ringPrice           = base + weight_g * cenaPoGramu + finiš + dijamant + gravura
+    pairPrice           = ringHer + ringHis
+    ```
+    `density` po materijalu u `params_json`; `cenaPoGramu` po finoći u `zs_settings` (ručno sad, ERPNext kasnije). Server ponovo računa na upit.
+
+25. **Materijali i finiši iz klijentovih V-Ray fajlova** (`*.gvVisMat`, 2026-09-03).
+    3 metala: **Žuto** `#E6C181`, **Belo** `#C3C3CD`, **Crveno** `#FFB9AA` (svi 14K). 3 finiša iz reflection glossiness: **Polirano** (gloss 1.0 → rough ~0.06), **Mat** (0.5 → ~0.42), **Grebano** (0.6 → ~0.34, anizotropna normal mapa). Platina/Palladium se dodaju u adminu ako klijent proširi ponudu.
+
 ## Otvorena pitanja (blokiraju procenu obima)
 
 | # | Pitanje | Zašto je bitno |
 |---|---|---|
-| A | **Tip prstenja**: glatke burme / verenički sa setom / unikati? | Mockup pokazuje burme (par, Njena/Njegova) → verovatno **malo/nimalo CAD-a**. Potvrditi da nema vereničkih sa setom u v1. |
+| ~~A~~ | ✅ Rešeno (odluka 22): glatke burme, par, bez CAD glava. | — |
 | B | **Finalni frontend framework**: Svelte / SolidJS / React / Preact? | Ne blokira arhitekturu, ali treba pre Faze 4. Lean: Svelte ili Solid (mali runtime). |
 | C | **CDN provider**: Bunny / Cloudflare R2 / S3+CloudFront? | Treba pre Faze 3 (upload pipeline za asseti). |
-| D | **Debljina prstena** = zaseban parametar ili implicirana profilom? Gde se bira **veličina** (obim prsta)? | Tipografski list pominje "širinu i debljinu"; mockup nema eksplicitnu debljinu ni veličinu. |
-| E | **Broj oblika dijamanata u v1** + kako izgleda DIJAMANTI korak za burme (utisnut kamen? koliko?). | Obim GLB biblioteke kamenja. |
+| ~~D~~ | ✅ Rešeno (odluka 23): debljina = zaseban klizač. | — |
+| E | **Dijamanti za burme**: koliko veličina flush kamena u v1 (seedovano Ø1.0 / 1.5 / 2.0 mm)? Više kamena / pavé red? | Obim proceduralnog kamenja + stock logika. |
+| E2 | **`.3dm` geometrija**: da li klijent može da izveze `.obj`/`.glb` iz Rhina (mesh, ~50k), ili idemo 100% proceduralno? | Proceduralno je plan (odluka 6) i radi bez Rhina; CAD izvoz treba samo ako se traži tačna geometrija 1:1. |
 | F | **Email**: primalac(ci)? kopija kupcu? slika client-side ili server-side? | Faza 5. Odloženo. |
 | G | **MODEL/glave kao CPT ili tabela?** | Zavisi koliko bogat editor klijentu treba (slike, opisi). |
 | H | **Tačne px veličine/weight-ovi tipografije** — izvući iz Figma Dev Mode. | Zaključati type scale u tokene. |

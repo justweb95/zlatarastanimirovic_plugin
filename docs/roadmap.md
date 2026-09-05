@@ -26,13 +26,26 @@ Faze su inkrementalne; svaka se može demonstrirati. Acceptance = merljiv kriter
 **Acceptance:** izmena opcije u adminu → za < 1s vidljiva u `GET /config`; payload < 50 KB gz; drugi poziv vraća 304.
 
 ## Faza 2 — 3D jezgro
-- [ ] three.js scena: renderer (`frameloop=demand`), kamera, OrbitControls (damped)
-- [ ] HDRI + PMREM + tone mapping + contact shadows
-- [ ] Proceduralni shank: profil `d-comfort`, sweep, klizači width/thickness/size (live regen, debounce)
-- [ ] Materijali: 5 metala (Belo/Žuto/Roze zlato 14K, Platina 950, Palladium 950) kao PBR setovi; 4 završne obrade (Polirano/Mat/Brušeno/Čekićano) kao roughness/normal override; glatki cross-fade
-- [ ] PROFIL: 4 profila poprečnog preseka (Okrugli/D/Ravni/Komfort); tabovi Njena/Njegova (2 stanja)
-- [ ] Fallback (nema WebGL → slika), dispose na unmount, DPR cap
-- [ ] Threepipe evaluacija (1 dan) — odluka pre početka faze
+
+### 2a — proceduralno jezgro (vanilla three.js) — U TOKU
+- [x] three.js **spakovan lokalno** (`assets/lib/three/`, r0.169) + import map iz shortcode-a
+- [x] `assets/js/scene.module.js`: renderer (`frameloop="demand"`), kamera, OrbitControls (damped, idle auto-rotacija)
+- [x] Studio svetlo: `RoomEnvironment` → PMREM, `ACESFilmicToneMapping`; ground `ShadowMaterial` (kontakt senka) + 1 directional key light
+- [x] Proceduralni shank: `LatheGeometry` (profil-presek → obrtanje oko ose prsta), live regen na klizače width/thickness/size
+- [x] 4 profila (`flat`/`court`/`d-comfort`/`round`) → funkcije koje vraćaju presek
+- [x] Materijali: 3 zlata × 3 finiša (boja + roughness iz V-Ray vrednosti), cross-fade lerp
+- [x] Flush kamen (proceduralni brilliant approx) + klizač pozicije po bendu
+- [x] DPR cap (≤2), `ResizeObserver`, fallback na render sliku ako nema `ZSCScene`
+- [x] Rail/toolbar: auto-rotacija, reset pogleda, zoom ±, screenshot, pun ekran
+- [ ] Šav na `LatheGeometry` (weld seam / rotirati na pozadinu) — sitna polir stavka
+- [ ] Normal mape za "Grebano" (anizotropno) i "Čekićano"; brušeni pravac
+- [ ] `dispose()` na unmount (napisan, ne poziva se); WebGL2 fallback poruka
+- [ ] Prikaz oba prstena istovremeno (sad se prikazuje aktivni)
+
+### 2b — Svelte UI ljuska + Vite build
+- [ ] `app/` Vite + Svelte projekat; migracija panela iz `assets/js/configurator.js`
+- [ ] `app/dist` → PHP enqueue umesto trenutnih vanilla asseta
+- [ ] state store (Svelte), deep-link URL ↔ konfiguracija
 
 **Acceptance:** klizači menjaju geometriju live bez frame drop-a; promena metala instant; 60 fps na test Androidu; render staje kad nema interakcije.
 
@@ -78,3 +91,31 @@ Faze su inkrementalne; svaka se može demonstrirati. Acceptance = merljiv kriter
 - [ ] SEO: server-rendered sadržaj + Product JSON-LD na stranici
 
 **Acceptance:** budžeti iz `architecture.md` ispunjeni i izmereni; nula konzolnih grešaka; a11y audit čist.
+
+## Tehnički dug / v2 (posle v1)
+
+Detaljna analiza konkurencije: `docs/reference/competitors.md` (Breuning + Fischer, oba na
+Confmetrix engine-u).
+
+- **DIJAMANTI** — v1 = jedan flush okrugli kamen (veličina Ø + pozicija na klizaču). v2:
+  - **tip rešetke/kruništa**: flush (eingerieben), kanal (+ poprečno / bočno l-r / oko celog
+    prstena), bezel/zarge, tension (spannring), kandže (chaton 4/6-prong), bočne rešetke
+  - **red / pavé**: bira se broj kamenova — preset "trećina / pola / ceo prsten" (sa
+    izračunatim brojem po veličini) ili tačan broj; `InstancedMesh`; opcija "sa obe strane"
+  - **free placement**: 2D razvijena mapa trake + drag tačke (X/Y mm) + ~17 gotovih šablona
+  - **cut**: brilliant / princess / baguette; **kvalitet**: G/SI…G/IF + fancy boje;
+    lab vs natural; **više grupa kamenova po prstenu**
+  - skriveni kamen u unutrašnjosti trake ("diamant im ringinnern")
+- **Profili** — v1 ima 4. Konkurencija 16–20, prikazani kao crtež poprečnog preseka.
+  Proširiti biblioteku + **live SVG presek** koji se menja sa širinom/debljinom/profilom.
+- **Materijal** — v1 = 3 zlata × 3 finiša (klijentovi V-Ray fajlovi). v2: finoća kao izbor
+  (585/750, menja `density` → masu → cenu), više finiša (konkurencija 12–16),
+  dvobojni/trobojni prsten sa uzorcima (1:1, 2:1, talas, dijagonala, inlay).
+- **Žljebovi / dezen** (Grooves/Fugen) — U/V/uglasti kanal, millgriff, carbon traka,
+  obojeni (emajl) umetak sa pozicijom/širinom/bojom; stepenici na ivici. Nije u v1.
+- **Veličina prstena**: korak 0.5, prikaz Ø mm, alternativni sistemi (US/UK/Swiss),
+  checkbox "optimalni odnos širina/debljina".
+- **Cena po prstenu** pored "za par" (uraditi već u v1 ako stigne).
+- **Gravura**: diamantgravur (pored lasera), potpis/otisak prsta, ćirilica, više simbola.
+- **Undo / Reset** dugmad; **Sačuvaj/Podeli/PDF/Deep-link** konfiguracije (Faza 5).
+- **"Primeni na oba prstena"** po sekciji (kopiraj Njena ↔ Njegova).
