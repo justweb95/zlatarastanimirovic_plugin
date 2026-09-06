@@ -45,6 +45,12 @@ body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
 }
 .zs-topbar-back:hover { color: var(--zs-bronze); }
 .zs-brand { display: flex; align-items: center; gap: var(--zs-space-3); }
+.zs-brand-logo-full { display: block; height: 34px; width: auto; }
+.zs-brand-logo-mark { display: none; height: 30px; width: auto; }
+@media (max-width: 640px) {
+  .zs-brand-logo-full { display: none; }
+  .zs-brand-logo-mark { display: block; }
+}
 .zs-brand-mark { color: var(--zs-bronze); font-size: 22px; line-height: 1; }
 .zs-brand-text { display: flex; flex-direction: column; line-height: 1.2; }
 .zs-brand-text strong {
@@ -89,10 +95,13 @@ body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
 
 /* ---------------------------------------------------------------- shell grid */
 
+/* Client (2026-09-06): the old left "Model" column is gone — the viewport now
+   runs from the shell's left edge all the way to the right options panel. */
 .zs-shell {
   flex: 1;
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  align-items: start;
   gap: var(--zs-space-5);
   max-width: var(--zs-maxw);
   width: 100%;
@@ -102,6 +111,7 @@ body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
 @media (max-width: 1180px) {
   .zs-shell { grid-template-columns: 1fr; }
   .zs-col-view { order: -1; }
+  .zs-view { height: 420px; } /* still fixed, just a smaller fixed value for small screens */
 }
 
 /* --------------------------------------------------------------- typography */
@@ -112,29 +122,6 @@ body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
   margin: 0 0 var(--zs-space-3);
 }
 .zs-micro { font-size: var(--zs-fs-micro); color: var(--zs-text-muted); margin: var(--zs-space-2) 0 0; }
-
-/* ------------------------------------------------------------------- models */
-
-.zs-model-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--zs-space-2); }
-.zs-model {
-  width: 100%; text-align: left; display: grid;
-  grid-template-columns: 44px 1fr 16px; align-items: center; gap: var(--zs-space-3);
-  border: 1px solid var(--zs-border); border-radius: var(--zs-radius);
-  background: #fff; padding: var(--zs-space-3); color: inherit;
-  transition: border-color .15s var(--zs-ease), background .15s var(--zs-ease);
-}
-.zs-model:hover { border-color: var(--zs-bronze); }
-.zs-model[aria-pressed="true"] { border-color: var(--zs-green); background: var(--zs-surface); }
-.zs-model-thumb {
-  width: 44px; height: 44px; border-radius: 8px;
-  background: var(--zs-surface-2) center/cover no-repeat;
-  box-shadow: inset 0 0 0 1px rgba(0,0,0,.04);
-}
-.zs-model-meta { display: flex; flex-direction: column; min-width: 0; }
-.zs-model-name { font-family: var(--zs-font-serif); font-size: var(--zs-fs-body); }
-.zs-model-desc { font-size: var(--zs-fs-micro); color: var(--zs-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.zs-model-check { color: var(--zs-green); opacity: 0; font-size: 13px; }
-.zs-model[aria-pressed="true"] .zs-model-check { opacity: 1; }
 
 /* ------------------------------------------------------------------ viewport */
 
@@ -148,8 +135,12 @@ body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
 }
 .zs-ring-tab[aria-selected="true"] { color: var(--zs-green); font-weight: 600; border-bottom-color: var(--zs-green); }
 
+/* Client (2026-09-06): the render must ALWAYS be the same height — it no
+   longer stretches with viewport height or with how tall the options panel
+   gets (grid rows default to align-items:stretch; .zs-shell overrides that
+   to `start` so this fixed height actually holds). */
 .zs-view {
-  position: relative; flex: 1; min-height: 420px;
+  position: relative; height: var(--zs-view-h, 560px); flex: none;
   border: 1px solid var(--zs-border); border-radius: var(--zs-radius);
   background: #ffffff;
   display: grid; place-items: center; overflow: hidden;
@@ -281,6 +272,144 @@ body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
   .zs-cta-group { justify-content: center; }
   .zs-trust-item { align-items: center; }
 }
+
+/* ============================================================================
+   2026-09-06 restructure — Profil boxes, Dimenzije diagram, Materijal
+   patterns, Žlebovi, Dijamanti (extended). See configurator.js for markup.
+   ========================================================================= */
+
+/* shared "field" / row layout helpers */
+.zs-field { display: flex; flex-direction: column; gap: var(--zs-space-2); }
+.zs-dim-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--zs-space-5); align-items: start; }
+@media (max-width: 1180px) { .zs-dim-row { grid-template-columns: 1fr; } }
+.zs-check-row {
+  display: flex; align-items: center; gap: var(--zs-space-2);
+  font-size: var(--zs-fs-micro); color: var(--zs-text-muted); margin: var(--zs-space-4) 0;
+  cursor: pointer;
+}
+.zs-check-row input { accent-color: var(--zs-green); }
+.zs-slider.is-locked { opacity: .55; }
+.zs-select {
+  width: 100%; border: 1px solid var(--zs-border); border-radius: var(--zs-radius);
+  padding: var(--zs-space-2) var(--zs-space-3); font: inherit; color: inherit; background: #fff;
+}
+
+/* "Sledeće" per-section footer button */
+.zs-acc-next {
+  display: inline-flex; align-items: center; gap: var(--zs-space-2);
+  margin-top: var(--zs-space-5); border: 1px solid var(--zs-border); background: #fff;
+  color: var(--zs-green); font-weight: 600; font-size: var(--zs-fs-button);
+  border-radius: var(--zs-radius-pill); padding: var(--zs-space-2) var(--zs-space-5);
+}
+.zs-acc-next:hover { border-color: var(--zs-green); background: var(--zs-surface); }
+.zs-acc-next .zs-icon { width: 14px; height: 14px; }
+
+/* "coming soon" badge, used across Materijal / Žlebovi / Dijamanti */
+.zs-badge-soon {
+  position: absolute; top: 6px; right: 6px; font-size: 10px; letter-spacing: .04em; text-transform: uppercase;
+  background: var(--zs-surface-2); color: var(--zs-text-muted); border-radius: var(--zs-radius-pill);
+  padding: 2px 7px;
+}
+
+/* generic image+text "box" card — Profil / groove shapes / diamond position */
+.zs-profile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: var(--zs-space-3); }
+.zs-profile-box, .zs-pattern-box {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: var(--zs-space-2);
+  border: 1px solid var(--zs-border); border-radius: var(--zs-radius); background: #fff;
+  padding: var(--zs-space-3) var(--zs-space-2); color: inherit;
+  transition: border-color .15s var(--zs-ease), background .15s var(--zs-ease);
+}
+.zs-profile-box:hover:not(:disabled), .zs-pattern-box:hover:not(:disabled) { border-color: var(--zs-bronze); }
+.zs-profile-box[aria-pressed="true"], .zs-pattern-box[aria-pressed="true"] { border-color: var(--zs-green); background: var(--zs-surface); }
+.zs-profile-box:disabled, .zs-pattern-box.is-disabled { opacity: .5; cursor: not-allowed; }
+.zs-profile-label { font-size: var(--zs-fs-micro); text-align: center; line-height: 1.25; }
+.zs-profile-icon { width: 100%; height: auto; max-width: 96px; }
+
+/* cross-section line art — soft palette + dash-dot centreline (client asked
+   for our own colours + dashed axis instead of the reference's screenshots) */
+.zs-cs-axis { stroke: var(--zs-border); stroke-width: 1.4; stroke-dasharray: 3 2 1 2; }
+.zs-cs-shape { fill: var(--zs-surface); stroke: var(--zs-bronze); stroke-width: 1.6; }
+.zs-cs-shape-big { stroke-width: 2; }
+.zs-cs-shape-line { fill: none; stroke: var(--zs-bronze); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* --------------------------------------------------------------- Dimenzije */
+.zs-cs-diagram-wrap { margin-bottom: var(--zs-space-5); }
+.zs-cs-diagram-host {
+  display: flex; justify-content: center; border: 1px solid var(--zs-border); border-radius: var(--zs-radius);
+  background: var(--zs-surface); padding: var(--zs-space-3) 0;
+}
+.zs-cs-diagram { width: 100%; max-width: 320px; height: auto; color: var(--zs-bronze); }
+.zs-cs-lead { stroke: var(--zs-border); stroke-width: 1; }
+.zs-cs-arrow { stroke: var(--zs-bronze); stroke-width: 1.4; fill: none; }
+.zs-cs-label { font-size: 11px; letter-spacing: .1em; fill: var(--zs-text-muted); font-family: var(--zs-font-sans); }
+
+/* --------------------------------------------------------------- Materijal */
+.zs-pattern-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: var(--zs-space-3); margin-bottom: var(--zs-space-4); }
+.zs-pattern-wrap { position: relative; }
+.zs-pat-fill { fill: var(--zs-surface); }
+.zs-pat-fill-a { fill: var(--zs-surface-2); }
+.zs-pat-fill-b { fill: var(--zs-bronze); opacity: .45; }
+.zs-pat-fill-free { fill: var(--zs-surface); opacity: .5; }
+.zs-pat-dash { stroke: var(--zs-text-muted); stroke-width: 1.4; stroke-dasharray: 3 2; }
+.zs-pattern-popover {
+  position: absolute; z-index: 5; top: calc(100% + 6px); left: 0; width: max(260px, 100%);
+  background: #fff; border: 1px solid var(--zs-border); border-radius: var(--zs-radius);
+  box-shadow: var(--zs-shadow-md); padding: var(--zs-space-4);
+}
+.zs-pattern-sub-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--zs-space-2); }
+.zs-pattern-sub {
+  border: 1px solid var(--zs-border); border-radius: var(--zs-radius); background: #fff;
+  padding: var(--zs-space-2) var(--zs-space-3); font-size: var(--zs-fs-micro); color: inherit; text-align: left;
+}
+.zs-pattern-sub:hover { border-color: var(--zs-bronze); }
+.zs-pattern-sub[aria-pressed="true"] { border-color: var(--zs-green); color: var(--zs-green); font-weight: 600; }
+
+/* ----------------------------------------------------------------- Žlebovi */
+.zs-groove-tabs { display: flex; gap: var(--zs-space-2); margin-bottom: var(--zs-space-4); flex-wrap: wrap; }
+.zs-groove-tab {
+  border: 1px solid var(--zs-border); background: #fff; border-radius: var(--zs-radius-pill);
+  padding: var(--zs-space-2) var(--zs-space-4); font-size: var(--zs-fs-micro); color: var(--zs-text-muted);
+}
+.zs-groove-tab[aria-pressed="true"] { border-color: var(--zs-green); color: var(--zs-green); font-weight: 600; background: var(--zs-surface); }
+.zs-groove-shapes { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: var(--zs-space-3); margin-bottom: var(--zs-space-4); }
+.zs-groove-addrow { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--zs-space-4); }
+.zs-groove-count { font-size: var(--zs-fs-micro); color: var(--zs-text-muted); }
+.zs-groove-add { padding: var(--zs-space-2) var(--zs-space-5); }
+.zs-groove-add .zs-icon { width: 14px; height: 14px; }
+.zs-groove-list { display: flex; flex-direction: column; gap: var(--zs-space-5); }
+.zs-groove-item {
+  display: grid; grid-template-columns: 64px 1fr; gap: var(--zs-space-4);
+  border: 1px solid var(--zs-border); border-radius: var(--zs-radius); padding: var(--zs-space-4);
+}
+.zs-groove-preview { position: relative; width: 64px; height: 96px; border-radius: 6px; overflow: hidden; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
+.zs-groove-preview-line { position: absolute; top: 0; bottom: 0; width: 2px; background: rgba(34,31,27,.35); transform: translateX(-50%); }
+.zs-groove-preview-line.is-h { top: 50%; left: 0; right: 0; width: auto; height: 2px; transform: translateY(-50%); }
+.zs-groove-settings { display: flex; flex-direction: column; gap: var(--zs-space-3); }
+.zs-groove-orient { margin: 0; }
+.zs-groove-del { align-self: flex-start; color: var(--zs-bronze); }
+.zs-groove-del .zs-icon { width: 14px; height: 14px; }
+.zs-slider-compact .zs-slider-top span:first-child { display: none; }
+
+/* --------------------------------------------------------------- Dijamanti */
+.zs-diamond-card {
+  display: flex; align-items: center; gap: var(--zs-space-4);
+  border: 1px solid var(--zs-border); border-radius: var(--zs-radius); background: var(--zs-surface);
+  padding: var(--zs-space-4); margin-bottom: var(--zs-space-5);
+}
+.zs-diamond-card-icon { font-size: 22px; }
+.zs-diamond-card-label { flex: 1; font-family: var(--zs-font-serif); font-size: var(--zs-fs-body); }
+.zs-diamond-setting-panel { border: 1px solid var(--zs-border); border-radius: var(--zs-radius); padding: var(--zs-space-4); margin-bottom: var(--zs-space-5); }
+.zs-setting-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: var(--zs-space-2); margin-bottom: var(--zs-space-4); }
+.zs-setting-box {
+  position: relative; border: 1px solid var(--zs-border); border-radius: var(--zs-radius); background: #fff;
+  padding: var(--zs-space-3); font-size: var(--zs-fs-micro); color: inherit;
+}
+.zs-setting-box:hover:not(:disabled) { border-color: var(--zs-bronze); }
+.zs-setting-box[aria-pressed="true"] { border-color: var(--zs-green); background: var(--zs-surface); color: var(--zs-green); font-weight: 600; }
+.zs-setting-box:disabled { opacity: .5; cursor: not-allowed; }
+.zs-position-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--zs-space-2); }
+.zs-position-box { padding: var(--zs-space-3) var(--zs-space-2); }
+@media (max-width: 480px) { .zs-position-grid { grid-template-columns: repeat(2, 1fr); } }
 
 /* ----------------------------------------------------------------- skeleton */
 

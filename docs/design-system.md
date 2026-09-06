@@ -33,10 +33,10 @@ Screenshotovi u `docs/reference/`. Vrednosti hex/tekst su iz same Figme; **px ve
 | `--zs-success` | `#3E6E52` | Potvrde ("dodato u korpu") | — |
 | `--zs-bronze` | `#8B5A34` | Sekundarna — hover, ikone, tekst-linkovi, detalji | ~3–5% |
 | `--zs-gold` | `#B8974F` | Vrlo suptilno — premium bedž, deliteri | <1% |
-| `--zs-bg` | `#FBF9F4` | Glavna pozadina (topla bela) | ~55–60% |
-| `--zs-surface` | `#F5F0E6` | Sekcije, kartice, selektovano stanje (slonovača) | ~20% |
-| `--zs-surface-2` | `#EAE3D4` | Podloge, tag-ovi, razdelnici (bež / kamen) | ~10% |
-| `--zs-border` | `#E2DBCB` | Linije, konture kartica i input-a (1px) | — |
+| `--zs-bg` | `#FFFFFF` | Glavna pozadina (čisto bela — client 2026-09-06, videti decisions.md #26) | ~55–60% |
+| `--zs-surface` | `#F7F7F5` | Sekcije, kartice, selektovano stanje (neutralno svetlo sivo) | ~20% |
+| `--zs-surface-2` | `#ECECE8` | Podloge, tag-ovi, razdelnici | ~10% |
+| `--zs-border` | `#E3E3DF` | Linije, konture kartica i input-a (1px) | — |
 | `--zs-text` | `#221F1B` | Naslovi, primarni tekst | — |
 | `--zs-text-muted` | `#7C7568` | Opisi, labele, meta-podaci | — |
 | `--zs-disabled` | `#C7C0B0` | Neaktivne opcije | — |
@@ -48,15 +48,17 @@ Screenshotovi u `docs/reference/`. Vrednosti hex/tekst su iz same Figme; **px ve
   --zs-success:      #3E6E52;
   --zs-bronze:       #8B5A34;
   --zs-gold:         #B8974F;
-  --zs-bg:           #FBF9F4;
-  --zs-surface:      #F5F0E6;
-  --zs-surface-2:    #EAE3D4;
-  --zs-border:       #E2DBCB;
+  --zs-bg:           #FFFFFF;
+  --zs-surface:      #F7F7F5;
+  --zs-surface-2:    #ECECE8;
+  --zs-border:       #E3E3DF;
   --zs-text:         #221F1B;
   --zs-text-muted:   #7C7568;
   --zs-disabled:     #C7C0B0;
 }
 ```
+
+> **2026-09-06 white refresh**: client felt the original warm cream/ivory (`#FBF9F4`/`#F5F0E6`) read as "yellowish" — flattened to clean white + neutral light-grey surfaces (values above). Green/bronze/gold accents untouched. Point 2 ("Topla — bela nikad hladna, uvek sa tonom slonovače ispod") in the ličnost-brenda table above is superseded by this — kept the row rather than rewritten, since it documents the original Figma read.
 
 Pravilo: **selektovano stanje mora biti uočljivo bojom (zelena), nikad samo senkom.**
 
@@ -97,7 +99,7 @@ Dva fonta (oba Google Fonts, besplatni):
 | | Vrednost |
 |---|---|
 | Max širina sadržaja | **1440px** |
-| Grid konfiguratora | **220px / 1fr / 300px** (leva lista modela · 3D viewport · desni panel opcija) |
+| Grid konfiguratora | **1fr / 300px** (3D viewport · desni panel opcija — leva lista modela uklonjena 2026-09-06, decisions.md #26) |
 | Spacing skala | **4 · 8 · 12 · 16 · 24 · 32 · 48 · 64** |
 | Padding kartice | 16–20px |
 | Razmak sekcija | 32–40px |
@@ -142,7 +144,13 @@ Opšte: tanki elegantni border-i, suptilne senke, umeren radius (8–12px), gene
 
 ## Rekonsilijacija sa konfiguratorom (iz mockup-a `configurator-mockup.png`)
 
-- **7 koraka**, ne 8: `MODEL · MATERIJAL · PROFIL · ŠIRINA · ZAVRŠNA OBRADA · DIJAMANTI · GRAVURA`.
+> **Superseded 2026-09-06** (decisions.md #26): koraci su sada `PROFIL · DIMENZIJE ·
+> MATERIJAL · ŽLEBOVI · DIJAMANTI · GRAVURA` — nema više zasebnog "MODEL" koraka
+> (PROFIL ga zamenjuje kao ulazna tačka, prikazan kao kartice sa slikom preseka +
+> tekstom), "ZAVRŠNA OBRADA" je uklopljena u MATERIJAL, dodat je ŽLEBOVI korak. Red
+> ispod ostaje kao istorijski zapis originalnog Figma mockup-a.
+
+- **7 koraka**, ne 8 (originalni mockup, pre 2026-09-06 restrukture — vidi napomenu iznad): `MODEL · MATERIJAL · PROFIL · ŠIRINA · ZAVRŠNA OBRADA · DIJAMANTI · GRAVURA`.
 - **PROFIL** je diskretan izbor (Okrugli / D-profil / Ravni / Komfort), ne klizač. **ŠIRINA** je klizač (2–6 mm). Body-tekst tipografskog lista pominje i "debljinu" ("Izaberite širinu i debljinu prstena.") — potvrditi da li je debljina zaseban parametar ili je implicirana profilom.
 - **Par prstenova** ("Njena burma" / "Njegova burma") — dve nezavisne konfiguracije sa tabovima; cena je "ZA PAR".
 - **Materijali**: Belo zlato 14K · Žuto zlato 14K · Roze zlato 14K · Platina 950 · Palladium 950.

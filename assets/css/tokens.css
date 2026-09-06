@@ -8,10 +8,13 @@
   --zs-success:      #3E6E52;
   --zs-bronze:       #8B5A34;
   --zs-gold:         #B8974F;
-  --zs-bg:           #FBF9F4;
-  --zs-surface:      #F5F0E6;
-  --zs-surface-2:    #EAE3D4;
-  --zs-border:       #E2DBCB;
+  /* White refresh (client, 2026-09-06): the old warm cream/ivory background
+     and surfaces read as "yellowish" — flattened to clean white + neutral
+     light-grey surfaces. Green/bronze/gold accents unchanged. */
+  --zs-bg:           #FFFFFF;
+  --zs-surface:      #F7F7F5;
+  --zs-surface-2:    #ECECE8;
+  --zs-border:       #E3E3DF;
   --zs-text:         #221F1B;
   --zs-text-muted:   #7C7568;
   --zs-disabled:     #C7C0B0;
@@ -41,8 +44,12 @@
   --zs-border-w: 1px;
 
   --zs-maxw: 1440px;
-  /* left model list · 3D viewport · right options panel */
-  --zs-grid: 220px 1fr 300px;
+  /* 3D viewport · right options panel (client, 2026-09-06: the old left
+     model-list column is gone — the viewport runs from the left edge). */
+  --zs-grid: 1fr 300px;
+  /* Fixed viewport height (client, 2026-09-06: "render ima fixnu visinu
+     uvek") — never grows/shrinks with window size or panel content. */
+  --zs-view-h: 560px;
 
   --zs-shadow-sm: 0 1px 2px rgba(34, 31, 27, 0.05);
   --zs-shadow-md: 0 6px 24px rgba(34, 31, 27, 0.08);

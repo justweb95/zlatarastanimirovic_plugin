@@ -42,7 +42,10 @@ final class Seeder
     {
         return [
             'width'     => ['min' => 3.0, 'max' => 8.0, 'step' => 0.5, 'default' => 4.0, 'unit' => 'mm'],
-            'thickness' => ['min' => 1.0, 'max' => 2.5, 'step' => 0.1, 'default' => 1.4, 'unit' => 'mm'],
+            // step 0.5 (client, 2026-09-06): was 0.1 — produced ugly non-aligned tick
+            // labels (4.3/5.5/6.8 instead of clean halves). Default nudged 1.4→1.5 to
+            // land on the new grid.
+            'thickness' => ['min' => 1.0, 'max' => 2.5, 'step' => 0.5, 'default' => 1.5, 'unit' => 'mm'],
             'size'      => ['min' => 44,  'max' => 68,  'step' => 0.5, 'default' => 54,  'unit' => 'EU'],
         ];
     }
@@ -112,9 +115,11 @@ final class Seeder
         //     at a per-gram price in Podešavanja. finish variants live in group 5.
         $materials = [
             // slug,  label,             filter colour, density(14K), spot_key
-            ['zuto',   'Žuto zlato',   '#E6C181', 13.07, 'au_14k'],
-            ['belo',   'Belo zlato',   '#C3C3CD', 12.90, 'au_14k'],
-            ['crveno', 'Crveno zlato', '#FFB9AA', 13.00, 'au_14k'],
+            // Colours sharpened/richened (client, 2026-09-06) — same 3 golds, more
+            // saturated + less washed-out than the original V-Ray filter-colour pull.
+            ['zuto',   'Žuto zlato',   '#D9A945', 13.07, 'au_14k'],
+            ['belo',   'Belo zlato',   '#D6D9DE', 12.90, 'au_14k'],
+            ['crveno', 'Crveno zlato', '#E8A28C', 13.00, 'au_14k'],
         ];
         foreach ($materials as $i => [$slug, $label, $color, $density, $spotKey]) {
             $rows[] = [

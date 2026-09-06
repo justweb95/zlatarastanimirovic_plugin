@@ -82,6 +82,86 @@ Sve odluke donete 2026-08-31 osim gde je drugačije navedeno. Format: odluka →
 25. **Materijali i finiši iz klijentovih V-Ray fajlova** (`*.gvVisMat`, 2026-09-03).
     3 metala: **Žuto** `#E6C181`, **Belo** `#C3C3CD`, **Crveno** `#FFB9AA` (svi 14K). 3 finiša iz reflection glossiness: **Polirano** (gloss 1.0 → rough ~0.06), **Mat** (0.5 → ~0.42), **Grebano** (0.6 → ~0.34, anizotropna normal mapa). Platina/Palladium se dodaju u adminu ako klijent proširi ponudu.
 
+## Odluke — 2026-09-06 (klijent, drugi krug UI/UX — 15 stavki u jednoj sesiji)
+
+26. **Koraci restrukturirani, "Model" korak ukinut.** Novi redosled: **Profil ·
+    Dimenzije · Materijal · Žlebovi · Dijamanti · Gravura** (bilo: Model ·
+    Materijal · Profil · Širina · Završna obrada · Dijamanti · Gravura) — prati
+    redosled konkurenta (Confmetrix, `docs/reference/competitors.md`). PROFIL
+    (4 postojeće cross-section forme: ravni/zaobljeni/d-profil/okrugli) je sada
+    ulazna tačka, prikazan kao kartice sa slikom preseka + tekstom (ne chip-ovi).
+    "Model" (ravna/zaobljena/ravna-kamen/zaobljena-kamen — `wp_zs_options`
+    `group_key='model'`) više nije korisnički izbor: sve 4 vrste imaju
+    `basePrice=0` i isti `fill` koji već nosi `profile` grupa, tako da ništa nije
+    izgubljeno — `model` red se i dalje interno razrešava (prvi `model` čiji
+    `params.profile` odgovara izabranom profilu) samo za bazne/fallback
+    vrednosti, korisnik ga nikad ne bira. Leva kolona sa listom modela je
+    obrisana u celosti — 3D viewport sada ide od levе ivice do desnog panela.
+    "Završna obrada" (finish grupa) uklopljena u MATERIJAL korak (dropdown/chip
+    "Površina" pored swatch-eva metala) — nije poseban korak. Svaka akordeon
+    sekcija ima "Sledeće" dugme (napreduje na sledeći korak); gornja navigacija
+    po brojevima sad ispravno prati aktivan korak (stari kod je uvek isticao
+    "Model", bug — nikad nije ažurirao aktivni korak).
+27. **Beli refresh palete.** `--zs-bg` `#FBF9F4`→`#FFFFFF`, `--zs-surface`
+    `#F5F0E6`→`#F7F7F5`, `--zs-surface-2`/`--zs-border` analogno neutralizovani
+    (klijent: oba starija tona "žućkasta", ne sviđaju se). Zelena/braon/gold
+    akcenti nepromenjeni. `docs/design-system.md` ažuriran, stara paleta ostaje
+    zapisana kao istorijski kontekst.
+28. **3 boje zlata "izoštrene".** Filter-boje iz V-Ray fajlova (odluka #25) bile
+    su vizuelno zamućene/blede; klijent tražio bogatije/oštrije tonove iste 3
+    nijanse: Žuto `#E6C181`→`#D9A945`, Belo `#C3C3CD`→`#D6D9DE`, Crveno
+    `#FFB9AA`→`#E8A28C` (`src/Data/Seeder.php`).
+29. **Debljina klizač step 0.1→0.5mm**, default 1.4→1.5mm (raspon 1.0–2.5
+    nepromenjen). I širina (već 0.5) i veličina (već 0.5 u Seeder-u, ali
+    frontend UI je greškom hardkodovao step=1 za veličinu — ispravljeno) sad
+    dosledno koriste isti "čist broj" korak. Zaseban bug fix uz to: tick-labele
+    ispod klizača su se računale kao (max-min)/4 bez obzira na pravi `step`, pa
+    su ispadale neporavnate vrednosti (4.3/5.5/6.8 na širini 3–8 step 0.5) —
+    nova `niceTicks()` u `configurator.js` uvek zaokružuje na najbliži umnožak
+    pravog koraka.
+30. **Her/his default veličine namerno različite.** `defaultState(ringKey)`
+    sada oduzima/dodaje malu deltu (širina ±1mm, debljina ±0.5mm, veličina
+    ±6 EU) od podrazumevanih vrednosti groupe, tako da početni render (pre bilo
+    kakvog diranja klizača) UVEK pokazuje "njenu" burmu manju/tanju od
+    "njegove" — ranije su oba prstena krenula identična.
+31. **Render viewport fiksne visine** (`--zs-view-h: 560px`, `420px` na uskim
+    ekranima) — ranije je `.zs-view` koristio `flex:1` unutar `.zs-shell`
+    (flex kolona `min-height:100vh`), pa je visina zavisila od visine prozora i
+    (posredno, kroz CSS grid stretch) od dužine sadržaja desnog panela. Sad
+    `align-items:start` na `.zs-shell` + fiksna visina na `.zs-view` — render
+    se nikad ne menja veličinom bez obzira na prozor ili koliko je panel visok.
+32. **Logo u header-u.** Klijentova 2 fajla (`zlatara-stanimirovic-logo.png` =
+    pun wordmark, `zlatara-stanimirov-logo-small.png` = samo dijamantski znak)
+    kopirana u `assets/img/logo-full.png` / `logo-mark.png`; boot JSON nosi
+    `assetsUrl` (novo polje) da frontend JS može da sastavi URL bez hardkodovane
+    PHP konstante. Pun wordmark je podrazumevani brend u topbar-u; mark-only
+    verzija se prikazuje na uskim ekranima (`max-width:640px`) gde bi pun
+    wordmark bio pretesan — CSS media-query swap, ne JS.
+33. **Grooves (Žlebovi) — nov korak, UI/state samo, bez 3D geometrije još.**
+    Petи oblika (V-žleb 90°/U-žleb/Ugaoni/Perlaž/Karbon) + lista dodatih
+    žlebova (oblik, površina, širina, dubina, orijentacija, pozicija, brisanje)
+    — čisto frontend state (`s.grooves` niz), ništa ne diramo u
+    `scene.module.js` geometriji. **Tehnički dug** (roadmap.md): stvarno urezivanje
+    žlebova u proceduralni shank je poseban 3D zadatak za kasnije. Dva od tri
+    pod-taba (Razdvajajući žlebovi / Slojevi) su placeholder-i ("stižu uskoro").
+34. **Materijal — pattern koraci (Jedna/Dve/Tri boje/Slobodno) su UI scaffold,
+    ne utiču na 3D još.** Klijent eksplicitno rekao "za sada" — birajući
+    Dve/Tri boje samo čuva izbor u state-u i prikazuje napomenu da 3D i dalje
+    koristi jednu boju; "Slobodno" je vizuelno zamućen/disabled ("Uskoro").
+    Sub-pattern popover (1:1, 1:2, wave, dijagonalno, itd.) isto samo UI.
+35. **Dijamanti prošireni**: tip postavke (grupisano Obrub/Kanal/Napeta
+    postavka/Oko/Šapice — samo Obrub + 3 Kanal varijante aktivne, ostalo
+    vizuelno zamućeno "Uskoro", u duhu odluke #22 — nema krunica/šapica u v1),
+    Brus (samo Brilijant aktivan), Kvalitet (fiksno, informativno), Količina
+    (1–5) i Pozicioniranje (Levo/Centar/Desno/Slobodno). `scene.module.js`
+    `buildStoneFor()` sada prima niz pozicija (`state.stone.positions`) umesto
+    jedne — N kamenova deljene geometrije, ravnomerno raspoređeni oko bazne
+    pozicije (razmak 2.4mm) — potvrđeno konzolskim logom tokom razvoja
+    (pozicije `[-2.4,0,2.4]` za qty=3), a ne samo vizuelno (headless swiftshader
+    render na ovoj mašini je premali/pod pogrešnim uglom da bi se 1.5mm kamen
+    jasno video na ~40mm prstenu — klijent treba da potvrdi izgled u pravom
+    browseru).
+
 ## Otvorena pitanja (blokiraju procenu obima)
 
 | # | Pitanje | Zašto je bitno |

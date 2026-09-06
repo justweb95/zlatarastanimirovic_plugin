@@ -371,7 +371,7 @@ function create(canvas, opts = {}) {
     const root = new THREE.Group();
     scene.add(root);
     const mat = new THREE.MeshPhysicalMaterial({
-      color: new THREE.Color('#E6C181'),
+      color: new THREE.Color('#D9A945'),
       metalness: 1.0, roughness: 0.08, envMap: envRT.texture, envMapIntensity: 1.5,
       side: THREE.DoubleSide,
     });
@@ -379,7 +379,7 @@ function create(canvas, opts = {}) {
     return {
       key, root, mat, band: null, stone: null, outer: 8,
       blob: pairMode ? makeContactBlob() : null,
-      target: { color: new THREE.Color('#E6C181'), roughness: 0.08 },
+      target: { color: new THREE.Color('#D9A945'), roughness: 0.08 },
     };
   }
   const rigs = { her: makeRig('her'), his: makeRig('his') };
@@ -542,33 +542,69 @@ function create(canvas, opts = {}) {
     return outerR;
   }
 
+  // Single flush round-brilliant approximation (pavilion cone + crown +
+  // table), unit-sized (Ø1) so any instance can be scaled to the actual mm
+  // diameter. Geometries are shared/cached at module scope — only the Group
+  // wrapper + its transform are per-stone, so N stones cost N cheap
+  // transforms, not N sets of geometry.
+  let stoneGeo = null;
+  function makeStoneMesh() {
+    if (!stoneGeo) {
+      stoneGeo = {
+        pav: new THREE.ConeGeometry(0.5, 0.62, 16),
+        crown: new THREE.CylinderGeometry(0.5, 0.42, 0.18, 16),
+        table: new THREE.CylinderGeometry(0.30, 0.42, 0.12, 16),
+      };
+    }
+    const group = new THREE.Group();
+    const pav = new THREE.Mesh(stoneGeo.pav, sharedStoneMat);
+    pav.position.y = -0.34; pav.rotation.x = Math.PI;
+    const crown = new THREE.Mesh(stoneGeo.crown, sharedStoneMat);
+    crown.position.y = 0.02;
+    const table = new THREE.Mesh(stoneGeo.table, sharedStoneMat);
+    table.position.y = 0.16;
+    group.add(pav, crown, table);
+    return group;
+  }
+
+  // state.stone = { mm, positions: [mm along band, ...] } — v1 only ever
+  // places flush round stones directly into the band's outer surface (no
+  // prong/crown setting yet, decisions.md #22/roadmap "Tehnički dug"). Several
+  // "Pozicioniranje"/"Količina" UI choices (configurator.js) resolve to
+  // several entries in `positions` here — e.g. quantity=3 "Kanal" style
+  // produces 3 evenly-spaced positions server^Wclient-side before this ever
+  // sees it; this function just places whatever list it's given.
+  // `position` (singular, legacy/thumbnail use) is still accepted as a
+  // single-stone shorthand.
   function buildStoneFor(key, state) {
     const rig = rigs[key];
     const s = state.stone;
-    if (!s || !s.mm) { if (rig.stone) rig.stone.visible = false; return; }
+    const positions = s && s.mm ? (s.positions || [typeof s.position === 'number' ? s.position : 0]) : [];
+    const n = positions.length;
+    if (!rig.stones) rig.stones = [];
+    // Grow/shrink the pool to match. Instances are cheap (shared geometry);
+    // just toggle visibility rather than dispose/recreate on every tweak.
+    while (rig.stones.length < n) {
+      const m = makeStoneMesh();
+      rig.root.add(m);
+      rig.stones.push(m);
+    }
+    rig.stones.forEach((m, i) => { m.visible = i < n; });
+    if (!n) return;
+
     const size = state.size || 54;
     const innerR = size / (2 * Math.PI);
     const outerR = innerR + (state.thickness || 1.4);
     const d = s.mm;                                  // stone Ø in mm
-    if (!rig.stone) {
-      rig.stone = new THREE.Group();
-      const pav = new THREE.Mesh(new THREE.ConeGeometry(0.5, 0.62, 16), sharedStoneMat);
-      pav.position.y = -0.34; pav.rotation.x = Math.PI;
-      const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.42, 0.18, 16), sharedStoneMat);
-      crown.position.y = 0.02;
-      const table = new THREE.Mesh(new THREE.CylinderGeometry(0.30, 0.42, 0.12, 16), sharedStoneMat);
-      table.position.y = 0.16;
-      rig.stone.add(pav, crown, table);
-      rig.root.add(rig.stone);
-    }
-    rig.stone.visible = true;
-    rig.stone.scale.setScalar(d);
-    // flush: sink the stone into the outer surface
-    const seatR = outerR - d * 0.34;
+    const seatR = outerR - d * 0.34;                  // flush: sink into the outer surface
     const meanCirc = Math.PI * (innerR + outerR);
-    const theta = ((s.position || 0) / meanCirc) * Math.PI * 2; // 0 = 12 o'clock (+Z)
-    rig.stone.position.set(Math.sin(theta) * seatR, 0, Math.cos(theta) * seatR);
-    rig.stone.rotation.set(Math.PI / 2, 0, -theta); // table faces outward
+    positions.forEach((posMm, i) => {
+      const m = rig.stones[i];
+      m.scale.setScalar(d);
+      const theta = ((posMm || 0) / meanCirc) * Math.PI * 2; // 0 = 12 o'clock (+Z)
+      m.position.set(Math.sin(theta) * seatR, 0, Math.cos(theta) * seatR);
+      m.rotation.set(Math.PI / 2, 0, -theta); // table faces outward
+    });
   }
 
   // ------------------------------------------------------------- material tween

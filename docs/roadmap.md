@@ -97,24 +97,39 @@ Faze su inkrementalne; svaka se može demonstrirati. Acceptance = merljiv kriter
 Detaljna analiza konkurencije: `docs/reference/competitors.md` (Breuning + Fischer, oba na
 Confmetrix engine-u).
 
-- **DIJAMANTI** — v1 = jedan flush okrugli kamen (veličina Ø + pozicija na klizaču). v2:
-  - **tip rešetke/kruništa**: flush (eingerieben), kanal (+ poprečno / bočno l-r / oko celog
-    prstena), bezel/zarge, tension (spannring), kandže (chaton 4/6-prong), bočne rešetke
-  - **red / pavé**: bira se broj kamenova — preset "trećina / pola / ceo prsten" (sa
-    izračunatim brojem po veličini) ili tačan broj; `InstancedMesh`; opcija "sa obe strane"
+- **DIJAMANTI** — v1 = jedan/više flush okruglih kamenova (veličina Ø + količina 1–5 +
+  pozicioniranje Levo/Centar/Desno/Slobodno, 2026-09-06 — vidi decisions.md #35).
+  UI već nudi grupisan izbor "tipa postavke" (Obrub aktivan; Kanal delimično aktivan;
+  Napeta postavka/Oko/Šapice vizuelno zamućeni "Uskoro") i Brus (samo Brilijant aktivan) —
+  **ali samo Obrub/Kanal stvarno menjaju 3D** (flush u ravnu podlogu, bez krunica/šapica,
+  odluka #22). Pravi v2 posao je 3D geometrija za:
+  - **tip rešetke/kruništa**: kanal (+ poprečno / bočno l-r / oko celog prstena), bezel/zarge,
+    tension (spannring), kandže (chaton 4/6-prong), bočne rešetke — sve već imenovano u UI-ju
+    kao zamućene opcije, čeka geometriju
+  - **red / pavé**: preset "trećina / pola / ceo prsten" (izračunat broj po veličini);
+    `InstancedMesh` za veće količine; opcija "sa obe strane"
   - **free placement**: 2D razvijena mapa trake + drag tačke (X/Y mm) + ~17 gotovih šablona
-  - **cut**: brilliant / princess / baguette; **kvalitet**: G/SI…G/IF + fancy boje;
-    lab vs natural; **više grupa kamenova po prstenu**
+  - **cut**: princess / baguette / ovalni / smaragd (UI dropdown već postoji, disabled);
+    **kvalitet**: G/SI…G/IF + fancy boje; lab vs natural; **više grupa kamenova po prstenu**
   - skriveni kamen u unutrašnjosti trake ("diamant im ringinnern")
-- **Profili** — v1 ima 4. Konkurencija 16–20, prikazani kao crtež poprečnog preseka.
-  Proširiti biblioteku + **live SVG presek** koji se menja sa širinom/debljinom/profilom.
-- **Materijal** — v1 = 3 zlata × 3 finiša (klijentovi V-Ray fajlovi). v2: finoća kao izbor
-  (585/750, menja `density` → masu → cenu), više finiša (konkurencija 12–16),
-  dvobojni/trobojni prsten sa uzorcima (1:1, 2:1, talas, dijagonala, inlay).
+- ~~**Profili** — live SVG presek koji se menja sa širinom/debljinom/profilom~~ **✅ urađeno
+  2026-09-06** (`crossSectionPath()`/`bigCrossSectionSVG()` u `configurator.js`, korak Dimenzije).
+  Ostaje: proširiti biblioteku profila (v1 ima 4, konkurencija 16–20).
+- **Materijal** — v1 = 3 zlata × 3 finiša (klijentovi V-Ray fajlovi, boje "izoštrene"
+  2026-09-06 — decisions.md #28). UI za dvobojni/trobojni/slobodni uzorak (1:1, 2:1, talas,
+  dijagonala, segment, osovinski...) **već postoji** (korak Materijal, 2026-09-06) ali je
+  **čisto vizuelni scaffold — ne utiče na 3D još** (decisions.md #34). v2: finoća kao izbor
+  (585/750, menja `density` → masu → cenu), više finiša (konkurencija 12–16), i stvarno
+  višebojno renderovanje (multi-material shank ili teksturirana maska) iza tog UI-ja.
 - **Žljebovi / dezen** (Grooves/Fugen) — U/V/uglasti kanal, millgriff, carbon traka,
-  obojeni (emajl) umetak sa pozicijom/širinom/bojom; stepenici na ivici. Nije u v1.
-- **Veličina prstena**: korak 0.5, prikaz Ø mm, alternativni sistemi (US/UK/Swiss),
-  checkbox "optimalni odnos širina/debljina".
+  obojeni (emajl) umetak sa pozicijom/širinom/bojom; stepenici na ivici. **UI/state korak
+  dodat 2026-09-06** (5 oblika, lista dodatih žlebova sa punim podešavanjima — decisions.md
+  #33) — **i dalje nema 3D efekta**, žlebovi se ne urezuju u proceduralni shank. To je
+  glavni preostali v2 zadatak ovde: pretvoriti `state.grooves` niz u stvarnu geometriju
+  (verovatno CSG/displacement na `LatheGeometry` preseku, analogno gravuri — odluka #8).
+- ~~**Veličina prstena**: korak 0.5, checkbox "optimalni odnos širina/debljina"~~ **✅ urađeno
+  2026-09-06** (Dimenzije korak — decisions.md #26/#29). Ostaje: alternativni sistemi
+  veličina (US/UK/Swiss).
 - **Cena po prstenu** pored "za par" (uraditi već u v1 ako stigne).
 - **Gravura**: diamantgravur (pored lasera), potpis/otisak prsta, ćirilica, više simbola.
 - **Undo / Reset** dugmad; **Sačuvaj/Podeli/PDF/Deep-link** konfiguracije (Faza 5).

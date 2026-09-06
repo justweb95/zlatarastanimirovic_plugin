@@ -151,7 +151,8 @@
         // reference "polished gold" hexes at different richness/depth for
         // side-by-side comparison.
         swatches: [
-          { label: 'Trenutna (klijent 14K)', hex: '#E6C181' },
+          { label: 'Trenutna (klijent 14K, sharpened 2026-09-06)', hex: '#D9A945' },
+          { label: 'Prethodna (pre-sharpen)', hex: '#E6C181' },
           { label: 'Čisto zlato (PBR F0)', hex: '#FFE39D' },
           { label: 'Bogato metalik', hex: '#D4AF37' },
           { label: 'Toplo 18K', hex: '#D9A857' },

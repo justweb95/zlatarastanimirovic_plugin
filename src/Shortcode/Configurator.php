@@ -37,10 +37,11 @@ final class Configurator
 
         $compiled = Compiler::get($model);
         $bootJson = wp_json_encode([
-            'restUrl' => esc_url_raw(rest_url('zs/v1/config')),
-            'model'   => $model,
-            'version' => $compiled['version'],
-            'config'  => $compiled['payload'],
+            'restUrl'   => esc_url_raw(rest_url('zs/v1/config')),
+            'assetsUrl' => esc_url_raw(ZSC_URL . 'assets/'),
+            'model'     => $model,
+            'version'   => $compiled['version'],
+            'config'    => $compiled['payload'],
         ]);
 
         $id = 'zs-config-' . wp_generate_uuid4();
