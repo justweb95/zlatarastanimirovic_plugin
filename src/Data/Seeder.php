@@ -131,11 +131,14 @@ final class Seeder
 
         // 3 — PROFIL. Discrete cross-section. shape → THREE.Shape generator;
         //     fill → cross-section fill factor for the weight formula.
+        // Order (client, 2026-09-07): "Zaobljeni" first/default, "Ravni" last —
+        // same "starts from rounded" preference as decisions.md's earlier
+        // model-sort note, now re-applied to the Profil group directly.
         $profiles = [
-            ['ravni',   'Ravni',    'flat',      1.00],
             ['zaobljeni', 'Zaobljeni', 'court',   0.86],
             ['d-profil', 'D-profil', 'd-comfort', 0.90],
             ['okrugli', 'Okrugli',  'round',      0.79],
+            ['ravni',   'Ravni',    'flat',      1.00],
         ];
         foreach ($profiles as $i => [$slug, $label, $shape, $fill]) {
             $rows[] = [

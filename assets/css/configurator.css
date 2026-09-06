@@ -17,6 +17,10 @@
   flex-direction: column;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
+  /* room for the fixed bottom bar (client, 2026-09-07: price bar must stay
+     pinned to the viewport bottom, see .zs-bottombar) so the last section
+     never sits hidden underneath it. */
+  padding-bottom: var(--zs-bottombar-h, 96px);
 }
 
 body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
@@ -185,7 +189,12 @@ body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
 
 /* ------------------------------------------------------------------ accordion */
 
-.zs-col-panel { align-self: start; border: 1px solid var(--zs-border); border-radius: var(--zs-radius); background: #fff; overflow: hidden; }
+/* overflow was `hidden` (just to clip children to the rounded corners) — that
+   also clipped the Materijal pattern popover (client, 2026-09-07: "opcije se
+   sakrivaju iza panela"), so it's `visible` now; the accordion header/body
+   rows don't actually need corner-clipping in practice (no child fills all
+   the way to the panel's own edge). */
+.zs-col-panel { align-self: start; border: 1px solid var(--zs-border); border-radius: var(--zs-radius); background: #fff; overflow: visible; }
 .zs-acc { border-bottom: 1px solid var(--zs-border); }
 .zs-acc:last-child { border-bottom: 0; }
 .zs-acc-head {
@@ -242,11 +251,17 @@ body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
 
 /* ---------------------------------------------------------------- bottom bar */
 
+/* Client (2026-09-07): price/CTA bar must always stay pinned to the bottom of
+   the viewport, independent of scroll position / how much content is above
+   it — fixed + high z-index (see also .zs-configurator's padding-bottom,
+   which reserves room so real content never sits underneath it). */
 .zs-bottombar {
   display: grid; grid-template-columns: auto 1fr auto; align-items: center;
   gap: var(--zs-space-6);
   padding: var(--zs-space-4) var(--zs-space-6);
   border-top: 1px solid var(--zs-border); background: var(--zs-bg);
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 999;
+  box-shadow: 0 -6px 24px rgba(34, 31, 27, 0.08);
 }
 .zs-price { display: flex; flex-direction: column; }
 .zs-price-label { font-size: var(--zs-fs-label); letter-spacing: var(--zs-ls-label); text-transform: uppercase; color: var(--zs-text-muted); }
@@ -351,10 +366,18 @@ body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
 .zs-pat-fill-b { fill: var(--zs-bronze); opacity: .45; }
 .zs-pat-fill-free { fill: var(--zs-surface); opacity: .5; }
 .zs-pat-dash { stroke: var(--zs-text-muted); stroke-width: 1.4; stroke-dasharray: 3 2; }
+/* Opens to the LEFT of its trigger (client, 2026-09-07) — the options panel
+   sits at the right edge of the layout, so a popover opening rightward/below
+   has nowhere to go but off-screen; opening left, over the viewport column,
+   is the only direction with room. */
 .zs-pattern-popover {
-  position: absolute; z-index: 5; top: calc(100% + 6px); left: 0; width: max(260px, 100%);
+  position: absolute; z-index: 20; top: 0; right: calc(100% + 10px); left: auto; width: 280px;
   background: #fff; border: 1px solid var(--zs-border); border-radius: var(--zs-radius);
   box-shadow: var(--zs-shadow-md); padding: var(--zs-space-4);
+}
+@media (max-width: 1180px) {
+  /* stacked single-column layout — no room to the left either; fall back to opening below */
+  .zs-pattern-popover { right: auto; left: 0; top: calc(100% + 6px); width: min(280px, 100%); }
 }
 .zs-pattern-sub-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--zs-space-2); }
 .zs-pattern-sub {

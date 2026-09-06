@@ -349,22 +349,66 @@ function create(canvas, opts = {}) {
   // uShadeMinY/uShadeMaxY range (set from that ring's own real vertical
   // extent in buildBandFor below, so it's always exactly bottom→top of THAT
   // ring regardless of size) darkens toward the bottom by uShadeStrength.
+  // Also wires up the Materijal "Dve boje"/"Tri boje" multi-colour band
+  // (client, 2026-09-07, decisions.md #34→real): a custom per-vertex
+  // `aBandY` attribute (set in buildBandFor, one float = that vertex's
+  // LOCAL width-axis position, i.e. the same coordinate profilePoints()
+  // already uses) lets the fragment shader pick a zone colour BEFORE the
+  // metal/specular math runs (right after <color_fragment>, so reflections
+  // pick up the right tint per zone too — swapping the colour only in the
+  // final gl_FragColor, like the bottom-shade trick below does, would leave
+  // gold-tinted specular highlights sitting on a silver base). Only straight
+  // width-ratio splits (1:1, 1:2, 2:1…) are done this way — patterns needing
+  // a per-angle coordinate (wave/diagonal/segment/axial) aren't implemented
+  // yet (configurator.js's colorZonesFor() returns null for those, which
+  // keeps uZoneCount at 0 here = ordinary single-colour material).
   function attachBottomShade(mat) {
     mat.userData.bottomShade = { minY: -10, maxY: 10, strength: 0 };
+    mat.userData.colorZones = { count: 0, colors: [new THREE.Color(), new THREE.Color(), new THREE.Color()], stop1: 0, stop2: 0 };
     mat.onBeforeCompile = (shader) => {
       shader.uniforms.uShadeMinY = { value: mat.userData.bottomShade.minY };
       shader.uniforms.uShadeMaxY = { value: mat.userData.bottomShade.maxY };
       shader.uniforms.uShadeStrength = { value: mat.userData.bottomShade.strength };
+      shader.uniforms.uZoneCount = { value: mat.userData.colorZones.count };
+      shader.uniforms.uColorA = { value: mat.userData.colorZones.colors[0] };
+      shader.uniforms.uColorB = { value: mat.userData.colorZones.colors[1] };
+      shader.uniforms.uColorC = { value: mat.userData.colorZones.colors[2] };
+      shader.uniforms.uStop1 = { value: mat.userData.colorZones.stop1 };
+      shader.uniforms.uStop2 = { value: mat.userData.colorZones.stop2 };
       shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nvarying float vShadeWorldY;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvShadeWorldY = (modelMatrix * vec4(transformed, 1.0)).y;');
+        .replace('#include <common>', '#include <common>\nattribute float aBandY;\nvarying float vShadeWorldY;\nvarying float vBandY;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvShadeWorldY = (modelMatrix * vec4(transformed, 1.0)).y;\nvBandY = aBandY;');
       shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', '#include <common>\nvarying float vShadeWorldY;\nuniform float uShadeMinY;\nuniform float uShadeMaxY;\nuniform float uShadeStrength;')
+        .replace('#include <common>',
+          '#include <common>\nvarying float vShadeWorldY;\nvarying float vBandY;\nuniform float uShadeMinY;\nuniform float uShadeMaxY;\nuniform float uShadeStrength;'
+          + '\nuniform float uZoneCount;\nuniform vec3 uColorA;\nuniform vec3 uColorB;\nuniform vec3 uColorC;\nuniform float uStop1;\nuniform float uStop2;')
+        .replace('#include <color_fragment>',
+          '#include <color_fragment>\nif (uZoneCount > 1.5) {\n  vec3 zsColor = (vBandY > uStop1) ? uColorB : uColorA;\n'
+          + '  if (uZoneCount > 2.5 && vBandY > uStop2) zsColor = uColorC;\n  diffuseColor.rgb = zsColor;\n}')
         .replace('#include <dithering_fragment>',
           'float shadeT = clamp((vShadeWorldY - uShadeMinY) / max(uShadeMaxY - uShadeMinY, 0.0001), 0.0, 1.0);\n'
           + 'gl_FragColor.rgb *= mix(1.0 - uShadeStrength, 1.0, shadeT);\n#include <dithering_fragment>');
       mat.userData.shader = shader;
     };
+  }
+  // Pushes configurator.js's `colorZones` (or null) onto a rig's material.
+  // `zones` = { colors: [hex,...], stops: [mm,...] } | null.
+  function applyColorZones(mat, zones) {
+    const cz = mat.userData.colorZones;
+    const count = zones ? zones.colors.length : 0;
+    cz.count = count;
+    if (zones) {
+      zones.colors.forEach((hex, i) => cz.colors[i].set(hex));
+      cz.stop1 = zones.stops[0] || 0;
+      cz.stop2 = zones.stops[1] || 0;
+    }
+    if (mat.userData.shader) {
+      mat.userData.shader.uniforms.uZoneCount.value = count;
+      mat.userData.shader.uniforms.uStop1.value = cz.stop1;
+      mat.userData.shader.uniforms.uStop2.value = cz.stop2;
+      // uColorA/B/C uniforms already point at cz.colors[i] (same Color
+      // instances, mutated above) — no reassignment needed.
+    }
   }
 
   function makeRig(key) {
@@ -488,6 +532,21 @@ function create(canvas, opts = {}) {
     const outerR = innerR + thickness;
     const pts = profilePoints(state.profileShape || 'flat', innerR, thickness, state.width || 4);
     const geo = new THREE.LatheGeometry(pts, LATHE_SEGMENTS);
+    // Custom per-vertex attribute carrying each vertex's LOCAL width-axis
+    // position (same y profilePoints() already works in) — feeds the
+    // Materijal multi-colour shader hook (attachBottomShade/applyColorZones)
+    // so it can pick a zone colour by width position. LatheGeometry's own
+    // vertex order is angular-slice-major, point-index-minor (index =
+    // i*pts.length + j) — rotateY() below only rotates X/Z, Y is untouched,
+    // so this doesn't need to be recomputed after it.
+    {
+      const n = pts.length;
+      const bandY = new Float32Array((LATHE_SEGMENTS + 1) * n);
+      for (let i = 0; i <= LATHE_SEGMENTS; i++) {
+        for (let j = 0; j < n; j++) bandY[i * n + j] = pts[j].y;
+      }
+      geo.setAttribute('aBandY', new THREE.BufferAttribute(bandY, 1));
+    }
     geo.rotateY(-Math.PI / 2);     // move the lathe seam to the left silhouette edge
     geo.computeVertexNormals();
     weldLatheSeam(geo, pts.length, LATHE_SEGMENTS);
@@ -598,12 +657,103 @@ function create(canvas, opts = {}) {
     const d = s.mm;                                  // stone Ø in mm
     const seatR = outerR - d * 0.34;                  // flush: sink into the outer surface
     const meanCirc = Math.PI * (innerR + outerR);
+    // widthPos = where ACROSS THE BAND'S WIDTH the stone sits (client,
+    // 2026-09-07 — "Pozicioniranje" Levo/Centar/Desno/Slobodno; configurator.js's
+    // diamondWidthPos() already clamps it to the band's real width minus
+    // margins and away from any groove). It's the same local Y axis
+    // profilePoints()/aBandY use, so this is just rig.root's local Y, no
+    // extra transform needed.
+    const widthPos = s.widthPos || 0;
     positions.forEach((posMm, i) => {
       const m = rig.stones[i];
       m.scale.setScalar(d);
       const theta = ((posMm || 0) / meanCirc) * Math.PI * 2; // 0 = 12 o'clock (+Z)
-      m.position.set(Math.sin(theta) * seatR, 0, Math.cos(theta) * seatR);
+      m.position.set(Math.sin(theta) * seatR, widthPos, Math.cos(theta) * seatR);
       m.rotation.set(Math.PI / 2, 0, -theta); // table faces outward
+    });
+  }
+
+  // ---------------------------------------------------------------- grooves
+  //
+  // Groove render (client, 2026-09-07 — was UI/state-only, decisions.md #33):
+  // each groove is its own tiny LatheGeometry ring (exact same revolve
+  // technique as the band itself, just a much smaller profile) sitting
+  // flush at the band's outer surface at the groove's width-position,
+  // reading as a fine decorative ridge/inlay line — NOT a true carved notch
+  // into the band's own silhouette. Real carving would need shape-specific
+  // surgery on profilePoints() (its geometry differs per profile —
+  // round/flat/court/d-comfort — so a notch that's correct for all 4 is a
+  // separate per-shape job); a small applied ridge is shape-agnostic, can't
+  // self-intersect, and is a legitimate real technique too (millgrain/inlay
+  // strips are physically applied, not always carved). This always wraps
+  // fully around the band, which is really only strictly what
+  // orientation:'vertical' (the default) means — 'horizontal'/'wave'
+  // grooves (a per-ANGLE feature) render the same way for now, logged as a
+  // v2 follow-up in roadmap.md.
+  function grooveProfilePoints(shape, outerR, width, depth) {
+    const halfW = Math.max(width, 0.05) / 2;
+    const rise = Math.max(depth, 0.02) * 0.6; // small raised ridge, proportional to "depth"
+    const pts = [];
+    if (shape === 'v90') {
+      pts.push(new THREE.Vector2(outerR, -halfW));
+      pts.push(new THREE.Vector2(outerR + rise, 0));
+      pts.push(new THREE.Vector2(outerR, halfW));
+    } else if (shape === 'angular') {
+      const flat = halfW * 0.35;
+      pts.push(new THREE.Vector2(outerR, -halfW));
+      pts.push(new THREE.Vector2(outerR + rise, -flat));
+      pts.push(new THREE.Vector2(outerR + rise, flat));
+      pts.push(new THREE.Vector2(outerR, halfW));
+    } else {
+      // u-round / perlage / carbon — one smooth arced ridge (v1 approximation)
+      const steps = 12;
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        pts.push(new THREE.Vector2(outerR + rise * Math.sin(Math.PI * t), -halfW + t * halfW * 2));
+      }
+    }
+    // NOT closed back to the first point — unlike the band's own profilePoints()
+    // (a closed cross-section loop), this is a thin OPEN ridge running from
+    // one edge of the groove's width to the other; closing it would revolve
+    // an extra seam jumping back across the width and produce a visible
+    // pinch/artifact.
+    return pts;
+  }
+  const GROOVE_SEGMENTS = 120; // thin decorative ring — doesn't need the band's full 260
+  function buildGroovesFor(key, state) {
+    const rig = rigs[key];
+    const grooves = state.grooves || [];
+    if (!rig.grooveMeshes) rig.grooveMeshes = [];
+    while (rig.grooveMeshes.length > grooves.length) {
+      const m = rig.grooveMeshes.pop();
+      rig.root.remove(m);
+      m.geometry.dispose(); m.material.dispose();
+    }
+    while (rig.grooveMeshes.length < grooves.length) {
+      const mat = new THREE.MeshPhysicalMaterial({
+        color: rig.mat.color.clone(), metalness: 1.0, roughness: 0.2,
+        envMap: envRT.texture, envMapIntensity: 1.1, side: THREE.DoubleSide,
+      });
+      const m = new THREE.Mesh(new THREE.BufferGeometry(), mat);
+      rig.root.add(m);
+      rig.grooveMeshes.push(m);
+    }
+    if (!grooves.length) return;
+
+    const size = state.size || 54;
+    const innerR = size / (2 * Math.PI);
+    const outerR = innerR + (state.thickness || 1.4);
+    grooves.forEach((grv, i) => {
+      const m = rig.grooveMeshes[i];
+      m.geometry.dispose();
+      const pts = grooveProfilePoints(grv.shape, outerR, grv.width || 0.3, grv.depth || 0.15);
+      const geo = new THREE.LatheGeometry(pts, GROOVE_SEGMENTS);
+      geo.rotateY(-Math.PI / 2);
+      geo.computeVertexNormals();
+      weldLatheSeam(geo, pts.length, GROOVE_SEGMENTS);
+      m.geometry = geo;
+      m.material.color.copy(rig.mat.color);
+      m.material.roughness = grv.roughness || 0.2;
     });
   }
 
@@ -614,6 +764,7 @@ function create(canvas, opts = {}) {
     if (state.materialColor) rig.target.color.set(state.materialColor);
     if (typeof state.roughness === 'number') rig.target.roughness = state.roughness;
     if (typeof state.envIntensity === 'number') rig.mat.envMapIntensity = state.envIntensity;
+    applyColorZones(rig.mat, state.colorZones || null);
     invalidate(30); // tween runs inside the render loop
   }
 
@@ -673,6 +824,12 @@ function create(canvas, opts = {}) {
       const rig = rigs[k];
       rig.mat.color.lerp(rig.target.color, 0.09);
       rig.mat.roughness += (rig.target.roughness - rig.mat.roughness) * 0.09;
+      // Grooves only rebuild on discrete state changes (buildGroovesFor), so
+      // their colour is kept tracking the band's own (tweening) colour here
+      // instead, each frame — otherwise a metal-colour change wouldn't
+      // repaint existing grooves until some geometry-changing field also
+      // happened to change.
+      if (rig.grooveMeshes) rig.grooveMeshes.forEach((m) => m.material.color.copy(rig.mat.color));
     });
     const moving = controls.update();       // true while damping / auto-rotating
     renderer.render(scene, camera);
@@ -705,20 +862,24 @@ function create(canvas, opts = {}) {
       const s = pair.her, last = rigs.her.last || {};
       const geomChanged = ['width', 'thickness', 'size', 'profileShape'].some((k) => s[k] !== last[k]);
       const stoneChanged = JSON.stringify(s.stone || null) !== JSON.stringify(last.stone || null);
+      const groovesChanged = JSON.stringify(s.grooves || null) !== JSON.stringify(last.grooves || null);
       if (geomChanged || !rigs.her.band) outerHer = buildBandFor('her', s);
       if (geomChanged || stoneChanged) buildStoneFor('her', s);
+      if (geomChanged || groovesChanged) buildGroovesFor('her', s);
       applyMaterialFor('her', s);
-      rigs.her.last = { ...s, stone: s.stone ? { ...s.stone } : null };
+      rigs.her.last = { ...s, stone: s.stone ? { ...s.stone } : null, grooves: s.grooves ? s.grooves.map((g) => ({ ...g })) : null };
     }
     if (pair.his && pairMode) {
       rigs.his.root.visible = true;
       const s = pair.his, last = rigs.his.last || {};
       const geomChanged = ['width', 'thickness', 'size', 'profileShape'].some((k) => s[k] !== last[k]);
       const stoneChanged = JSON.stringify(s.stone || null) !== JSON.stringify(last.stone || null);
+      const groovesChanged = JSON.stringify(s.grooves || null) !== JSON.stringify(last.grooves || null);
       if (geomChanged || !rigs.his.band) outerHis = buildBandFor('his', s);
       if (geomChanged || stoneChanged) buildStoneFor('his', s);
+      if (geomChanged || groovesChanged) buildGroovesFor('his', s);
       applyMaterialFor('his', s);
-      rigs.his.last = { ...s, stone: s.stone ? { ...s.stone } : null };
+      rigs.his.last = { ...s, stone: s.stone ? { ...s.stone } : null, grooves: s.grooves ? s.grooves.map((g) => ({ ...g })) : null };
     }
     if (!framed && (rigs.her.band || rigs.his.band)) {
       framed = true;
@@ -858,6 +1019,7 @@ function create(canvas, opts = {}) {
     rigs.his.mat.dispose();
     rigs.her.blob && rigs.her.blob.material.dispose();
     rigs.his.blob && rigs.his.blob.material.dispose();
+    ['her', 'his'].forEach((k) => (rigs[k].grooveMeshes || []).forEach((m) => { m.geometry.dispose(); m.material.dispose(); }));
     contactTex.dispose();
     glowTex.dispose();
     ground.material.dispose();

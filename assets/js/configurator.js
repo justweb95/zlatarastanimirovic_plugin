@@ -214,7 +214,18 @@
     shell.appendChild(this.buildView());
     shell.appendChild(this.buildPanel());
     r.appendChild(shell);
-    r.appendChild(this.buildBottombar());
+    var bottombar = this.buildBottombar();
+    r.appendChild(bottombar);
+    // The bar is `position:fixed` (see configurator.css) so it always stays
+    // pinned to the viewport bottom — real content needs matching
+    // padding-bottom on the root or the last section sits hidden underneath
+    // it. Height varies (bottombar wraps to multiple rows on narrow widths),
+    // so measure it live rather than hardcoding one number.
+    if (window.ResizeObserver) {
+      new ResizeObserver(function (entries) {
+        r.style.setProperty('--zs-bottombar-h', Math.ceil(entries[0].contentRect.height) + 'px');
+      }).observe(bottombar);
+    }
     this.refresh();
     this.initScene();
   };
@@ -250,14 +261,24 @@
     var pbr = (mat && mat.params && mat.params.pbr) || {};
     var finPbr = (fin && fin.params && fin.params.pbr) || {};
     var stone = (dia && dia.params && dia.params.mm)
-      ? { mm: dia.params.mm, positions: diamondPositions(s) } : null;
+      ? { mm: dia.params.mm, positions: diamondPositions(s), widthPos: diamondWidthPos(s) } : null;
+    var grooves = (s.grooves || []).map(function (grv) {
+      var gfin = bySlug(g.finish, grv.surface);
+      var gpbr = (gfin && gfin.params && gfin.params.pbr) || {};
+      return {
+        shape: grv.shape, width: grv.width, depth: grv.depth, position: grv.position,
+        roughness: typeof gpbr.roughness === 'number' ? gpbr.roughness : 0.2
+      };
+    });
     return {
       width: s.width, thickness: s.thickness, size: s.size,
       profileShape: (prof && prof.params && prof.params.shape) || 'flat',
       materialColor: pbr.color || '#D9A945',
       roughness: typeof finPbr.roughness === 'number' ? finPbr.roughness : (pbr.roughness || 0.08),
       envIntensity: finPbr.anisotropy ? 1.0 : 1.2,
-      stone: stone
+      stone: stone,
+      grooves: grooves,
+      colorZones: colorZonesFor(s, g)
     };
   };
 
@@ -568,8 +589,12 @@
           sb.setAttribute('aria-pressed', String(s.colorSubPattern === sub.id));
           sb.addEventListener('click', function () {
             s.colorPattern = def.id; s.colorSubPattern = sub.id;
+            var zoneCount = def.id === 'three' ? 3 : 2;
+            if (!s.materialZones || s.materialZones.length !== zoneCount) {
+              s.materialZones = defaultZones(g.material, s.material, zoneCount);
+            }
             pop.hidden = true;
-            self.renderPanel();
+            self.renderPanel(); self.pushScene();
           });
           grid.appendChild(sb);
         });
@@ -586,24 +611,51 @@
         card.addEventListener('click', function () {
           if (def.disabled) return;
           s.colorPattern = def.id; s.colorSubPattern = '';
-          self.renderPanel();
+          self.renderPanel(); self.pushScene();
         });
       }
       patterns.appendChild(wrap);
     });
     box.appendChild(patterns);
-    if (s.colorPattern !== 'single') {
-      box.appendChild(hx('p', 'zs-micro', 'Napredne kombinacije boja stižu uskoro — 3D prikaz za sada koristi odabrani osnovni metal.'));
+
+    var zoneCount = s.colorPattern === 'three' ? 3 : (s.colorPattern === 'two' ? 2 : 0);
+    if (zoneCount && !RATIO_RE.test(s.colorSubPattern || '')) {
+      // "Talas"/"Dijagonalno"/"Segment"/"Osovinski" etc. — chosen but not one
+      // of the straight ratio splits the shader can actually do yet (needs a
+      // per-angle coordinate, not just width) — still single-colour for now.
+      box.appendChild(hx('p', 'zs-micro', 'Ovaj raspored (talas/dijagonalno/segment/osovinski) stiže uskoro — 3D za sada prikazuje samo pravolinijske razmere (1:1, 1:2...).'));
     }
 
-    box.appendChild(hx('p', 'zs-eyebrow', 'Metal'));
-    box.appendChild(this.uiSwatches(g.material, s.material, function (v) { s.material = v; }));
+    if (zoneCount) {
+      if (!s.materialZones || s.materialZones.length !== zoneCount) s.materialZones = defaultZones(g.material, s.material, zoneCount);
+      var zoneLabels = zoneCount === 3 ? ['Deo A', 'Deo B', 'Deo C'] : ['Deo A', 'Deo B'];
+      var zonesRow = el('div', 'zs-dim-row');
+      zoneLabels.forEach(function (label, i) {
+        var zbox = el('div');
+        zbox.appendChild(hx('p', 'zs-eyebrow', label));
+        zbox.appendChild(self.uiSwatches(g.material, s.materialZones[i], function (v) { s.materialZones[i] = v; }));
+        zonesRow.appendChild(zbox);
+      });
+      box.appendChild(zonesRow);
+    } else {
+      box.appendChild(hx('p', 'zs-eyebrow', 'Metal'));
+      box.appendChild(this.uiSwatches(g.material, s.material, function (v) { s.material = v; }));
+    }
 
     box.appendChild(hx('p', 'zs-eyebrow', 'Površina'));
     box.appendChild(this.uiChips(g.finish, s.finish, function (v) { s.finish = v; }));
 
     return box;
   };
+  function defaultZones(materials, primarySlug, count) {
+    var list = (materials || []).map(function (m) { return m.slug; });
+    var out = [primarySlug];
+    for (var i = 0; i < list.length && out.length < count; i++) {
+      if (list[i] !== primarySlug) out.push(list[i]);
+    }
+    while (out.length < count) out.push(primarySlug); // not enough distinct materials — repeat rather than crash
+    return out.slice(0, count);
+  }
 
   /* ------------------------------------------------------------------ Žlebovi */
 
@@ -671,7 +723,7 @@
         shape: s._grooveShapeChoice || 'v90', surface: 'polirano',
         width: 0.3, depth: 0.15, orientation: 'vertical', position: 0
       });
-      self.renderPanel(); self.gotoStep('Žlebovi');
+      self.renderPanel(); self.gotoStep('Žlebovi'); self.pushScene();
     });
     addRow.appendChild(addBtn);
     box.appendChild(addRow);
@@ -692,10 +744,8 @@
     var preview = el('div', 'zs-groove-preview');
     var mat = bySlug(g.material, s.material);
     var color = (mat && mat.params && mat.params.pbr && mat.params.pbr.color) || '#D9A945';
-    var posPct = 50 + Math.max(-1, Math.min(1, (grv.position || 0) / 10)) * 40;
     preview.style.background = 'linear-gradient(180deg,' + shade(color, 0.25) + ',' + color + ' 45%,' + shade(color, -0.2) + ')';
     var line = el('span', 'zs-groove-preview-line' + (grv.orientation === 'horizontal' ? ' is-h' : (grv.orientation === 'wave' ? ' is-wave' : '')));
-    line.style.left = posPct + '%';
     preview.appendChild(line);
     row.appendChild(preview);
 
@@ -705,7 +755,30 @@
     settings.appendChild(field('Oblik', selectEl(GROOVE_SHAPES.map(function (o) { return { value: o.id, label: o.label }; }), grv.shape, function (v) { grv.shape = v; })));
     var surfaceOpts = (g.finish || []).map(function (o) { return { value: o.slug, label: o.label }; });
     settings.appendChild(field('Površina', selectEl(surfaceOpts.length ? surfaceOpts : [{ value: 'polirano', label: 'Polirano' }], grv.surface, function (v) { grv.surface = v; })));
-    settings.appendChild(field('Širina', rangeEl(0.1, 1.0, 0.05, grv.width, 'mm', function (v) { grv.width = v; })));
+
+    var posInput = el('input');
+    posInput.type = 'number'; posInput.step = '0.1';
+
+    // Groove position must stay within the band's width margins (client,
+    // 2026-09-07), accounting for the groove's OWN width too (its edges, not
+    // just its centre, must clear the margin) — recomputed whenever the
+    // ring's width or the groove's own width changes.
+    function syncPosBounds() {
+      var b = widthBounds(s.width, 1);
+      var half = (grv.width || 0.3) / 2;
+      var lo = b.min + half, hi = b.max - half;
+      if (lo > hi) { lo = hi = 0; } // groove too wide for this band — pin to centre
+      grv.position = Math.max(lo, Math.min(hi, grv.position || 0));
+      posInput.min = lo; posInput.max = hi; posInput.value = grv.position;
+      var posPct = 50 + Math.max(-1, Math.min(1, grv.position / Math.max(s.width / 2, 0.1))) * 40;
+      line.style.left = posPct + '%';
+    }
+
+    // Geometry rebuild (self.pushScene()) is deferred to the panel's generic
+    // 'change' listener (fires once on release), same as the Dimenzije
+    // width/thickness sliders — rebuilding the band on every 'input' tick
+    // while dragging would jank the 60fps target.
+    settings.appendChild(field('Širina', rangeEl(0.1, 1.0, 0.05, grv.width, 'mm', function (v) { grv.width = v; syncPosBounds(); })));
     settings.appendChild(field('Dubina', rangeEl(0.05, 0.5, 0.05, grv.depth, 'mm', function (v) { grv.depth = v; })));
 
     var orient = el('div', 'zs-chips zs-groove-orient');
@@ -722,14 +795,12 @@
     });
     settings.appendChild(field('Orijentacija', orient));
 
-    var posInput = el('input');
-    posInput.type = 'number'; posInput.step = '0.1'; posInput.value = grv.position;
     posInput.addEventListener('input', function () {
       grv.position = parseFloat(posInput.value) || 0;
-      posPct = 50 + Math.max(-1, Math.min(1, grv.position / 10)) * 40;
-      line.style.left = posPct + '%';
+      syncPosBounds();
     });
-    settings.appendChild(field('Pozicija (mm)', posInput));
+    settings.appendChild(field('Pozicija (mm od centra trake)', posInput));
+    syncPosBounds();
 
     var del = el('button', 'zs-linkbtn zs-groove-del');
     del.type = 'button';
@@ -737,7 +808,7 @@
     del.addEventListener('click', function () {
       var i = s.grooves.indexOf(grv);
       if (i > -1) s.grooves.splice(i, 1);
-      self.renderPanel(); self.gotoStep('Žlebovi');
+      self.renderPanel(); self.gotoStep('Žlebovi'); self.pushScene();
     });
     settings.appendChild(del);
 
@@ -851,13 +922,23 @@
     row2.appendChild(field('Količina', qtyInput));
     box.appendChild(row2);
 
+    // Position is across the band's WIDTH (client, 2026-09-07: a 5mm-wide
+    // band can't take a stone at "10mm" — it must stay ≥1mm from each edge,
+    // and can't sit inside a groove) — NOT a clock-position around the
+    // circumference. Bounds are recomputed from the ring's live width/grooves
+    // on every render, never a static -10..10.
     box.appendChild(hx('p', 'zs-eyebrow', 'Pozicioniranje'));
+    var bounds = widthBounds(s.width, 1);
+    var forbidden = grooveForbiddenRanges(s.grooves, 0.4);
     var posBox = el('div', 'zs-position-grid');
-    [['levo', 'Levo'], ['centar', 'Centar'], ['desno', 'Desno'], ['slobodno', 'Slobodno']].forEach(function (pair) {
+    [['levo', 'Levo', bounds.min], ['centar', 'Centar', 0], ['desno', 'Desno', bounds.max], ['slobodno', 'Slobodno', null]].forEach(function (pair) {
+      var blocked = pair[2] !== null && Math.abs(nudgeOutOfForbidden(pair[2], bounds, forbidden) - pair[2]) > 0.05;
       var b = el('button', 'zs-profile-box zs-position-box');
       b.type = 'button';
       b.setAttribute('aria-pressed', String(s.diamondPosMode === pair[0]));
-      b.innerHTML = '<span class="zs-profile-label">' + pair[1] + '</span>';
+      if (blocked) { b.disabled = true; b.title = 'Blokirano žlebom na toj poziciji'; }
+      b.innerHTML = '<span class="zs-profile-label">' + pair[1] + '</span>' +
+        (blocked ? '<span class="zs-badge-soon">Blokirano</span>' : '');
       b.addEventListener('click', function () {
         s.diamondPosMode = pair[0];
         self.renderPanel();
@@ -866,21 +947,23 @@
     });
     box.appendChild(posBox);
     if (s.diamondPosMode === 'slobodno') {
-      var sel = bySlug(g.diamond, s.diamond);
-      var r = (sel && sel.params && sel.params.posRange) || { min: -10, max: 10, step: 0.5, unit: 'mm' };
+      var step = 0.5;
+      s.diamondPos = nudgeOutOfForbidden(Math.max(bounds.min, Math.min(bounds.max, s.diamondPos || 0)), bounds, forbidden);
       var srow = el('div', 'zs-slider');
       srow.style.marginTop = '12px';
-      srow.innerHTML = '<div class="zs-slider-top"><span>Pozicija</span><span class="zs-slider-val">' +
-        fmtNum(s.diamondPos) + ' ' + (r.unit || 'mm') + '</span></div>';
+      srow.innerHTML = '<div class="zs-slider-top"><span>Pozicija (od centra trake)</span><span class="zs-slider-val">' +
+        fmtNum(s.diamondPos) + ' mm</span></div>';
       var input = el('input');
-      input.type = 'range'; input.min = r.min; input.max = r.max; input.step = r.step || 0.5; input.value = s.diamondPos;
+      input.type = 'range'; input.min = bounds.min; input.max = bounds.max; input.step = step; input.value = s.diamondPos;
       var out = srow.querySelector('.zs-slider-val');
       input.addEventListener('input', function () {
-        s.diamondPos = parseFloat(input.value);
-        out.textContent = fmtNum(s.diamondPos) + ' ' + (r.unit || 'mm');
+        s.diamondPos = nudgeOutOfForbidden(parseFloat(input.value), bounds, forbidden);
+        input.value = s.diamondPos;
+        out.textContent = fmtNum(s.diamondPos) + ' mm';
       });
       srow.appendChild(input);
       box.appendChild(srow);
+      if (forbidden.length) box.appendChild(hx('p', 'zs-micro', 'Pozicija se automatski pomera van žleba ako se preklapaju.'));
     }
 
     return box;
@@ -1149,20 +1232,88 @@
     var prof = bySlug(g.profile, profileSlug);
     return (prof && prof.params && prof.params.shape) || 'flat';
   }
-  // "Levo"/"Centar"/"Desno"/"Slobodno" tiles + "Količina" together resolve to
-  // a list of mm-offsets along the band for scene.module.js's buildStoneFor —
-  // v1 only ever places flush stones directly into the band (no crown/prong
-  // geometry yet, decisions.md #22), so N stones are just evenly spaced
-  // around a base offset rather than following a real setting-specific curve.
+  // "Količina" resolves to N flush stones spaced evenly AROUND the band's
+  // circumference (v1 only ever places flush stones directly into the band,
+  // no crown/prong geometry yet — decisions.md #22), all sharing the same
+  // WIDTH-axis offset (see diamondWidthPos below — that's what "Pozicioniranje"
+  // actually controls, corrected 2026-09-07: it was wrongly wired to
+  // circumference before).
   function diamondPositions(s) {
-    var base = s.diamondPosMode === 'levo' ? -4 : (s.diamondPosMode === 'desno' ? 4 : (s.diamondPosMode === 'slobodno' ? (s.diamondPos || 0) : 0));
     var n = Math.max(1, Math.min(5, s.diamondQty || 1));
-    if (n === 1) return [base];
+    if (n === 1) return [0];
     var spacing = 2.4;
-    var start = base - spacing * (n - 1) / 2;
+    var start = -spacing * (n - 1) / 2;
     var out = [];
     for (var i = 0; i < n; i++) out.push(start + spacing * i);
     return out;
+  }
+  // "Levo"/"Centar"/"Desno"/"Slobodno" — where across the band's WIDTH the
+  // stone(s) sit (client, 2026-09-07: a 5mm band can't take a stone at
+  // "10mm"; must stay ≥1mm from each edge and can't overlap a groove).
+  // widthBounds/grooveForbiddenRanges/nudgeOutOfForbidden are also used
+  // directly by uiDiamonds (see there) to size the slider + disable blocked
+  // preset buttons; kept here too since sceneStateFor needs the same
+  // resolved value for the actual 3D placement.
+  function widthBounds(width, margin) {
+    margin = margin == null ? 1 : margin;
+    var half = Math.max(0, (width || 0) / 2 - margin);
+    return { min: -half, max: half };
+  }
+  function grooveForbiddenRanges(grooves, clearance) {
+    clearance = clearance == null ? 0.4 : clearance;
+    return (grooves || []).map(function (grv) {
+      var half = (grv.width || 0.3) / 2 + clearance;
+      var p = grv.position || 0;
+      return [p - half, p + half];
+    });
+  }
+  function nudgeOutOfForbidden(value, bounds, forbidden) {
+    value = Math.max(bounds.min, Math.min(bounds.max, value));
+    for (var iter = 0; iter < forbidden.length + 1; iter++) {
+      var hit = null;
+      for (var i = 0; i < forbidden.length; i++) {
+        if (value > forbidden[i][0] && value < forbidden[i][1]) { hit = forbidden[i]; break; }
+      }
+      if (!hit) break;
+      value = (Math.abs(value - hit[0]) <= Math.abs(value - hit[1])) ? hit[0] : hit[1];
+      value = Math.max(bounds.min, Math.min(bounds.max, value));
+    }
+    return Math.round(value * 100) / 100;
+  }
+  function diamondWidthPos(s) {
+    var bounds = widthBounds(s.width, 1);
+    var forbidden = grooveForbiddenRanges(s.grooves, 0.4);
+    var base = s.diamondPosMode === 'levo' ? bounds.min
+      : s.diamondPosMode === 'desno' ? bounds.max
+      : s.diamondPosMode === 'slobodno' ? (s.diamondPos || 0) : 0;
+    return nudgeOutOfForbidden(base, bounds, forbidden);
+  }
+  // Materijal step's "Dve boje"/"Tri boje" → real multi-colour band (client,
+  // 2026-09-07: "boje se ne menjaju, uvek je jedan" — this used to be UI-only,
+  // decisions.md #34). Only the straight ratio sub-patterns (1:1, 1:2, 2:1,
+  // 3:1, 4:1, 1:1:1, 1:2:1, 2:1:1) are real 3D — wave/diagonal/segment/axial
+  // need a per-ANGLE coordinate the shader doesn't have yet, so those still
+  // fall back to a single colour (see uiMaterijal's note to the client).
+  var RATIO_RE = /^\d+(:\d+){1,2}$/;
+  function colorZonesFor(s, g) {
+    if (s.colorPattern !== 'two' && s.colorPattern !== 'three') return null;
+    var zoneCount = s.colorPattern === 'three' ? 3 : 2;
+    var sub = s.colorSubPattern || '';
+    if (!RATIO_RE.test(sub)) return null;
+    var parts = sub.split(':').map(Number);
+    if (parts.length !== zoneCount) return null;
+    var zones = s.materialZones || [];
+    var colors = [];
+    for (var i = 0; i < zoneCount; i++) {
+      var m = bySlug(g.material, zones[i] || s.material);
+      colors.push((m && m.params && m.params.pbr && m.params.pbr.color) || '#D9A945');
+    }
+    var total = parts.reduce(function (a, b) { return a + b; }, 0);
+    var half = (s.width || 4) / 2;
+    var stops = [];
+    var acc = 0;
+    for (var j = 0; j < parts.length - 1; j++) { acc += parts[j]; stops.push(-half + (acc / total) * (s.width || 4)); }
+    return { colors: colors, stops: stops };
   }
   function swatchGradient(hex) { return 'radial-gradient(circle at 32% 28%, #fff 0%, ' + hex + ' 42%, ' + shade(hex, -0.35) + ' 100%)'; }
   function shade(hex, amt) {

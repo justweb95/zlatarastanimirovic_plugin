@@ -97,8 +97,9 @@ Faze su inkrementalne; svaka se može demonstrirati. Acceptance = merljiv kriter
 Detaljna analiza konkurencije: `docs/reference/competitors.md` (Breuning + Fischer, oba na
 Confmetrix engine-u).
 
-- **DIJAMANTI** — v1 = jedan/više flush okruglih kamenova (veličina Ø + količina 1–5 +
-  pozicioniranje Levo/Centar/Desno/Slobodno, 2026-09-06 — vidi decisions.md #35).
+- **DIJAMANTI** — v1 = jedan/više flush okruglih kamenova (veličina Ø + količina 1–5 raspoređeno
+  oko obima + pozicioniranje Levo/Centar/Desno/Slobodno PREKO ŠIRINE trake, ograničeno na
+  stvarnu širinu/marginu/žlebove — vidi decisions.md #35 i #39, ispravljeno 2026-09-07).
   UI već nudi grupisan izbor "tipa postavke" (Obrub aktivan; Kanal delimično aktivan;
   Napeta postavka/Oko/Šapice vizuelno zamućeni "Uskoro") i Brus (samo Brilijant aktivan) —
   **ali samo Obrub/Kanal stvarno menjaju 3D** (flush u ravnu podlogu, bez krunica/šapica,
@@ -116,17 +117,22 @@ Confmetrix engine-u).
   2026-09-06** (`crossSectionPath()`/`bigCrossSectionSVG()` u `configurator.js`, korak Dimenzije).
   Ostaje: proširiti biblioteku profila (v1 ima 4, konkurencija 16–20).
 - **Materijal** — v1 = 3 zlata × 3 finiša (klijentovi V-Ray fajlovi, boje "izoštrene"
-  2026-09-06 — decisions.md #28). UI za dvobojni/trobojni/slobodni uzorak (1:1, 2:1, talas,
-  dijagonala, segment, osovinski...) **već postoji** (korak Materijal, 2026-09-06) ali je
-  **čisto vizuelni scaffold — ne utiče na 3D još** (decisions.md #34). v2: finoća kao izbor
-  (585/750, menja `density` → masu → cenu), više finiša (konkurencija 12–16), i stvarno
-  višebojno renderovanje (multi-material shank ili teksturirana maska) iza tog UI-ja.
+  2026-09-06 — decisions.md #28). ~~Dvobojni/trobojni uzorak — čist scaffold, ne utiče na
+  3D~~ **✅ prave razmere-po-širini urađene 2026-09-07** (1:1, 1:2, 2:1, 3:1, 4:1, i
+  1:1:1/1:2:1/2:1:1 — shader-based `aBandY`/`colorZonesFor()`, decisions.md #42). I dalje
+  scaffold-only: **talas / dijagonalno / dijagonalno-ogledalo / segment / osovinski** (trebaju
+  ugaonu, ne samo širinsku, koordinatu — v2). Takođe v2: finoća kao izbor (585/750, menja
+  `density` → masu → cenu), više finiša (konkurencija 12–16).
 - **Žljebovi / dezen** (Grooves/Fugen) — U/V/uglasti kanal, millgriff, carbon traka,
   obojeni (emajl) umetak sa pozicijom/širinom/bojom; stepenici na ivici. **UI/state korak
   dodat 2026-09-06** (5 oblika, lista dodatih žlebova sa punim podešavanjima — decisions.md
-  #33) — **i dalje nema 3D efekta**, žlebovi se ne urezuju u proceduralni shank. To je
-  glavni preostali v2 zadatak ovde: pretvoriti `state.grooves` niz u stvarnu geometriju
-  (verovatno CSG/displacement na `LatheGeometry` preseku, analogno gravuri — odluka #8).
+  #33). ~~Nema 3D efekta~~ **✅ vidljivo na render-u od 2026-09-07** (decisions.md #40) —
+  ALI kao aplicirani greben (mali sopstveni `LatheGeometry` prsten uz spoljnu površinu), NE
+  kao prava karvana šara u siluetu trake, i uvek se "omotava" oko celog obima (samo
+  orijentacija:'vertical' je geometrijski tačna — 'horizontal'/'wave' renderuju se identično
+  za sada, čekaju ugaonu koordinatu). Pravo urezivanje ostaje v2: modifikovati
+  `profilePoints()` po obliku (round/flat/court/d-comfort svaki druga geometrija → notch
+  specifičan za svaki) — verovatno CSG/displacement, analogno gravuri (odluka #8).
 - ~~**Veličina prstena**: korak 0.5, checkbox "optimalni odnos širina/debljina"~~ **✅ urađeno
   2026-09-06** (Dimenzije korak — decisions.md #26/#29). Ostaje: alternativni sistemi
   veličina (US/UK/Swiss).

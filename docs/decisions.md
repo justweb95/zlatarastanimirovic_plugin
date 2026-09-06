@@ -162,6 +162,71 @@ Sve odluke donete 2026-08-31 osim gde je drugačije navedeno. Format: odluka →
     jasno video na ~40mm prstenu — klijent treba da potvrdi izgled u pravom
     browseru).
 
+## Odluke — 2026-09-07 (klijent, treći krug — bugfix + Materijal/Žlebovi stvarno rade)
+
+36. **Profil redosled: Zaobljeni prvi, Ravni poslednji** (client, ponovljeno iz
+    starog model-sort zahteva, sada primenjeno direktno na `profile` grupu —
+    `src/Data/Seeder.php` sort 10/20/30/40 = zaobljeni/d-profil/okrugli/ravni).
+37. **Bottombar (cena/CTA) je sada `position:fixed` + `z-index:999`**, uvek
+    prikovan za dno viewporta nezavisno od skrola/sadržaja iznad (klijent
+    tražio "position absolute" — implementirano kao `fixed`, jer je to
+    jedini CSS mehanizam koji stvarno postiže opisano ponašanje; `absolute`
+    bi i dalje skrolovao sa stranicom). Visina se meri live
+    (`ResizeObserver` → `--zs-bottombar-h`) i koristi kao `padding-bottom`
+    na `.zs-configurator` da poslednja sekcija ne završi ispod trake.
+38. **Materijal pattern popover otvara se ULEVO, ne ispod.** Panel je bio
+    `overflow:hidden` (samo radi zaobljenih ivica) što je seklo popover van
+    vidljivog dela — promenjeno u `overflow:visible`; popover sad `right:
+    calc(100% + 10px)` (otvara se preko 3D viewporta, ne van ekrana desno).
+39. **Dijamant/žleb pozicija je ŠIRINSKA osa, ne pozicija oko obima.**
+    Ranije (26-09-06 sesija) je "Pozicioniranje" (Levo/Centar/Desno/Slobodno)
+    pogrešno mapirano na poziciju OKO prstena (kao sat 12/3/6/9) — klijent je
+    razjasnio (2026-09-07) da to zapravo znači gde PREKO ŠIRINE trake kamen
+    sedi (bliže jednoj ivici ili drugoj), tačno kao referentne ikonice
+    (tačka pomerena levo/desno unutar silуete trake). Ispravljeno:
+    `diamondWidthPos()` (configurator.js) sada vraća mm-offset preko širine,
+    dinamički ograničen na `[-(width/2-1), +(width/2-1)]` (klijent: "5mm
+    traka, mora ostati 1mm od svake ivice") I dalje izbegava svaki postojeći
+    žleb (`grooveForbiddenRanges` + `nudgeOutOfForbidden`, clearance 0.4mm) —
+    ako je tačno mesto blokirano žlebom, dugme (Levo/Centar/Desno) se
+    onemogućava sa "Blokirano" bedžom, a "Slobodno" klizač se automatski
+    pomera van zabranjene zone. Isti mehanizam sada koristi i žlebova
+    "Pozicija (mm)" polje (ograničeno na širinu trake minus 1mm marže minus
+    sopstvenu širinu žleba). "Količina" (1-5) i dalje raspoređuje kamenove
+    OKO obima (nepromenjeno, decisions.md #35) — sada NEZAVISNO od širinske
+    pozicije (svi dele isti `widthPos`).
+40. **Žlebovi se sada stvarno vide na render-u** (bila UI/state-only
+    scaffolding, decisions.md #33). Implementacija: svaki žleb je sopstveni
+    mali `LatheGeometry` prsten (ista tehnika kao sam obruč, samo sitan
+    profil) koji sedi tik uz spoljnu površinu trake na širinskoj poziciji
+    žleba — čita se kao fin ugraviran/aplicirani greben (millgrain/inlay
+    stil), NE kao pravo urezivanje u siluetu trake. Pravo urezivanje (CSG u
+    `profilePoints()` po obliku — round/flat/court/d-comfort svaki imaju
+    drugačiju geometriju) ostaje v2 zadatak, upisano u roadmap.md. Boja
+    žleba prati boju trake živo (svaki frame, `loop()`), hrapavost dolazi iz
+    žlebovog "Površina" izbora (Polirano/Mat/Grebano).
+41. **Dijamant se sada uvek vidi na render-u kad je selektovan** — ranije
+    (26-09-06) `buildStoneFor` je već podržavao niz pozicija, ali je stvarna
+    render-provera bila samo konzolnim logom (headless swiftshader kamera
+    ovde nikad nije uhvatila dobar ugao za 1.5mm kamen). Sada uz širinsku
+    poziciju (#39) i veće/vidljivije test-vrednosti, potvrđeno i vizuelno
+    (v. napomenu u sledećoj memoriji).
+42. **"Dve boje"/"Tri boje" sada STVARNO menjaju render** (bilo UI-only,
+    decisions.md #34→real). Mehanizam: poseban `aBandY` per-vertex atribut
+    (LatheGeometry, ista y-osa kao `profilePoints()`) + shader hook (nastavak
+    postojećeg `attachBottomShade`/`onBeforeCompile` trika) koji menja
+    `diffuseColor.rgb` ODMAH POSLE `#include <color_fragment>` — pre PBR
+    metal/specular računice, tako da odsjaj ispravno prati boju svake zone
+    (menjanje boje tek na `gl_FragColor` na kraju, kao bottom-shade, dalo bi
+    pogrešan "zlatni sjaj na srebrnoj osnovi" efekat). Samo prave
+    razmere-po-širini (1:1, 1:2, 2:1, 3:1, 4:1, i 1:1:1/1:2:1/2:1:1 za tri
+    boje) su realne; talas/dijagonalno/segment/osovinski i dalje traže
+    ugaonu koordinatu koju šejder nema — ostaju "uskoro" (vraćaju null iz
+    `colorZonesFor()`, pa se i dalje prikazuje jedna boja). UI dobija po-zonu
+    swatch birače ("Deo A"/"Deo B"[/"Deo C"]) umesto jednog "Metal" reda kad
+    je pattern != jedna boja; podrazumevane zone biraju različite metale
+    automatski (`defaultZones()`) tako da je razlika odmah vidljiva.
+
 ## Otvorena pitanja (blokiraju procenu obima)
 
 | # | Pitanje | Zašto je bitno |
