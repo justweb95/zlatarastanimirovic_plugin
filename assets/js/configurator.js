@@ -163,15 +163,13 @@
     this.c = boot.config || {};
     this.activeRing = 'her';
     this._activeStep = STEPS[0];
-    // All sections start OPEN (client, 2026-09-07: "nisu zatvoreni nego su
-    // display:none, nema ih" — a strict one-open-at-a-time accordion made
-    // Dimenzije/Materijal/etc. literally absent from the page until you
-    // clicked "Sledeće" or a top-nav number; scrolling down the panel should
-    // just show every step's content in order, like a long form). Sledeće /
-    // the top-nav / a header click now just scroll to a section (still
-    // re-opening it first in case someone manually collapsed it).
+    // Only the active step is open (client, 2026-09-07, corrected back after
+    // a misreading two commits ago: sections OTHER than the current one
+    // must be genuinely display:none/gone, not all shown at once — this is
+    // a strict step wizard, only "Sledeće" or a top-nav number reveals the
+    // next section).
     this.openSections = {};
-    STEPS.forEach(function (l) { this.openSections[l] = true; }, this);
+    this.openSections[STEPS[0]] = true;
     this.state = { her: this.defaultState('her'), his: this.defaultState('his') };
   }
 
@@ -336,6 +334,10 @@
 
   Configurator.prototype.gotoStep = function (label) {
     this._activeStep = label;
+    // Strict single-open wizard: navigating to a step closes every other
+    // one (client, 2026-09-07) — only the target section should exist on
+    // the page, not just "also be open alongside whatever else was open".
+    this.openSections = {};
     this.openSections[label] = true;
     this.renderPanel();
     this.updateStepsActive();
