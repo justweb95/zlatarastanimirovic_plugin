@@ -195,7 +195,13 @@ body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
    rows don't actually need corner-clipping in practice (no child fills all
    the way to the panel's own edge). */
 .zs-col-panel { align-self: start; border: 1px solid var(--zs-border); border-radius: var(--zs-radius); background: #fff; overflow: visible; }
-.zs-acc { border-bottom: 1px solid var(--zs-border); }
+/* Client (2026-09-07): the WHOLE block (header included) must be gone for
+   an inactive step, not just its body — you shouldn't see "2. DIMENZIJE"
+   sitting there collapsed while on step 1, only the current step's own
+   block exists at all. Reachable only via "Sledeće" / the top-nav (both
+   call gotoStep(), which is the only thing that flips .is-open). */
+.zs-acc { display: none; border-bottom: 1px solid var(--zs-border); }
+.zs-acc.is-open { display: block; }
 .zs-acc:last-child { border-bottom: 0; }
 .zs-acc-head {
   width: 100%; display: flex; align-items: center; justify-content: space-between;
