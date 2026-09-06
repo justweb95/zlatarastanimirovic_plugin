@@ -227,6 +227,18 @@ Sve odluke donete 2026-08-31 osim gde je drugačije navedeno. Format: odluka →
     je pattern != jedna boja; podrazumevane zone biraju različite metale
     automatski (`defaultZones()`) tako da je razlika odmah vidljiva.
 
+43. **Sve akordeon sekcije sada otvorene podrazumevano** (klijent, 2026-09-07,
+    razjašnjenje odluke #38's "samo jedna opcija"): raniji default
+    (`openSections = {Profil: true}` samo) je značio da su Dimenzije/
+    Materijal/Žlebovi/Dijamanti/Gravura bukvalno `display:none` dok se ne
+    klikne "Sledeće" ili broj gore — klijentove reči: "nisu zatvoreni nego
+    su display none, nema ih". Sad je `openSections` inicijalno TRUE za svih
+    6 koraka — skrolovanje nadole kroz desni panel odmah pokazuje sadržaj
+    svake sekcije, kao dug formular, ne kao pravi accordion. "Sledeće"/
+    gornja navigacija i dalje postoje, samo sad samo SKROLUJU (sekcija je
+    već otvorena); klik na naslov sekcije i dalje može ručno da je zatvori/
+    otvori ako korisnik želi da sažme prikaz.
+
 ## Otvorena pitanja (blokiraju procenu obima)
 
 | # | Pitanje | Zašto je bitno |

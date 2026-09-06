@@ -163,8 +163,15 @@
     this.c = boot.config || {};
     this.activeRing = 'her';
     this._activeStep = STEPS[0];
+    // All sections start OPEN (client, 2026-09-07: "nisu zatvoreni nego su
+    // display:none, nema ih" — a strict one-open-at-a-time accordion made
+    // Dimenzije/Materijal/etc. literally absent from the page until you
+    // clicked "Sledeće" or a top-nav number; scrolling down the panel should
+    // just show every step's content in order, like a long form). Sledeće /
+    // the top-nav / a header click now just scroll to a section (still
+    // re-opening it first in case someone manually collapsed it).
     this.openSections = {};
-    this.openSections[STEPS[0]] = true;
+    STEPS.forEach(function (l) { this.openSections[l] = true; }, this);
     this.state = { her: this.defaultState('her'), his: this.defaultState('his') };
   }
 
