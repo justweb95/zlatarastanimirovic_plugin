@@ -227,17 +227,18 @@ Sve odluke donete 2026-08-31 osim gde je drugačije navedeno. Format: odluka →
     je pattern != jedna boja; podrazumevane zone biraju različite metale
     automatski (`defaultZones()`) tako da je razlika odmah vidljiva.
 
-43. **Sve akordeon sekcije sada otvorene podrazumevano** (klijent, 2026-09-07,
-    razjašnjenje odluke #38's "samo jedna opcija"): raniji default
-    (`openSections = {Profil: true}` samo) je značio da su Dimenzije/
-    Materijal/Žlebovi/Dijamanti/Gravura bukvalno `display:none` dok se ne
-    klikne "Sledeće" ili broj gore — klijentove reči: "nisu zatvoreni nego
-    su display none, nema ih". Sad je `openSections` inicijalno TRUE za svih
-    6 koraka — skrolovanje nadole kroz desni panel odmah pokazuje sadržaj
-    svake sekcije, kao dug formular, ne kao pravi accordion. "Sledeće"/
-    gornja navigacija i dalje postoje, samo sad samo SKROLUJU (sekcija je
-    već otvorena); klik na naslov sekcije i dalje može ručno da je zatvori/
-    otvori ako korisnik želi da sažme prikaz.
+43. **Strogi "jedna sekcija odjednom" akordeon je namerno ponašanje —
+    potvrđeno klijentom 2026-09-07 posle kratke zabune.** Prvobitno
+    razjašnjenje ("nisu zatvoreni nego su display none, nema ih... dok se ne
+    klikne sledeća ili gore") je pogrešno pročitano kao ŽALBA na to
+    ponašanje, pa je nakratko promenjeno da SVE sekcije budu otvorene
+    odjednom (commit `0d0abe4`) — klijent je odmah ispravio: to JESTE
+    traženo ponašanje, ne bag. Vraćeno (`38afb4a`): `openSections` počinje
+    samo sa Profil-om otvorenim; `gotoStep()` sad EKSPLICITNO zatvara sve
+    ostale sekcije pri navigaciji (ne samo otvara ciljnu) — samo trenutni
+    korak postoji na strani, ostali su `display:none` dok se ne klikne
+    "Sledeće" ili broj gore u navigaciji. Klik na naslov sekcije i dalje
+    može ručno da je otvori/zatvori nezavisno.
 
 ## Otvorena pitanja (blokiraju procenu obima)
 
