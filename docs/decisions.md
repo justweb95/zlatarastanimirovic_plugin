@@ -240,6 +240,89 @@ Sve odluke donete 2026-08-31 osim gde je drugačije navedeno. Format: odluka →
     "Sledeće" ili broj gore u navigaciji. Klik na naslov sekcije i dalje
     može ručno da je otvori/zatvori nezavisno.
 
+## Odluke — 2026-09-08/09 (klijent, četvrti/peti krug — izgled + preslikavanje opcija sa Breuning-a)
+
+44. **Izgled/layout (Round 4, 2026-09-08).** Header: svi tekstovi 13px
+    (`.zs-topbar *`), logo `height` 34→55px (mark 30→44). Shell širi:
+    `--zs-maxw` 1440→1600, novi `--zs-panelw` 380px (desni panel bio 320).
+    Prekidač burmi: stari „Njena/Njegova" tabovi iznad viewporta uklonjeni →
+    **♂ / ♀ ikonice u donjoj traci sa alatima** (♂ prvo), + **„oko" =
+    prikaži samo aktivnu burmu**, ISTI kadar (scene `setSolo(key)`, klijent:
+    „isti kadar samo bez drugog prstena"). Profili: **4 → 14**, u 4 grupe
+    (Osnovni / Zaobljeni / Ravni / Šiljati profili — `params.group`). 4
+    originala zadržavaju ručne oblike; 10 novih koriste `shape:'param'` +
+    knobove `dome/cham/taper/belly/point/relief` (0..1) kroz JEDAN generator
+    `paramProfileOutline()` koji hrani i 2D crtež kartice i 3D `LatheGeometry`
+    (`profilePoints('param', …, outline)`) — svaki profil stvarno renderuje.
+    `geomChanged` sad ključa i na `profileKey` (svi param profili dele
+    `profileShape='param'`).
+
+45. **Preslikane opcije sa Breuning-a (Round 5, 2026-09-08).** Prošli su svi
+    koraci Breuning konfiguratora uporedo (headless browser — v. #48).
+    - **Finoća 585/750** dodata u Materijal (`FINOCA` tabela u
+      `configurator.js`): 750 podiže `density` → masu (par 9,2→10,9 g kad su
+      obe burme 750) i produbljuje boju zlata (`mixHex` ka `#C98A2E` za
+      `deepen:0.30`; 585 = bez efekta). `s.finoca` state, default '585'.
+    - **Cena po prstenu** („Njena … / Njegova …") uz „Cena za par" u donjoj
+      traci (`_ringPrice` se već računao, sad se i prikazuje).
+    - **„Primeni na drugu burmu"** dugme u svakoj akordeon sekciji
+      (`SECTION_FIELDS` mapa + `copySection()`) = Breuning-ovo „Einstellung
+      für Ring 1 übernehmen" po koraku.
+    - **Gravura `maxLen` 20 → 30** (Seeder).
+    - Maße / Fugen (Designfugen) / Diamanten ocenjeni kao već na paritetu.
+      „Inlay"/„Farbwellen" boje, US/UK sistemi veličina, ugaono
+      pozicioniranje žlebova — ostaju v2.
+
+46. **Bug fix na osnovu klijentove provere Round 5 (Round 5b, 2026-09-08).**
+    - **Dijamant se nije mogao izabrati** — 3 reda kamena (`round-1_0/1_5/2_0`)
+      su u Seeder-u imali `available => 0` (stock-gate) pa je `uiChips`
+      onemogućavao dugmad. → `available => 1`.
+    - **Žleb „Pozicija" nije pomerao 3D** — `grooveProfilePoints()` centrira
+      greben na y=0, `buildGroovesFor()` nikad nije primenjivao `grv.position`.
+      → `m.position.set(0, grv.position || 0, 0)` (root-local Y = osa širine,
+      isto kao `widthPos` kamena).
+    - **Gravura se nije renderovala** (bila UI/state samo). → novi
+      `buildEngravingFor()` u `scene.module.js`: tekst → canvas → `CanvasTexture`
+      → tanak parcijalni `CylinderGeometry` tik uz unutrašnji/spoljni zid
+      trake, `MeshBasicMaterial`. **Aproksimacija** (aplicirana tamna slova,
+      NE pravo urezivanje sa dubinom — to je i dalje canvas→height/normal
+      posao, odluka #8 / Faza 3). Ažurira se dok se kuca (120ms debounce).
+    - `window.__zscApp` handle dodat u `mount()` za QA (bezopasna referenca).
+
+47. **Klijentov feedback na Round 5b (Round 5c, 2026-09-09).**
+    - **Dijamant je bio postavljen SPOLJA pogrešno → iznutra** (na tankoj
+      traci mu je pavilion probijao unutrašnji zid). Sad: `maxScale =
+      (thickness − 0.12) / (TABLE_UP + PAV_DOWN)` ograničava kamen da mu
+      kulet ostane u metalu (2mm kamen fizički ne staje flush u 1mm traku →
+      prikaže se malo manji, ne probija); sto poravnat sa spoljnom površinom
+      (`outerR + 0.01`); orijentacija preko
+      `quaternion.setFromUnitVectors(+Y, radijalno-napolje)`.
+    - **Dijamant „beli kvadratić" → pravi brilijant**: `makeBrilliantGeometry()`
+      (12-strani fasetiran round brilliant: sto + kruna + rondiš + pavilion),
+      non-indexed → `computeVertexNormals()` daje normalu PO FASETI = svetluca
+      i na software GL-u. Materijal: transmission 0.85, ior 2.42, clearcoat 1,
+      iridescence 0.45, envMapIntensity 4.5. **Puna vatra se vidi tek na
+      pravom GPU-u** (SwiftShader ne ume transmisiju).
+    - **Gravura presvetla/prevelika → svetlija i manji font** (Breuning):
+      `rgba(48,40,28,0.62)` (bilo ~0.92), 64px tanko (bilo 104px bold), tanja
+      traka, `opacity 0.85`, radijus tik iznad zida (`innerR−0.015` /
+      `outerR+0.015`) da spoljna varijanta nije uronjena u traku.
+    - **Žlebovi korak — UI totalno preuređen po Breuning-ovom „Fugen/Stufen"**:
+      tab traka sa donjom linijom · `.zs-profile-grid` kartice oblika · red
+      „N žleb(ova)" + „Ukloni sve" + zeleno „Dodaj žleb" · kartica po žlebu =
+      numerisani naslov + „Ukloni" + uredni redovi sa labelama (Oblik /
+      Površina / **Širina** / **Dubina** sad dropdown-i preko `GROOVE_WIDTHS`/
+      `GROOVE_DEPTHS`, ne klizači; Orijentacija pill-ovi; Pozicija broj + „mm"
+      sa prikazom raspona) + mini pregled. **Izuzetak od „držimo naš dizajn"**
+      — klijent eksplicitno tražio da se za ovaj korak preslika njihov dizajn.
+
+48. **Testiranje: pravi headless browser RADI u ovom okruženju** (2026-09-08).
+    Suprotno starijim beleškama („nema browsera u WSL, koristi Windows
+    Chrome"), Playwright-ov Chromium je preinstaliran
+    (`~/.cache/ms-playwright/chromium-1243`), renderuje WebGL (SwiftShader) i
+    ima pristup internetu — korišćen za poređenje sa `konfigurator.breuning.de`
+    i za QA našeg UI-ja. `playwright-core` vozi već prisutni binarni fajl.
+
 ## Otvorena pitanja (blokiraju procenu obima)
 
 | # | Pitanje | Zašto je bitno |
@@ -248,11 +331,12 @@ Sve odluke donete 2026-08-31 osim gde je drugačije navedeno. Format: odluka →
 | B | **Finalni frontend framework**: Svelte / SolidJS / React / Preact? | Ne blokira arhitekturu, ali treba pre Faze 4. Lean: Svelte ili Solid (mali runtime). |
 | C | **CDN provider**: Bunny / Cloudflare R2 / S3+CloudFront? | Treba pre Faze 3 (upload pipeline za asseti). |
 | ~~D~~ | ✅ Rešeno (odluka 23): debljina = zaseban klizač. | — |
-| E | **Dijamanti za burme**: koliko veličina flush kamena u v1 (seedovano Ø1.0 / 1.5 / 2.0 mm)? Više kamena / pavé red? | Obim proceduralnog kamenja + stock logika. |
+| E | **Dijamanti za burme**: 3 veličine (Ø1.0 / 1.5 / 2.0 mm) su sada `available=1` i biraju se; kamen je fasetiran brilijant, flush spolja (#46/#47). Ostaje pitanje: više kamena / pavé red / tipovi postavke — v2. | Obim proceduralnog kamenja + stock logika. |
 | E2 | **`.3dm` geometrija**: da li klijent može da izveze `.obj`/`.glb` iz Rhina (mesh, ~50k), ili idemo 100% proceduralno? | Proceduralno je plan (odluka 6) i radi bez Rhina; CAD izvoz treba samo ako se traži tačna geometrija 1:1. |
 | F | **Email**: primalac(ci)? kopija kupcu? slika client-side ili server-side? | Faza 5. Odloženo. |
 | G | **MODEL/glave kao CPT ili tabela?** | Zavisi koliko bogat editor klijentu treba (slike, opisi). |
-| H | **Tačne px veličine/weight-ovi tipografije** — izvući iz Figma Dev Mode. | Zaključati type scale u tokene. |
+| H | **Tačne px veličine/weight-ovi tipografije** — izvući iz Figma Dev Mode. Delimično: header zaključan na 13px, logo 55px, shell 1600 / panel 380 (#44); ostatak type-scale-a još estimacija. | Zaključati type scale u tokene. |
+| I | **Finoća** — 585/750 su sada izbor (#45). Cene po gramu za 18k (`au_18k` spot key) nisu unete; da li klijent proširuje ponudu (platina/paládijum, više karata)? | Cena + `spotPrices` u Podešavanjima. |
 
 ## Za reviziju kasnije
 - Threepipe evaluacija (1 dan) pre nego što se krene sa scene bootstrap-om (Faza 2).

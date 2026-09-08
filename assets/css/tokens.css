@@ -43,10 +43,13 @@
   --zs-radius-swatch: 50%;
   --zs-border-w: 1px;
 
-  --zs-maxw: 1440px;
+  /* Wider shell + roomier options panel (client, 2026-09-08: "povećaj desni
+     box da bolje stane", "promeni širinu kontejnera"). */
+  --zs-maxw: 1600px;
+  --zs-panelw: 380px;
   /* 3D viewport · right options panel (client, 2026-09-06: the old left
      model-list column is gone — the viewport runs from the left edge). */
-  --zs-grid: 1fr 300px;
+  --zs-grid: 1fr var(--zs-panelw);
   /* Fixed viewport height (client, 2026-09-06: "render ima fixnu visinu
      uvek") — never grows/shrinks with window size or panel content. */
   --zs-view-h: 560px;

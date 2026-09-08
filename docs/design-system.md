@@ -98,8 +98,9 @@ Dva fonta (oba Google Fonts, besplatni):
 
 | | Vrednost |
 |---|---|
-| Max širina sadržaja | **1440px** |
-| Grid konfiguratora | **1fr / 300px** (3D viewport · desni panel opcija — leva lista modela uklonjena 2026-09-06, decisions.md #26) |
+| Max širina sadržaja | **1600px** (bilo 1440 — prošireno 2026-09-08, decisions #44) |
+| Grid konfiguratora | **1fr / 380px** (3D viewport · desni panel opcija — `--zs-panelw`, bilo 300/320; leva lista modela uklonjena 2026-09-06, decisions #26) |
+| Header | svi tekstovi **13px**, logo **height 55px** (decisions #44) |
 | Spacing skala | **4 · 8 · 12 · 16 · 24 · 32 · 48 · 64** |
 | Padding kartice | 16–20px |
 | Razmak sekcija | 32–40px |
@@ -113,8 +114,9 @@ Dva fonta (oba Google Fonts, besplatni):
   --zs-space-1: 4px;  --zs-space-2: 8px;  --zs-space-3: 12px; --zs-space-4: 16px;
   --zs-space-5: 24px; --zs-space-6: 32px; --zs-space-7: 48px; --zs-space-8: 64px;
   --zs-radius: 10px;  --zs-radius-pill: 999px;
-  --zs-maxw: 1440px;
-  --zs-grid: 220px 1fr 300px;
+  --zs-maxw: 1600px;         /* bilo 1440 (decisions #44) */
+  --zs-panelw: 380px;        /* desni panel opcija */
+  --zs-grid: 1fr var(--zs-panelw);
 }
 ```
 
@@ -132,10 +134,11 @@ Opšte: tanki elegantni border-i, suptilne senke, umeren radius (8–12px), gene
 | **Icon dugme** | kružno, outline, 1px border, ikona 18–20px (reset, zoom, rotate) |
 | **Kartica — stanja** | *Podrazumevano*: 1px `--zs-border` · *Hover*: border `--zs-bronze` · *Izabrano*: border `--zs-green` + fill `--zs-surface` · *Nedostupno*: `--zs-disabled`, faded, ne-klik |
 | **Swatch metala** | kružić 50%, metalik gradijent; selektovan = zeleni prsten oko njega + ✓ |
-| **Profil chip** | mali chip sa ikonicom poprečnog preseka (Comfort / Flat / Court / Okrugli) |
+| **Profil kartica** | kartica sa SVG poprečnim presekom (`crossSectionPath`) + labelom; 14 profila u 4 grupe sa eyebrow naslovom po grupi (decisions #44) |
 | **Step indicator** | kružići: *completed* ✓ outline · *active* fill `--zs-green` sa brojem · *pending* svetli; spojeni 1px linijom |
-| **Tabovi** | "Njena burma" / "Njegova burma" — aktivan bold + `--zs-green` underline |
-| **Akordeon** | header sa `+` / `−`, subtitle prikazuje opcije ("Polirano · Mat · Brušeno · Čekićano") |
+| **Prekidač burmi** | ♂ / ♀ kružna dugmad u donjoj toolbar traci (bilo tabovi iznad viewporta); izabran = fill `--zs-green`. Pored: „oko" dugme = prikaži samo aktivnu burmu (decisions #44) |
+| **Akordeon** | header sa `›` chevron; strogi single-open (decisions #43); footer: „Primeni na drugu burmu" (dashed) + „Sledeće: …" |
+| **Žlebovi korak** | tab traka (underline) · mreža kartica oblika · red „N žleb(ova)" + „Ukloni sve" + zeleno „Dodaj žleb" · kartica po žlebu = numerisani head + labelirani redovi (dropdown Oblik/Površina/Širina/Dubina · pill Orijentacija · broj Pozicija) — po Breuning „Fugen/Stufen" (decisions #47) |
 | **Tooltip** | taman bubble (`~#221F1B`), beli tekst, mali radius ("Mera obima prsta u mm") |
 | **Cena kartica** | label "CIJENA ZA PAR" (`label` stil) + iznos (`price` stil, Fraunces); valuta **RSD** |
 | **Slider (širina)** | track `--zs-border`, filled deo `--zs-green`, handle `--zs-green`; oznake koraka ispod (2–6 mm) |

@@ -34,13 +34,17 @@ Faze su inkrementalne; svaka se može demonstrirati. Acceptance = merljiv kriter
 - [x] Proceduralni shank: `LatheGeometry` (profil-presek → obrtanje oko ose prsta), live regen na klizače width/thickness/size
 - [x] 4 profila (`flat`/`court`/`d-comfort`/`round`) → funkcije koje vraćaju presek
 - [x] Materijali: 3 zlata × 3 finiša (boja + roughness iz V-Ray vrednosti), cross-fade lerp
-- [x] Flush kamen (proceduralni brilliant approx) + klizač pozicije po bendu
+- [x] Flush kamen — **fasetiran round brilliant** (`makeBrilliantGeometry`, 12 strana, per-faseta normale = sjaj), flush na SPOLJNU površinu, `scale` ograničen na debljinu trake da kulet ne probije unutrašnji zid; pozicija po širini (Levo/Centar/Desno/Slobodno) (2026-09-09, decisions #46/#47)
 - [x] DPR cap (≤2), `ResizeObserver`, fallback na render sliku ako nema `ZSCScene`
 - [x] Rail/toolbar: auto-rotacija, reset pogleda, zoom ±, screenshot, pun ekran
-- [ ] Šav na `LatheGeometry` (weld seam / rotirati na pozadinu) — sitna polir stavka
+- [x] Šav na `LatheGeometry` — `weldLatheSeam()` (2026-09-04)
+- [x] Prikaz oba prstena istovremeno + **♂/♀ prekidač u toolbaru + „vidi samo jednu"** (`setSolo`, isti kadar) (2026-09-08, decisions #44)
+- [x] **14 profila u 4 grupe** kroz jedan parametarski generator (`paramProfileOutline`) koji hrani i 2D crtež i 3D `LatheGeometry` (2026-09-08, decisions #44)
+- [x] **Finoća 585/750** → `density` → masa + produbljena boja (2026-09-08, decisions #45)
+- [x] **Gravura vidljiva u renderu** — aproksimacija: tamna slova na tankom cilindru uz zid trake, Unutra/Spolja (2026-09-08/09, decisions #46/#47). Pravo urezivanje (canvas→height/normal) = Faza 3.
+- [x] **Žlebovi**: „Pozicija" stvarno pomera greben po širini; korak-UI preuređen po Breuning „Fugen/Stufen" (decisions #46/#47)
 - [ ] Normal mape za "Grebano" (anizotropno) i "Čekićano"; brušeni pravac
-- [ ] `dispose()` na unmount (napisan, ne poziva se); WebGL2 fallback poruka
-- [ ] Prikaz oba prstena istovremeno (sad se prikazuje aktivni)
+- [ ] `dispose()` na unmount — delimično (gravura/žlebovi se čiste; band/mat dispose još nije zakačen za unmount); WebGL2 fallback poruka
 
 ### 2b — Svelte UI ljuska + Vite build
 - [ ] `app/` Vite + Svelte projekat; migracija panela iz `assets/js/configurator.js`
@@ -97,9 +101,10 @@ Faze su inkrementalne; svaka se može demonstrirati. Acceptance = merljiv kriter
 Detaljna analiza konkurencije: `docs/reference/competitors.md` (Breuning + Fischer, oba na
 Confmetrix engine-u).
 
-- **DIJAMANTI** — v1 = jedan/više flush okruglih kamenova (veličina Ø + količina 1–5 raspoređeno
-  oko obima + pozicioniranje Levo/Centar/Desno/Slobodno PREKO ŠIRINE trake, ograničeno na
-  stvarnu širinu/marginu/žlebove — vidi decisions.md #35 i #39, ispravljeno 2026-09-07).
+- **DIJAMANTI** — v1 = jedan/više flush okruglih kamenova, sada **izbirljivo** (3 veličine
+  Ø1.0/1.5/2.0, `available=1`), **fasetiran brilijant** flush na SPOLJNU površinu, ograničen
+  na debljinu trake (decisions #46/#47). Količina 1–5 oko obima + pozicioniranje Levo/Centar/
+  Desno/Slobodno PREKO ŠIRINE trake (decisions #35/#39).
   UI već nudi grupisan izbor "tipa postavke" (Obrub aktivan; Kanal delimično aktivan;
   Napeta postavka/Oko/Šapice vizuelno zamućeni "Uskoro") i Brus (samo Brilijant aktivan) —
   **ali samo Obrub/Kanal stvarno menjaju 3D** (flush u ravnu podlogu, bez krunica/šapica,
@@ -113,30 +118,36 @@ Confmetrix engine-u).
   - **cut**: princess / baguette / ovalni / smaragd (UI dropdown već postoji, disabled);
     **kvalitet**: G/SI…G/IF + fancy boje; lab vs natural; **više grupa kamenova po prstenu**
   - skriveni kamen u unutrašnjosti trake ("diamant im ringinnern")
-- ~~**Profili** — live SVG presek koji se menja sa širinom/debljinom/profilom~~ **✅ urađeno
-  2026-09-06** (`crossSectionPath()`/`bigCrossSectionSVG()` u `configurator.js`, korak Dimenzije).
-  Ostaje: proširiti biblioteku profila (v1 ima 4, konkurencija 16–20).
+- ~~**Profili** — live SVG presek~~ **✅ 2026-09-06** + ~~proširiti biblioteku (v1 imao 4)~~
+  **✅ 2026-09-08: 14 profila u 4 grupe** kroz jedan parametarski generator
+  (`paramProfileOutline` — deljen 2D crtež + 3D lathe, decisions #44). Ostaje: fino
+  usaglašavanje oblika/imena sa klijentovim katalogom; konkurencija ima ~20.
 - **Materijal** — v1 = 3 zlata × 3 finiša (klijentovi V-Ray fajlovi, boje "izoštrene"
   2026-09-06 — decisions.md #28). ~~Dvobojni/trobojni uzorak — čist scaffold, ne utiče na
   3D~~ **✅ prave razmere-po-širini urađene 2026-09-07** (1:1, 1:2, 2:1, 3:1, 4:1, i
   1:1:1/1:2:1/2:1:1 — shader-based `aBandY`/`colorZonesFor()`, decisions.md #42). I dalje
   scaffold-only: **talas / dijagonalno / dijagonalno-ogledalo / segment / osovinski** (trebaju
-  ugaonu, ne samo širinsku, koordinatu — v2). Takođe v2: finoća kao izbor (585/750, menja
-  `density` → masu → cenu), više finiša (konkurencija 12–16).
+  ugaonu, ne samo širinsku, koordinatu — v2), i **Inlay / Farbwellen** (Breuning ima 6 šema,
+  mi 4). ~~finoća kao izbor (585/750)~~ **✅ 2026-09-08** (decisions #45 — menja `density` →
+  masu + produbljuje boju; cene po gramu za 18k još nisu unete). v2: više finiša (12–16).
 - **Žljebovi / dezen** (Grooves/Fugen) — U/V/uglasti kanal, millgriff, carbon traka,
   obojeni (emajl) umetak sa pozicijom/širinom/bojom; stepenici na ivici. **UI/state korak
   dodat 2026-09-06** (5 oblika, lista dodatih žlebova sa punim podešavanjima — decisions.md
-  #33). ~~Nema 3D efekta~~ **✅ vidljivo na render-u od 2026-09-07** (decisions.md #40) —
-  ALI kao aplicirani greben (mali sopstveni `LatheGeometry` prsten uz spoljnu površinu), NE
-  kao prava karvana šara u siluetu trake, i uvek se "omotava" oko celog obima (samo
-  orijentacija:'vertical' je geometrijski tačna — 'horizontal'/'wave' renderuju se identično
-  za sada, čekaju ugaonu koordinatu). Pravo urezivanje ostaje v2: modifikovati
-  `profilePoints()` po obliku (round/flat/court/d-comfort svaki druga geometrija → notch
-  specifičan za svaki) — verovatno CSG/displacement, analogno gravuri (odluka #8).
+  #33). ~~Nema 3D efekta~~ **✅ vidljivo na render-u od 2026-09-07** (decisions.md #40) +
+  ~~pozicija po širini~~ **✅ 2026-09-08** (`m.position.y = grv.position`, decisions #46) +
+  ~~korak-UI~~ **✅ preuređen po Breuning „Fugen/Stufen" 2026-09-09** (decisions #47) —
+  ALI i dalje kao aplicirani greben, NE prava karvana šara u siluetu trake, i uvek se
+  "omotava" oko celog obima (samo orijentacija:'vertical' je geometrijski tačna). Pravo
+  urezivanje ostaje v2: modifikovati `profilePoints()` po obliku — CSG/displacement,
+  analogno gravuri (odluka #8). Sub-tabovi „Razdvajajući žlebovi"/„Slojevi" i dalje
+  placeholderi.
 - ~~**Veličina prstena**: korak 0.5, checkbox "optimalni odnos širina/debljina"~~ **✅ urađeno
   2026-09-06** (Dimenzije korak — decisions.md #26/#29). Ostaje: alternativni sistemi
   veličina (US/UK/Swiss).
-- **Cena po prstenu** pored "za par" (uraditi već u v1 ako stigne).
-- **Gravura**: diamantgravur (pored lasera), potpis/otisak prsta, ćirilica, više simbola.
-- **Undo / Reset** dugmad; **Sačuvaj/Podeli/PDF/Deep-link** konfiguracije (Faza 5).
-- **"Primeni na oba prstena"** po sekciji (kopiraj Njena ↔ Njegova).
+- ~~**Cena po prstenu** pored "za par"~~ **✅ 2026-09-08** (`.zs-price-perring`, decisions #45).
+- **Gravura** — ~~vidljivo u renderu~~ **✅ aproks. 2026-09-08/09** + `maxLen` 20→30. Ostaje:
+  pravo urezivanje sa dubinom (canvas→height/normal, Faza 3), izbor fonta, red simbola
+  (srca/beskonačno…), faksimil/otisak prsta, diamantgravur, ćirilica.
+- **Undo / Reset** dugmad; **Sačuvaj/Podeli/PDF/Deep-link** konfiguracije (Faza 5) —
+  „Sačuvaj"/„Podeli" dugmad postoje u topbaru ali još nemaju handler.
+- ~~**"Primeni na oba prstena"** po sekciji~~ **✅ 2026-09-08** (`copySection()`, decisions #45).

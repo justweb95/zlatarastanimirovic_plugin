@@ -47,6 +47,21 @@ cd app && npm run dev                 # dev server; WP stranica proxy-uje asset
 
 Plugin verzija u `zs-configurator.php` header-u = cache-bust za enqueue.
 
+## Testiranje / QA
+
+- Frontend (bez `app/` build-a još): vanilla `assets/js/configurator.js` +
+  `assets/js/scene.module.js`. Posle izmena: `node -c` na oba, pa vizuelna
+  provera u browseru.
+- **Headless browser radi u ovom okruženju** (decisions.md #48): Playwright
+  Chromium je preinstaliran (`~/.cache/ms-playwright/`), renderuje WebGL
+  (SwiftShader — transmisija/refrakcija se NE vide, samo na pravom GPU-u) i ima
+  pristup internetu → koristi ga za poređenje sa `konfigurator.breuning.de` i za
+  proveru našeg UI-ja. `playwright-core` vozi već prisutni binarni fajl.
+- `window.__zscApp` je izložen u `mount()` — `__zscApp.cur()`,
+  `.sceneStateFor('her'|'his')`, `.scene` (`setSolo`, `reset`, `zoom`…).
+- Posle izmena `Seeder.php`: `TRUNCATE wp_zs_options` + `Seeder::run()` +
+  `Compiler::flush_all()` (`wp eval … --allow-root`).
+
 ## Docs
 
 - `docs/architecture.md` — sistem, tok podataka, stack, performance budžet, scope

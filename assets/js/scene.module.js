@@ -334,9 +334,11 @@ function create(canvas, opts = {}) {
   // Assigning the same PMREM texture as an explicit envMap on each material
   // opts it back into per-material control.
   const sharedStoneMat = new THREE.MeshPhysicalMaterial({
-    color: 0xffffff, metalness: 0, roughness: 0.015,
-    transmission: 1, ior: 2.42, thickness: 0.9, specularIntensity: 1,
-    envMap: envRT.texture, envMapIntensity: 3.0, transparent: true, side: THREE.DoubleSide,
+    color: 0xffffff, metalness: 0, roughness: 0.02,
+    transmission: 0.85, ior: 2.42, thickness: 0.35, specularIntensity: 1,
+    clearcoat: 1, clearcoatRoughness: 0.02,
+    iridescence: 0.45, iridescenceIOR: 1.6, iridescenceThicknessRange: [120, 420],
+    envMap: envRT.texture, envMapIntensity: 4.5, transparent: true, side: THREE.DoubleSide,
   });
 
   // Client (2026-09-05): the flat base gold colour reads as plain/generic
@@ -438,10 +440,25 @@ function create(canvas, opts = {}) {
 
   // Cross-section in the (radius, axial) plane. x = distance from finger axis,
   // y = position across the band width. Returned as a closed Vector2 loop.
-  function profilePoints(shape, innerR, thickness, width) {
+  function profilePoints(shape, innerR, thickness, width, outline) {
     const outerR = innerR + thickness;
     const h = width / 2;
     const pts = [];
+
+    // Parametric profiles (client, 2026-09-08): configurator.js samples the
+    // cross-section outline once (paramProfileOutline) and passes it in via
+    // sceneStateFor, so the 3D band is exactly the shape the Profil card
+    // drew. outline pts are normalised: nx in [-1,1] width axis, ny in
+    // [-1,1] thickness axis (ny=-1 outer / ny=+1 inner/finger side).
+    if (shape === 'param' && Array.isArray(outline) && outline.length > 2) {
+      for (let i = 0; i < outline.length; i++) {
+        const nx = outline[i][0], ny = outline[i][1];
+        const r = innerR + ((1 - ny) / 2) * thickness;
+        pts.push(new THREE.Vector2(r, nx * h));
+      }
+      if (!pts[0].equals(pts[pts.length - 1])) pts.push(pts[0].clone());
+      return pts;
+    }
     const arc = (cx, cy, r, a0, a1, steps) => {
       for (let i = 0; i <= steps; i++) {
         const a = a0 + (a1 - a0) * (i / steps);
@@ -530,7 +547,7 @@ function create(canvas, opts = {}) {
     const innerR = size / (2 * Math.PI);
     const thickness = state.thickness || 1.4;
     const outerR = innerR + thickness;
-    const pts = profilePoints(state.profileShape || 'flat', innerR, thickness, state.width || 4);
+    const pts = profilePoints(state.profileShape || 'flat', innerR, thickness, state.width || 4, state.profileOutline);
     const geo = new THREE.LatheGeometry(pts, LATHE_SEGMENTS);
     // Custom per-vertex attribute carrying each vertex's LOCAL width-axis
     // position (same y profilePoints() already works in) — feeds the
@@ -601,30 +618,44 @@ function create(canvas, opts = {}) {
     return outerR;
   }
 
-  // Single flush round-brilliant approximation (pavilion cone + crown +
-  // table), unit-sized (Ø1) so any instance can be scaled to the actual mm
-  // diameter. Geometries are shared/cached at module scope — only the Group
-  // wrapper + its transform are per-stone, so N stones cost N cheap
-  // transforms, not N sets of geometry.
-  let stoneGeo = null;
-  function makeStoneMesh() {
-    if (!stoneGeo) {
-      stoneGeo = {
-        pav: new THREE.ConeGeometry(0.5, 0.62, 16),
-        crown: new THREE.CylinderGeometry(0.5, 0.42, 0.18, 16),
-        table: new THREE.CylinderGeometry(0.30, 0.42, 0.12, 16),
-      };
+  // Faceted round-brilliant (client, 2026-09-09: "neka bude baš baš dijamant
+  // svetlucav, ne samo beli kvadratić"). Non-indexed → computeVertexNormals()
+  // gives every facet its OWN normal, so each one mirrors the studio env at a
+  // different angle = real sparkle (works even on software GL, unlike relying
+  // on transmission alone). Unit stone: girdle plane at y=0 (radius 0.5),
+  // table at y=+TABLE_UP, culet at y=-PAV_DOWN — so scaling by the mm Ø and
+  // placing the origin at the band's outer surface seats it table-flush.
+  const TABLE_UP = 0.20, PAV_DOWN = 0.52;
+  let brilliantGeo = null;
+  function makeBrilliantGeometry() {
+    const N = 12, rG = 0.5, rT = 0.30;
+    const yT = TABLE_UP, yGT = 0.04, yGB = -0.02, yC = -PAV_DOWN;
+    const pos = [];
+    const P = (r, y, i) => { const a = (i / N) * Math.PI * 2; return [Math.cos(a) * r, y, Math.sin(a) * r]; };
+    const tri = (a, b, c) => { pos.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]); };
+    const TC = [0, yT, 0], CU = [0, yC, 0];
+    for (let i = 0; i < N; i++) {
+      const t0 = P(rT, yT, i), t1 = P(rT, yT, i + 1);
+      const gt0 = P(rG, yGT, i), gt1 = P(rG, yGT, i + 1);
+      const gb0 = P(rG, yGB, i), gb1 = P(rG, yGB, i + 1);
+      tri(TC, t0, t1);                 // table facet
+      tri(t0, gt0, gt1); tri(t0, gt1, t1); // crown facets (split for per-face normals)
+      tri(gt0, gb0, gb1); tri(gt0, gb1, gt1); // girdle
+      tri(gb0, CU, gb1);              // pavilion facet
     }
-    const group = new THREE.Group();
-    const pav = new THREE.Mesh(stoneGeo.pav, sharedStoneMat);
-    pav.position.y = -0.34; pav.rotation.x = Math.PI;
-    const crown = new THREE.Mesh(stoneGeo.crown, sharedStoneMat);
-    crown.position.y = 0.02;
-    const table = new THREE.Mesh(stoneGeo.table, sharedStoneMat);
-    table.position.y = 0.16;
-    group.add(pav, crown, table);
-    return group;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.computeVertexNormals();
+    return g;
   }
+  function makeStoneMesh() {
+    if (!brilliantGeo) brilliantGeo = makeBrilliantGeometry();
+    const m = new THREE.Mesh(brilliantGeo, sharedStoneMat);
+    m.renderOrder = 3;
+    return m;
+  }
+  const _stoneUp = new THREE.Vector3(0, 1, 0);
+  const _stoneOut = new THREE.Vector3();
 
   // state.stone = { mm, positions: [mm along band, ...] } — v1 only ever
   // places flush round stones directly into the band's outer surface (no
@@ -653,23 +684,31 @@ function create(canvas, opts = {}) {
 
     const size = state.size || 54;
     const innerR = size / (2 * Math.PI);
-    const outerR = innerR + (state.thickness || 1.4);
-    const d = s.mm;                                  // stone Ø in mm
-    const seatR = outerR - d * 0.34;                  // flush: sink into the outer surface
+    const thickness = state.thickness || 1.4;
+    const outerR = innerR + thickness;
     const meanCirc = Math.PI * (innerR + outerR);
-    // widthPos = where ACROSS THE BAND'S WIDTH the stone sits (client,
-    // 2026-09-07 — "Pozicioniranje" Levo/Centar/Desno/Slobodno; configurator.js's
-    // diamondWidthPos() already clamps it to the band's real width minus
-    // margins and away from any groove). It's the same local Y axis
-    // profilePoints()/aBandY use, so this is just rig.root's local Y, no
-    // extra transform needed.
+    // Flush-set on the OUTER surface (client, 2026-09-09: "dijamant si stavio
+    // iznutra, treba spolja"). Clamp the stone so its culet can't punch
+    // through the inner wall on a thin band — a 2mm stone genuinely can't
+    // flush-set into a 1mm band, so it's shown a touch smaller instead of
+    // poking out inside the ring.
+    const d = s.mm;
+    const wall = 0.12;
+    const maxScale = Math.max(0.4, (thickness - wall) / (TABLE_UP + PAV_DOWN));
+    const scale = Math.min(d, maxScale);
+    const tableR = outerR + 0.01;                 // table ~flush, a hair proud
+    const originR = tableR - TABLE_UP * scale;    // stone origin = girdle plane
+    // widthPos = position ACROSS the band's width (configurator.js clamps it
+    // to the real width minus margins and away from grooves) — same local Y
+    // axis profilePoints()/aBandY use.
     const widthPos = s.widthPos || 0;
     positions.forEach((posMm, i) => {
       const m = rig.stones[i];
-      m.scale.setScalar(d);
-      const theta = ((posMm || 0) / meanCirc) * Math.PI * 2; // 0 = 12 o'clock (+Z)
-      m.position.set(Math.sin(theta) * seatR, widthPos, Math.cos(theta) * seatR);
-      m.rotation.set(Math.PI / 2, 0, -theta); // table faces outward
+      m.scale.setScalar(scale);
+      const theta = ((posMm || 0) / meanCirc) * Math.PI * 2; // 0 = +Z
+      _stoneOut.set(Math.sin(theta), 0, Math.cos(theta));    // radial outward
+      m.position.set(_stoneOut.x * originR, widthPos, _stoneOut.z * originR);
+      m.quaternion.setFromUnitVectors(_stoneUp, _stoneOut);  // table faces outward
     });
   }
 
@@ -752,9 +791,87 @@ function create(canvas, opts = {}) {
       geo.computeVertexNormals();
       weldLatheSeam(geo, pts.length, GROOVE_SEGMENTS);
       m.geometry = geo;
+      // Slide the groove ring along the band's WIDTH axis (root-local Y — the
+      // same axis profilePoints()/aBandY and the stone's widthPos use) so
+      // "Pozicija (mm od centra trake)" actually moves it left/right (client,
+      // 2026-09-08: "žlebovi ne mogu da se pomeraju levo desno").
+      m.position.set(0, grv.position || 0, 0);
       m.material.color.copy(rig.mat.color);
       m.material.roughness = grv.roughness || 0.2;
     });
+  }
+
+  // --------------------------------------------------------------- engraving
+  //
+  // Real (if approximate) 3D engraving (client, 2026-09-08: "gravura i dalje
+  // ne radi" — it was UI/state only before). The text is drawn to a canvas
+  // and mapped onto a thin partial cylinder sitting a hair off the band's
+  // inner (or outer) wall, reading as dark incised lettering when you look
+  // into / at the ring. Not a true displaced cut (that's the canvas→normal/
+  // height-map job in roadmap.md) — but it genuinely shows in the render and
+  // tracks the text / side / ring size live.
+  function buildEngravingFor(key, state) {
+    const rig = rigs[key];
+    const eng = state.engraving;
+    if (!eng || !eng.text) { if (rig.engrave) rig.engrave.visible = false; return; }
+
+    const size = state.size || 54;
+    const innerR = size / (2 * Math.PI);
+    const outerR = innerR + (state.thickness || 1.4);
+    const width = state.width || 4;
+    const inside = eng.side !== 'outside';
+
+    if (!rig.engraveCanvas) {
+      rig.engraveCanvas = document.createElement('canvas');
+      rig.engraveCanvas.width = 2048; rig.engraveCanvas.height = 128;
+    }
+    const cv = rig.engraveCanvas, ctx = cv.getContext('2d');
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    // Light + fine, like the Breuning reference (client, 2026-09-09: "gravura
+    // je full crne boje, kod Breuninga je laganija i manji font").
+    ctx.fillStyle = 'rgba(48,40,28,0.62)';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    let fs = 64;
+    ctx.font = '400 ' + fs + 'px Georgia, "Times New Roman", serif';
+    while (ctx.measureText(eng.text).width > cv.width * 0.8 && fs > 20) {
+      fs -= 3; ctx.font = '400 ' + fs + 'px Georgia, "Times New Roman", serif';
+    }
+    ctx.fillText(eng.text, cv.width / 2, cv.height / 2 + 3);
+
+    if (!rig.engraveTex) {
+      rig.engraveTex = new THREE.CanvasTexture(cv);
+      rig.engraveTex.colorSpace = THREE.SRGBColorSpace;
+      rig.engraveTex.anisotropy = 4;
+    }
+    // Text on the inner wall is seen from the finger side (back face) — mirror
+    // it horizontally so it doesn't read reversed; outer wall reads straight.
+    rig.engraveTex.wrapS = THREE.ClampToEdgeWrapping;
+    rig.engraveTex.repeat.x = inside ? -1 : 1;
+    rig.engraveTex.offset.x = inside ? 1 : 0;
+    rig.engraveTex.needsUpdate = true;
+
+    // Sit just PROUD of the relevant wall (into the hole for inside, above the
+    // outer surface for outside) so it's never buried in the opaque band.
+    const r = inside ? innerR - 0.015 : outerR + 0.015;
+    const h = Math.min(width * 0.42, 1.7);
+    const arc = Math.min(Math.PI * 0.7, 0.4 + eng.text.length * 0.1);
+    const thetaStart = -Math.PI / 2 - arc / 2; // centre the text at the front-bottom of the band
+
+    if (rig.engrave) rig.engrave.geometry.dispose();
+    const geo = new THREE.CylinderGeometry(r, r, h, 128, 1, true, thetaStart, arc);
+    if (!rig.engrave) {
+      const mat = new THREE.MeshBasicMaterial({
+        map: rig.engraveTex, transparent: true, opacity: 0.85,
+        depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4,
+      });
+      rig.engrave = new THREE.Mesh(geo, mat);
+      rig.engrave.renderOrder = 2;
+      rig.root.add(rig.engrave);
+    } else {
+      rig.engrave.geometry = geo;
+    }
+    rig.engrave.material.side = inside ? THREE.BackSide : THREE.FrontSide;
+    rig.engrave.visible = true;
   }
 
   // ------------------------------------------------------------- material tween
@@ -771,6 +888,21 @@ function create(canvas, opts = {}) {
   // ---------------------------------------------------------------- framing
 
   let framed = false;
+
+  // "View solo" (client, 2026-09-08): show only one ring of the pair, WITHOUT
+  // touching the camera — the other ring (and its contact-AO blob) is just
+  // hidden. null = show both. setState re-shows both every call, so this is
+  // re-asserted from configurator.js right after each setState.
+  let soloKey = null;
+  function applySolo() {
+    if (!pairMode) return;
+    ['her', 'his'].forEach((k) => {
+      const on = !soloKey || soloKey === k;
+      if (rigs[k].root) rigs[k].root.visible = on;
+      if (rigs[k].blob) rigs[k].blob.visible = on;
+    });
+  }
+
   function frameScene(outerHer, outerHis) {
     const maxOuter = Math.max(outerHer || 8, outerHis || 8);
     if (pairMode) {
@@ -860,31 +992,36 @@ function create(canvas, opts = {}) {
     if (pair.her) {
       rigs.her.root.visible = true;
       const s = pair.her, last = rigs.her.last || {};
-      const geomChanged = ['width', 'thickness', 'size', 'profileShape'].some((k) => s[k] !== last[k]);
+      const geomChanged = ['width', 'thickness', 'size', 'profileShape', 'profileKey'].some((k) => s[k] !== last[k]);
       const stoneChanged = JSON.stringify(s.stone || null) !== JSON.stringify(last.stone || null);
       const groovesChanged = JSON.stringify(s.grooves || null) !== JSON.stringify(last.grooves || null);
+      const engChanged = JSON.stringify(s.engraving || null) !== JSON.stringify(last.engraving || null);
       if (geomChanged || !rigs.her.band) outerHer = buildBandFor('her', s);
       if (geomChanged || stoneChanged) buildStoneFor('her', s);
       if (geomChanged || groovesChanged) buildGroovesFor('her', s);
+      if (geomChanged || engChanged) buildEngravingFor('her', s);
       applyMaterialFor('her', s);
-      rigs.her.last = { ...s, stone: s.stone ? { ...s.stone } : null, grooves: s.grooves ? s.grooves.map((g) => ({ ...g })) : null };
+      rigs.her.last = { ...s, stone: s.stone ? { ...s.stone } : null, grooves: s.grooves ? s.grooves.map((g) => ({ ...g })) : null, engraving: s.engraving ? { ...s.engraving } : null };
     }
     if (pair.his && pairMode) {
       rigs.his.root.visible = true;
       const s = pair.his, last = rigs.his.last || {};
-      const geomChanged = ['width', 'thickness', 'size', 'profileShape'].some((k) => s[k] !== last[k]);
+      const geomChanged = ['width', 'thickness', 'size', 'profileShape', 'profileKey'].some((k) => s[k] !== last[k]);
       const stoneChanged = JSON.stringify(s.stone || null) !== JSON.stringify(last.stone || null);
       const groovesChanged = JSON.stringify(s.grooves || null) !== JSON.stringify(last.grooves || null);
+      const engChanged = JSON.stringify(s.engraving || null) !== JSON.stringify(last.engraving || null);
       if (geomChanged || !rigs.his.band) outerHis = buildBandFor('his', s);
       if (geomChanged || stoneChanged) buildStoneFor('his', s);
       if (geomChanged || groovesChanged) buildGroovesFor('his', s);
+      if (geomChanged || engChanged) buildEngravingFor('his', s);
       applyMaterialFor('his', s);
-      rigs.his.last = { ...s, stone: s.stone ? { ...s.stone } : null, grooves: s.grooves ? s.grooves.map((g) => ({ ...g })) : null };
+      rigs.his.last = { ...s, stone: s.stone ? { ...s.stone } : null, grooves: s.grooves ? s.grooves.map((g) => ({ ...g })) : null, engraving: s.engraving ? { ...s.engraving } : null };
     }
     if (!framed && (rigs.her.band || rigs.his.band)) {
       framed = true;
       frameScene(outerHer, outerHis);
     }
+    applySolo();
     invalidate(60);
   }
 
@@ -1020,6 +1157,11 @@ function create(canvas, opts = {}) {
     rigs.her.blob && rigs.her.blob.material.dispose();
     rigs.his.blob && rigs.his.blob.material.dispose();
     ['her', 'his'].forEach((k) => (rigs[k].grooveMeshes || []).forEach((m) => { m.geometry.dispose(); m.material.dispose(); }));
+    ['her', 'his'].forEach((k) => {
+      const rg = rigs[k];
+      if (rg.engrave) { rg.engrave.geometry.dispose(); rg.engrave.material.dispose(); }
+      if (rg.engraveTex) rg.engraveTex.dispose();
+    });
     contactTex.dispose();
     glowTex.dispose();
     ground.material.dispose();
@@ -1030,8 +1172,14 @@ function create(canvas, opts = {}) {
     renderer.dispose();
   }
 
+  function setSolo(key) {
+    soloKey = (key === 'her' || key === 'his') ? key : null;
+    applySolo();
+    invalidate(30);
+  }
+
   return {
-    setState, resize, dispose, screenshot, zoom, reset, setAutoRotate, controls, renderer,
+    setState, resize, dispose, screenshot, zoom, reset, setAutoRotate, setSolo, controls, renderer,
     debug: debugApi, // temporary — see comment above debugApi's definition
   };
 }

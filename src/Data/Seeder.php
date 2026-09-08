@@ -129,22 +129,43 @@ final class Seeder
             ];
         }
 
-        // 3 — PROFIL. Discrete cross-section. shape → THREE.Shape generator;
-        //     fill → cross-section fill factor for the weight formula.
-        // Order (client, 2026-09-07): "Zaobljeni" first/default, "Ravni" last —
-        // same "starts from rounded" preference as decisions.md's earlier
-        // model-sort note, now re-applied to the Profil group directly.
+        // 3 — PROFIL. Discrete cross-section, laid out in labelled groups like
+        //     the Breuning/Saintmaurice reference (client, 2026-09-08 — "add
+        //     more profiles like their site"). Two kinds of `shape`:
+        //       - keyword ('court'/'d-comfort'/'round'/'flat') → hand-written
+        //         generator, the 4 originals the client already signed off;
+        //       - 'param' + knobs (dome/cham/taper/belly/point/relief, all
+        //         0..1) → one parametric generator shared by the 2D card art
+        //         AND the 3D LatheGeometry (configurator.js paramProfileOutline
+        //         → scene.module.js), so every option genuinely renders.
+        //     `fill` = cross-section fill factor for the weight formula.
+        //     Order (client, 2026-09-07): "Zaobljeni" first/default, "Ravni"
+        //     last within the first group.
         $profiles = [
-            ['zaobljeni', 'Zaobljeni', 'court',   0.86],
-            ['d-profil', 'D-profil', 'd-comfort', 0.90],
-            ['okrugli', 'Okrugli',  'round',      0.79],
-            ['ravni',   'Ravni',    'flat',      1.00],
+            // [slug, label, group, params(without fill), fill]
+            ['zaobljeni',       'Zaobljeni',       'Osnovni profili',    ['shape' => 'court'],     0.86],
+            ['d-profil',        'D-profil',        'Osnovni profili',    ['shape' => 'd-comfort'], 0.90],
+            ['okrugli',         'Okrugli',         'Osnovni profili',    ['shape' => 'round'],     0.79],
+            ['ravni',           'Ravni',           'Osnovni profili',    ['shape' => 'flat'],      1.00],
+
+            ['poluokrugli',     'Poluokrugli',     'Zaobljeni profili',  ['shape' => 'param', 'dome' => 1.0, 'cham' => 0.0],                   0.80],
+            ['blago-zaobljeni', 'Blago zaobljeni', 'Zaobljeni profili',  ['shape' => 'param', 'dome' => 0.35, 'cham' => 0.25],                 0.92],
+            ['anatomski',       'Anatomski',       'Zaobljeni profili',  ['shape' => 'param', 'dome' => 0.6, 'relief' => 0.5, 'cham' => 0.12], 0.84],
+            ['bombirani',       'Bombirani',       'Zaobljeni profili',  ['shape' => 'param', 'dome' => 0.85, 'belly' => 0.55],                0.83],
+
+            ['ravni-faseta',    'Ravni sa fazom',  'Ravni profili',      ['shape' => 'param', 'dome' => 0.0, 'cham' => 0.55],                  0.96],
+            ['trapezni',        'Trapezni',        'Ravni profili',      ['shape' => 'param', 'dome' => 0.05, 'taper' => 0.55, 'cham' => 0.1],  0.88],
+            ['jastucasti',      'Jastučasti',      'Ravni profili',      ['shape' => 'param', 'dome' => 0.28, 'cham' => 0.5, 'belly' => 0.22],  0.90],
+            ['pljosnati',       'Pljosnati',       'Ravni profili',      ['shape' => 'param', 'dome' => 0.14, 'cham' => 0.16],                  0.97],
+
+            ['nozasti',         'Nožasti',         'Šiljati profili',    ['shape' => 'param', 'point' => 1.0],                                 0.62],
+            ['siljati-oval',    'Šiljati oval',    'Šiljati profili',    ['shape' => 'param', 'point' => 0.55, 'belly' => 0.3],                0.70],
         ];
-        foreach ($profiles as $i => [$slug, $label, $shape, $fill]) {
+        foreach ($profiles as $i => [$slug, $label, $group, $params, $fill]) {
             $rows[] = [
                 'group_key' => 'profile', 'slug' => $slug, 'label_sr' => $label, 'sort' => ($i + 1) * 10,
                 'price_json'  => ['type' => 'flat', 'amount' => 0],
-                'params_json' => ['shape' => $shape, 'fill' => $fill],
+                'params_json' => $params + ['group' => $group, 'fill' => $fill],
             ];
         }
 
@@ -193,7 +214,7 @@ final class Seeder
         foreach ($diamonds as $i => [$slug, $label, $shape, $mm, $amount]) {
             $rows[] = [
                 'group_key' => 'diamond', 'slug' => $slug, 'label_sr' => $label, 'sort' => ($i + 2) * 10,
-                'available'   => 0,
+                'available'   => 1, // client 2026-09-08: stones must be selectable (was stock-gated off)
                 'price_json'  => ['type' => 'flat', 'amount' => $amount],
                 'params_json' => [
                     'shape' => $shape, 'mm' => $mm, 'count' => 1, 'flush' => true,
@@ -207,7 +228,7 @@ final class Seeder
             'group_key' => 'engraving', 'slug' => 'engraving', 'label_sr' => 'Gravura', 'sort' => 10,
             'price_json'  => ['type' => 'flat', 'amount' => 3000],
             'params_json' => [
-                'maxLen'      => 20,
+                'maxLen'      => 30, // client/Breuning parity (was 20), 2026-09-08
                 'fonts'       => ['serif', 'script'],
                 'sides'       => ['inside', 'outside'],
                 'defaultSide' => 'inside',

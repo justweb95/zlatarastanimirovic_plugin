@@ -43,6 +43,28 @@
   var STEPS = ['Profil', 'Dimenzije', 'Materijal', 'Žlebovi', 'Dijamanti', 'Gravura'];
   var RINGS = [{ key: 'her', label: 'Njena burma' }, { key: 'his', label: 'Njegova burma' }];
 
+  // Fineness (finoća) — client's real catalogue is 14k (585); 18k (750) is the
+  // common upsell, matching the Breuning reference's 333/375/585/750 selector.
+  // Copies only what genuinely renders: density (→ weight → price) + a slight
+  // colour deepening on 18k gold. `dens` is specific gravity g/cm³ by metal
+  // slug; `deepen` lerps the swatch colour toward a richer 18k tone.
+  var FINOCA = [
+    { id: '585', label: '585', sub: '14k', dens: { zuto: 13.07, belo: 12.90, crveno: 13.00 }, deepen: 0 },
+    { id: '750', label: '750', sub: '18k', dens: { zuto: 15.55, belo: 15.90, crveno: 15.45 }, deepen: 0.30 }
+  ];
+  function finocaDef(id) { for (var i = 0; i < FINOCA.length; i++) if (FINOCA[i].id === id) return FINOCA[i]; return FINOCA[0]; }
+
+  // Which state fields each accordion step owns — used by "Primeni na drugu
+  // burmu" (client/Breuning: "Einstellung für Ring 1 übernehmen" per step).
+  var SECTION_FIELDS = {
+    'Profil':    ['profile'],
+    'Dimenzije': ['width', 'thickness', 'size', 'autoRatio'],
+    'Materijal': ['material', 'finish', 'finoca', 'colorPattern', 'colorSubPattern', 'materialZones'],
+    'Žlebovi':   ['grooveTab', 'grooves'],
+    'Dijamanti': ['diamond', 'diamondSetting', 'diamondCut', 'diamondQty', 'diamondPosMode', 'diamondPos'],
+    'Gravura':   ['engravingText', 'engravingSide']
+  };
+
   // Thin, consistent line-icon set (24x24, stroke=currentColor).
   var ICON_SVG = {
     orbit: '<path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v4h-4"/>',
@@ -54,6 +76,8 @@
     heart: '<path d="M12 20s-7-4.35-9.5-8.8C1 8 2.4 5 5.6 5c1.9 0 3.3 1 4.4 2.6C11.1 6 12.5 5 14.4 5 17.6 5 19 8 18.5 11.2 16 15.65 12 20 12 20Z"/>',
     share: '<path d="M12 4v11"/><path d="M8 8l4-4 4 4"/><path d="M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/>',
     chevronRight: '<path d="M9 5l7 7-7 7"/>',
+    eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
+    copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/>',
     plusCircle: '<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>',
     trash: '<path d="M4 7h16M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2m-9 0 1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/>'
   };
@@ -75,8 +99,69 @@
    * scene.module.js's profilePoints() revolves, just flattened to 2D and
    * without the absolute radius (we only need the LOCAL bump shape here).
    */
-  function crossSectionPath(shape, w, h) {
+  // Parametric cross-section (client, 2026-09-08: "add more profiles like the
+  // Breuning site"). One knob-set drives BOTH the 2D line-art here AND the 3D
+  // LatheGeometry (scene.module.js gets the sampled outline via sceneStateFor,
+  // so the shape a card shows is exactly what renders). Knobs, all 0..1:
+  //   dome   — how domed the OUTER face is (0 flat top, 1 half-round)
+  //   cham   — 45° bevel on the outer edges (only visible when dome is low)
+  //   taper  — inner face narrower than outer (trapezoid / "F"-style)
+  //   belly  — side walls bow outward (barrel / oval)
+  //   point  — pointed apex on the outer face (knife-edge / marquise)
+  //   relief — comfort hollow on the inner (finger-facing) face
+  // Outline is normalised: nx in [-1,1] = WIDTH axis, ny in [-1,1] = THICKNESS
+  // axis with ny=-1 the outer (dome) side, ny=+1 the inner (finger) side.
+  function c01(v) { return Math.max(0, Math.min(1, +v || 0)); }
+  function paramProfileOutline(p) {
+    p = p || {};
+    var dome = c01(p.dome), cham = c01(p.cham), taper = c01(p.taper),
+        belly = c01(p.belly), point = c01(p.point), relief = c01(p.relief);
+    var wi = 1 - 0.42 * taper;                 // inner half-width (nx)
+    var ch = 0.30 * cham;                      // chamfer size (nx & ny)
+    var bow = 0.18 * belly;                    // side bows this far past nx=1
+    var pts = [];
+    function q(a, cp, b, n) {
+      for (var i = 1; i <= n; i++) {
+        var t = i / n, mt = 1 - t;
+        pts.push([mt * mt * a[0] + 2 * mt * t * cp[0] + t * t * b[0],
+                  mt * mt * a[1] + 2 * mt * t * cp[1] + t * t * b[1]]);
+      }
+    }
+    // Outer face: corners at nx=±outNx, ny=edgeY; centre reaches the top
+    // (ny=-1). dome lifts the corners toward mid-height so the sides curve up
+    // into a half-round; point makes a sharp apex instead.
+    var pointed = point > 0.02;
+    var outNx = pointed ? (1 - point * 0.12) : (dome > 0.02 ? 1 - dome * 0.34 : 1);
+    var edgeY = pointed ? (-1 + point * 0.72) : (dome > 0.02 ? (-1 + dome * 0.85) : -1 + ch);
+
+    pts.push([-wi, 1]);                                    // inner face, left
+    if (relief > 0.02) q([-wi, 1], [0, 1 - relief * 0.55], [wi, 1], 10);
+    else pts.push([wi, 1]);                                // inner face, right
+    q([wi, 1], [1 + bow, -0.1], [outNx, edgeY], 12);       // right side
+    if (pointed) {                                         // sharp apex
+      pts.push([outNx * 0.42, -1 + point * 0.10]);
+      pts.push([0, -1]);
+      pts.push([-outNx * 0.42, -1 + point * 0.10]);
+      pts.push([-outNx, edgeY]);
+    } else if (dome > 0.02) {                              // rounded top
+      q([outNx, edgeY], [0, -2 - edgeY], [-outNx, edgeY], 20);
+    } else {                                               // flat top, bevelled
+      pts.push([outNx - ch, -1]);
+      pts.push([-(outNx - ch), -1]);
+      pts.push([-outNx, edgeY]);
+    }
+    q([-outNx, edgeY], [-(1 + bow), -0.1], [-wi, 1], 12);  // left side
+    return pts;
+  }
+
+  function crossSectionPath(shape, w, h, p) {
     var r = Math.min(w, h) * 0.16;
+    if (shape === 'param') {
+      var o = paramProfileOutline(p), hw = w / 2, hh = h / 2;
+      var d = 'M ' + (o[0][0] * hw).toFixed(2) + ' ' + (o[0][1] * hh).toFixed(2);
+      for (var i = 1; i < o.length; i++) d += ' L ' + (o[i][0] * hw).toFixed(2) + ' ' + (o[i][1] * hh).toFixed(2);
+      return d + ' Z';
+    }
     if (shape === 'round') {
       return 'M ' + (-w / 2) + ' 0 A ' + (w / 2) + ' ' + (h / 2) + ' 0 1 0 ' + (w / 2) + ' 0 ' +
         'A ' + (w / 2) + ' ' + (h / 2) + ' 0 1 0 ' + (-w / 2) + ' 0 Z';
@@ -101,9 +186,9 @@
 
   // Small profile-box icon (Profil step). Fixed illustrative ratio — the
   // point here is "which shape", not the live mm values.
-  function profileIconSVG(shape) {
+  function profileIconSVG(shape, p) {
     var vw = 96, vh = 64, w = 58, h = 34;
-    var d = crossSectionPath(shape, w, h);
+    var d = crossSectionPath(shape, w, h, p);
     return '<svg viewBox="0 0 ' + vw + ' ' + vh + '" class="zs-profile-icon" aria-hidden="true">' +
       '<g transform="translate(' + (vw / 2) + ',' + (vh / 2) + ')">' +
       '<line x1="' + (-w / 2 - 8) + '" y1="0" x2="' + (w / 2 + 8) + '" y2="0" class="zs-cs-axis"/>' +
@@ -115,13 +200,13 @@
   // Big interactive diagram (Dimenzije step) — reflects the ring's own live
   // width/thickness ratio for whichever profile is currently selected, with
   // ŠIRINA / VISINA arrows (client's own wording, see reference sketch).
-  function bigCrossSectionSVG(shape, widthMm, thicknessMm) {
+  function bigCrossSectionSVG(shape, widthMm, thicknessMm, p) {
     var vw = 320, vh = 190;
     var maxSpan = 150, ratio = widthMm / Math.max(thicknessMm, 0.1);
     var w, h;
     if (ratio >= 1) { w = maxSpan; h = maxSpan / ratio; } else { h = maxSpan; w = maxSpan * ratio; }
     h = Math.max(h, 26); w = Math.max(w, 40);
-    var d = crossSectionPath(shape, w, h);
+    var d = crossSectionPath(shape, w, h, p);
     var cx = vw / 2, cy = vh / 2 - 6;
     var arrowY = cy + h / 2 + 26;
     return '<svg viewBox="0 0 ' + vw + ' ' + vh + '" class="zs-cs-diagram" aria-hidden="true">' +
@@ -162,6 +247,7 @@
     this.assetsUrl = boot.assetsUrl || '';
     this.c = boot.config || {};
     this.activeRing = 'her';
+    this.viewSolo = false;
     this._activeStep = STEPS[0];
     // Only the active step is open (client, 2026-09-07, corrected back after
     // a misreading two commits ago: sections OTHER than the current one
@@ -193,6 +279,7 @@
       thickness: snap(num(tCfg.default, 1.5) + delta * 0.5, tCfg.min, tCfg.max, tCfg.step || 0.5),
       size: snap(num(sCfg.default, 54) + delta * 6, sCfg.min, sCfg.max, sCfg.step || 0.5),
       autoRatio: false,
+      finoca: '585',
       colorPattern: 'single',
       colorSubPattern: '',
       grooveTab: 0,
@@ -233,6 +320,7 @@
     }
     this.refresh();
     this.initScene();
+    window.__zscApp = this; // debug/QA handle (state + sceneStateFor) — harmless, kept for testing
   };
 
   /* --------------------------------------------------------------- 3D scene */
@@ -275,21 +363,33 @@
         roughness: typeof gpbr.roughness === 'number' ? gpbr.roughness : 0.2
       };
     });
+    var profParams = (prof && prof.params) || {};
+    // 18k gold reads slightly richer/deeper than 14k — nudge the swatch colour
+    // toward a warmer gold by the fineness' `deepen` amount (no-op for 585).
+    var fdef = finocaDef(s.finoca);
+    var baseColor = pbr.color || '#D9A945';
+    var matColor = fdef.deepen > 0 ? mixHex(baseColor, '#C98A2E', fdef.deepen) : baseColor;
     return {
       width: s.width, thickness: s.thickness, size: s.size,
-      profileShape: (prof && prof.params && prof.params.shape) || 'flat',
-      materialColor: pbr.color || '#D9A945',
+      profileShape: profParams.shape || 'flat',
+      profileKey: s.profile,
+      profileOutline: profParams.shape === 'param' ? paramProfileOutline(profParams) : null,
+      materialColor: matColor,
       roughness: typeof finPbr.roughness === 'number' ? finPbr.roughness : (pbr.roughness || 0.08),
       envIntensity: finPbr.anisotropy ? 1.0 : 1.2,
       stone: stone,
       grooves: grooves,
-      colorZones: colorZonesFor(s, g)
+      colorZones: colorZonesFor(s, g),
+      engraving: (s.engravingText || '').trim()
+        ? { text: (s.engravingText || '').trim(), side: s.engravingSide || 'inside' } : null
     };
   };
 
   Configurator.prototype.pushScene = function () {
     if (!this.scene) return;
     this.scene.setState({ her: this.sceneStateFor('her'), his: this.sceneStateFor('his') });
+    // setState makes both rings visible again; re-assert any "view solo" state.
+    this.applyViewSolo();
   };
 
   /* ------------------------------------------------------------------- topbar */
@@ -361,18 +461,7 @@
 
   Configurator.prototype.buildView = function () {
     var col = el('div', 'zs-col zs-col-view');
-
-    var tabs = el('div', 'zs-ring-tabs');
     var self = this;
-    RINGS.forEach(function (t) {
-      var b = el('button', 'zs-ring-tab');
-      b.type = 'button';
-      b.textContent = t.label;
-      b.addEventListener('click', function () { self.activeRing = t.key; self.refresh(); });
-      tabs.appendChild(b);
-    });
-    col.appendChild(tabs);
-    this._ringTabs = tabs;
 
     var stage = el('div', 'zs-view');
     stage.innerHTML =
@@ -400,11 +489,26 @@
     });
 
     var toolbar = el('div', 'zs-view-toolbar');
+    // Njegova / Njena as bare ♂ / ♀ symbols (client, 2026-09-08), sitting to
+    // the LEFT of the view tools; "his" first, then "her". The eye button
+    // isolates whichever ring is active — same camera, the other ring hidden.
     toolbar.innerHTML =
+      '<div class="zs-ring-toggle">' +
+        '<button type="button" class="zs-ring-btn" data-ring="his" title="Njegova burma" aria-label="Njegova burma">♂</button>' +
+        '<button type="button" class="zs-ring-btn" data-ring="her" title="Njena burma" aria-label="Njena burma">♀</button>' +
+      '</div>' +
+      '<button type="button" class="zs-tool-btn zs-view-solo" data-k="solo" aria-pressed="false" title="Prikaži samo izabranu burmu">' +
+        icon('eye') + '</button>' +
+      '<span class="zs-tool-sep"></span>' +
       toolBtn(icon('reset'), 'Reset') + toolBtn(icon('orbit'), 'Rotacija') +
       toolBtn(icon('camera'), 'Slika') + toolBtn(icon('expand'), 'Pun ekran');
+    this._ringToggle = toolbar.querySelector('.zs-ring-toggle');
+    this._soloBtn = toolbar.querySelector('.zs-view-solo');
     toolbar.addEventListener('click', function (e) {
+      var ringBtn = e.target.closest('.zs-ring-btn');
+      if (ringBtn) { self.setActiveRing(ringBtn.dataset.ring); return; }
       var btn = e.target.closest('.zs-tool-btn'); if (!btn) return;
+      if (btn.dataset.k === 'solo') { self.toggleViewSolo(); return; }
       var label = btn.textContent.trim();
       if (label === 'Reset' && self.scene) self.scene.reset();
       else if (label === 'Rotacija' && self.scene) self.scene.setAutoRotate();
@@ -414,6 +518,39 @@
     col.appendChild(toolbar);
 
     return col;
+  };
+
+  Configurator.prototype.setActiveRing = function (key) {
+    if (key !== 'her' && key !== 'his') return;
+    this.activeRing = key;
+    this.refresh();
+  };
+
+  // Copy one step's fields from the active ring onto the other ring.
+  Configurator.prototype.copySection = function (label) {
+    var fields = SECTION_FIELDS[label]; if (!fields) return;
+    var src = this.state[this.activeRing];
+    var dst = this.state[this.activeRing === 'her' ? 'his' : 'her'];
+    fields.forEach(function (f) {
+      var v = src[f];
+      dst[f] = (v && typeof v === 'object') ? JSON.parse(JSON.stringify(v)) : v;
+    });
+    this.recalc();
+    this.pushScene();
+  };
+
+  // "View solo" = show only the active ring, keeping the exact same camera
+  // (client, 2026-09-08: "isti kadar samo bez drugog prstena").
+  Configurator.prototype.toggleViewSolo = function () {
+    this.viewSolo = !this.viewSolo;
+    this.applyViewSolo();
+  };
+
+  Configurator.prototype.applyViewSolo = function () {
+    if (this._soloBtn) this._soloBtn.setAttribute('aria-pressed', String(!!this.viewSolo));
+    if (this.scene && this.scene.setSolo) {
+      this.scene.setSolo(this.viewSolo ? this.activeRing : null);
+    }
   };
 
   /* -------------------------------------------------------------------- panel */
@@ -445,19 +582,38 @@
   /* ------------------------------------------------------------------- Profil */
 
   Configurator.prototype.uiProfile = function (g, s) {
-    var box = el('div', 'zs-profile-grid');
+    var wrap = el('div', 'zs-profile-groups');
     var self = this;
+    // Group by params.group (client, 2026-09-08: laid out in labelled groups
+    // like the competitor's Profil step); ungrouped rows fall into "Profili".
+    var order = [], byGroup = {};
     (g.profile || []).forEach(function (opt) {
-      var shape = (opt.params && opt.params.shape) || 'flat';
-      var card = el('button', 'zs-profile-box');
-      card.type = 'button';
-      card.setAttribute('aria-pressed', String(opt.slug === s.profile));
-      if (!opt.available) card.disabled = true;
-      card.innerHTML = profileIconSVG(shape) + '<span class="zs-profile-label">' + esc(opt.label) + '</span>';
-      card.addEventListener('click', function () { s.profile = opt.slug; self.pushScene(); self.refreshDiagrams(); bubble(card); });
-      box.appendChild(card);
+      var gk = (opt.params && opt.params.group) || 'Profili';
+      if (!byGroup[gk]) { byGroup[gk] = []; order.push(gk); }
+      byGroup[gk].push(opt);
     });
-    return box;
+    order.forEach(function (gk) {
+      var group = el('div', 'zs-profile-group');
+      if (order.length > 1) group.appendChild(hx('p', 'zs-eyebrow', gk));
+      var grid = el('div', 'zs-profile-grid');
+      byGroup[gk].forEach(function (opt) {
+        var shape = (opt.params && opt.params.shape) || 'flat';
+        var card = el('button', 'zs-profile-box');
+        card.type = 'button';
+        card.setAttribute('aria-pressed', String(opt.slug === s.profile));
+        if (!opt.available) card.disabled = true;
+        card.innerHTML = profileIconSVG(shape, opt.params) + '<span class="zs-profile-label">' + esc(opt.label) + '</span>';
+        card.addEventListener('click', function () {
+          s.profile = opt.slug;
+          wrap.querySelectorAll('.zs-profile-box').forEach(function (b) { b.setAttribute('aria-pressed', String(b === card)); });
+          self.pushScene(); self.refreshDiagrams(); bubble(card);
+        });
+        grid.appendChild(card);
+      });
+      group.appendChild(grid);
+      wrap.appendChild(group);
+    });
+    return wrap;
   };
 
   /* ---------------------------------------------------------------- Dimenzije */
@@ -469,7 +625,7 @@
     var diagramWrap = el('div', 'zs-cs-diagram-wrap');
     diagramWrap.appendChild(hx('p', 'zs-eyebrow', 'Presek profila'));
     var diagram = el('div', 'zs-cs-diagram-host');
-    diagram.innerHTML = bigCrossSectionSVG(profileShapeOf(g, s.profile), s.width, s.thickness);
+    diagram.innerHTML = bigCrossSectionSVG(profileShapeOf(g, s.profile), s.width, s.thickness, profileParamsOf(g, s.profile));
     diagramWrap.appendChild(diagram);
     box.appendChild(diagramWrap);
     this._diagramHost = diagram;
@@ -528,7 +684,7 @@
   Configurator.prototype.refreshDiagrams = function () {
     var s = this.cur(), g = this.c.groups || {};
     if (this._diagramHost) {
-      this._diagramHost.innerHTML = bigCrossSectionSVG(profileShapeOf(g, s.profile), s.width, s.thickness);
+      this._diagramHost.innerHTML = bigCrossSectionSVG(profileShapeOf(g, s.profile), s.width, s.thickness, profileParamsOf(g, s.profile));
     }
   };
 
@@ -654,6 +810,21 @@
     box.appendChild(hx('p', 'zs-eyebrow', 'Površina'));
     box.appendChild(this.uiChips(g.finish, s.finish, function (v) { s.finish = v; }));
 
+    box.appendChild(hx('p', 'zs-eyebrow', 'Finoća'));
+    var finRow = el('div', 'zs-chips');
+    FINOCA.forEach(function (f) {
+      var b = el('button', 'zs-chip');
+      b.type = 'button';
+      b.innerHTML = esc(f.label) + ' <span class="zs-chip-sub">' + esc(f.sub) + '</span>';
+      b.setAttribute('aria-pressed', String((s.finoca || '585') === f.id));
+      b.addEventListener('click', function () {
+        s.finoca = f.id;
+        self.renderPanel(); self.recalc(); self.pushScene();
+      });
+      finRow.appendChild(b);
+    });
+    box.appendChild(finRow);
+
     return box;
   };
   function defaultZones(materials, primarySlug, count) {
@@ -709,7 +880,7 @@
     }
 
     box.appendChild(hx('p', 'zs-eyebrow', 'Oblik žleba'));
-    var shapes = el('div', 'zs-groove-shapes');
+    var shapes = el('div', 'zs-profile-grid zs-groove-shapes');
     GROOVE_SHAPES.forEach(function (sh) {
       var b = el('button', 'zs-profile-box zs-groove-shape');
       b.type = 'button';
@@ -720,12 +891,20 @@
     });
     box.appendChild(shapes);
 
+    var n = s.grooves.length;
     var addRow = el('div', 'zs-groove-addrow');
-    addRow.innerHTML = '<span class="zs-groove-count">' + s.grooves.length + ' žleb' +
-      (s.grooves.length === 1 ? '' : (s.grooves.length === 0 ? 'ova' : 'a')) + '</span>';
-    var addBtn = el('button', 'zs-cta is-secondary zs-groove-add');
+    addRow.appendChild(hx('span', 'zs-groove-count', n + ' žleb' + (n === 1 ? '' : (n === 0 ? 'ova' : 'a'))));
+    var actions = el('div', 'zs-groove-actions');
+    if (n) {
+      var clr = el('button', 'zs-linkbtn');
+      clr.type = 'button';
+      clr.innerHTML = icon('trash') + ' Ukloni sve';
+      clr.addEventListener('click', function () { s.grooves = []; self.renderPanel(); self.gotoStep('Žlebovi'); self.pushScene(); });
+      actions.appendChild(clr);
+    }
+    var addBtn = el('button', 'zs-groove-add');
     addBtn.type = 'button';
-    addBtn.innerHTML = icon('plusCircle') + ' Dodaj';
+    addBtn.innerHTML = icon('plusCircle') + ' Dodaj žleb';
     addBtn.addEventListener('click', function () {
       s.grooves.push({
         id: 'g' + Date.now() + Math.floor(Math.random() * 999),
@@ -734,7 +913,8 @@
       });
       self.renderPanel(); self.gotoStep('Žlebovi'); self.pushScene();
     });
-    addRow.appendChild(addBtn);
+    actions.appendChild(addBtn);
+    addRow.appendChild(actions);
     box.appendChild(addRow);
 
     var list = el('div', 'zs-groove-list');
@@ -747,48 +927,63 @@
     return box;
   };
 
+  var GROOVE_WIDTHS = [0.15, 0.20, 0.30, 0.40, 0.50, 0.60, 0.80];
+  var GROOVE_DEPTHS = [0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.40];
+
+  // Per-groove settings card — Breuning-style labelled rows (client, 2026-09-09:
+  // "žlebovi, ove opcije dole totalno loše, preslikaj način dizajna sa
+  // njihovog sajta"): shape/surface/width/depth as dropdowns, orientation as
+  // pills, position as a number + "mm", small live preview, delete link.
   Configurator.prototype.grooveItem = function (grv, idx, s, g) {
     var self = this;
     var row = el('div', 'zs-groove-item');
+
+    var head = el('div', 'zs-groove-item-head');
+    head.innerHTML = '<span class="zs-groove-badge">' + (idx + 1) + '</span><span>Podešavanja žleba</span>';
+    var del = el('button', 'zs-linkbtn zs-groove-del');
+    del.type = 'button';
+    del.innerHTML = icon('trash') + ' Ukloni';
+    del.addEventListener('click', function () {
+      var i = s.grooves.indexOf(grv);
+      if (i > -1) s.grooves.splice(i, 1);
+      self.renderPanel(); self.gotoStep('Žlebovi'); self.pushScene();
+    });
+    head.appendChild(del);
+    row.appendChild(head);
+
+    var body = el('div', 'zs-groove-body');
+
     var preview = el('div', 'zs-groove-preview');
     var mat = bySlug(g.material, s.material);
     var color = (mat && mat.params && mat.params.pbr && mat.params.pbr.color) || '#D9A945';
     preview.style.background = 'linear-gradient(180deg,' + shade(color, 0.25) + ',' + color + ' 45%,' + shade(color, -0.2) + ')';
     var line = el('span', 'zs-groove-preview-line' + (grv.orientation === 'horizontal' ? ' is-h' : (grv.orientation === 'wave' ? ' is-wave' : '')));
     preview.appendChild(line);
-    row.appendChild(preview);
+    body.appendChild(preview);
 
-    var settings = el('div', 'zs-groove-settings');
-    settings.appendChild(hx('p', 'zs-eyebrow', (idx + 1) + '. Podešavanja'));
+    var rows = el('div', 'zs-groove-rows');
 
-    settings.appendChild(field('Oblik', selectEl(GROOVE_SHAPES.map(function (o) { return { value: o.id, label: o.label }; }), grv.shape, function (v) { grv.shape = v; })));
-    var surfaceOpts = (g.finish || []).map(function (o) { return { value: o.slug, label: o.label }; });
-    settings.appendChild(field('Površina', selectEl(surfaceOpts.length ? surfaceOpts : [{ value: 'polirano', label: 'Polirano' }], grv.surface, function (v) { grv.surface = v; })));
-
-    var posInput = el('input');
-    posInput.type = 'number'; posInput.step = '0.1';
-
-    // Groove position must stay within the band's width margins (client,
-    // 2026-09-07), accounting for the groove's OWN width too (its edges, not
-    // just its centre, must clear the margin) — recomputed whenever the
-    // ring's width or the groove's own width changes.
-    function syncPosBounds() {
+    function mmOpts(list, cur) {
+      return list.map(function (v) { return { value: String(v), label: fmtNum(v) + ' mm' }; })
+        .concat(list.indexOf(cur) === -1 ? [{ value: String(cur), label: fmtNum(cur) + ' mm' }] : []);
+    }
+    function syncPreviewLine() {
       var b = widthBounds(s.width, 1);
       var half = (grv.width || 0.3) / 2;
       var lo = b.min + half, hi = b.max - half;
-      if (lo > hi) { lo = hi = 0; } // groove too wide for this band — pin to centre
-      grv.position = Math.max(lo, Math.min(hi, grv.position || 0));
+      if (lo > hi) { lo = hi = 0; }
+      grv.position = Math.round(Math.max(lo, Math.min(hi, grv.position || 0)) * 100) / 100;
       posInput.min = lo; posInput.max = hi; posInput.value = grv.position;
+      posHint.textContent = 'raspon ' + fmtNum(lo) + '…' + fmtNum(hi) + ' mm';
       var posPct = 50 + Math.max(-1, Math.min(1, grv.position / Math.max(s.width / 2, 0.1))) * 40;
       line.style.left = posPct + '%';
     }
 
-    // Geometry rebuild (self.pushScene()) is deferred to the panel's generic
-    // 'change' listener (fires once on release), same as the Dimenzije
-    // width/thickness sliders — rebuilding the band on every 'input' tick
-    // while dragging would jank the 60fps target.
-    settings.appendChild(field('Širina', rangeEl(0.1, 1.0, 0.05, grv.width, 'mm', function (v) { grv.width = v; syncPosBounds(); })));
-    settings.appendChild(field('Dubina', rangeEl(0.05, 0.5, 0.05, grv.depth, 'mm', function (v) { grv.depth = v; })));
+    rows.appendChild(grooveRow('Oblik', selectEl(GROOVE_SHAPES.map(function (o) { return { value: o.id, label: o.label }; }), grv.shape, function (v) { grv.shape = v; bubble(rows); })));
+    var surfaceOpts = (g.finish || []).map(function (o) { return { value: o.slug, label: o.label }; });
+    rows.appendChild(grooveRow('Površina', selectEl(surfaceOpts.length ? surfaceOpts : [{ value: 'polirano', label: 'Polirano' }], grv.surface, function (v) { grv.surface = v; bubble(rows); })));
+    rows.appendChild(grooveRow('Širina', selectEl(mmOpts(GROOVE_WIDTHS, grv.width), String(grv.width), function (v) { grv.width = parseFloat(v); syncPreviewLine(); bubble(rows); })));
+    rows.appendChild(grooveRow('Dubina', selectEl(mmOpts(GROOVE_DEPTHS, grv.depth), String(grv.depth), function (v) { grv.depth = parseFloat(v); bubble(rows); })));
 
     var orient = el('div', 'zs-chips zs-groove-orient');
     [['horizontal', 'Horizontalno'], ['vertical', 'Vertikalno'], ['wave', 'Talas']].forEach(function (pair) {
@@ -802,28 +997,31 @@
       });
       orient.appendChild(b);
     });
-    settings.appendChild(field('Orijentacija', orient));
+    rows.appendChild(grooveRow('Orijentacija', orient));
 
-    posInput.addEventListener('input', function () {
-      grv.position = parseFloat(posInput.value) || 0;
-      syncPosBounds();
-    });
-    settings.appendChild(field('Pozicija (mm od centra trake)', posInput));
-    syncPosBounds();
+    var posWrap = el('div', 'zs-groove-posinput');
+    var posInput = el('input');
+    posInput.type = 'number'; posInput.step = '0.05';
+    posInput.addEventListener('input', function () { grv.position = parseFloat(posInput.value) || 0; syncPreviewLine(); });
+    posInput.addEventListener('change', function () { bubble(posInput); });
+    var posUnit = el('span', 'zs-groove-posunit'); posUnit.textContent = 'mm';
+    posWrap.appendChild(posInput); posWrap.appendChild(posUnit);
+    var posField = grooveRow('Pozicija (od centra)', posWrap);
+    var posHint = el('span', 'zs-groove-poshint');
+    posField.appendChild(posHint);
+    rows.appendChild(posField);
 
-    var del = el('button', 'zs-linkbtn zs-groove-del');
-    del.type = 'button';
-    del.innerHTML = icon('trash') + ' Obriši';
-    del.addEventListener('click', function () {
-      var i = s.grooves.indexOf(grv);
-      if (i > -1) s.grooves.splice(i, 1);
-      self.renderPanel(); self.gotoStep('Žlebovi'); self.pushScene();
-    });
-    settings.appendChild(del);
-
-    row.appendChild(settings);
+    syncPreviewLine();
+    body.appendChild(rows);
+    row.appendChild(body);
     return row;
   };
+  function grooveRow(label, control) {
+    var r = el('div', 'zs-groove-row');
+    r.appendChild(hx('span', 'zs-groove-row-label', label));
+    r.appendChild(control);
+    return r;
+  }
 
   /* ---------------------------------------------------------------- Dijamanti */
 
@@ -997,6 +1195,19 @@
     });
     var wrap = el('div', 'zs-acc-body');
     wrap.appendChild(body);
+
+    // "Primeni na drugu burmu" — copies just this step's fields from the
+    // active ring to the other one (client/Breuning: "Einstellung für Ring 1
+    // übernehmen", offered per step).
+    if (SECTION_FIELDS[label]) {
+      var other = this.activeRing === 'her' ? 'Njegovu' : 'Njenu';
+      var applyBtn = el('button', 'zs-acc-apply');
+      applyBtn.type = 'button';
+      applyBtn.innerHTML = icon('copy') + ' Primeni na ' + other + ' burmu';
+      applyBtn.addEventListener('click', function () { self.copySection(label); bubble(applyBtn); });
+      wrap.appendChild(applyBtn);
+    }
+
     var idx = STEPS.indexOf(label);
     if (idx > -1 && idx + 1 < STEPS.length) {
       var next = el('button', 'zs-acc-next');
@@ -1049,7 +1260,13 @@
     input.type = 'text'; input.maxLength = e.maxLen || 20;
     input.placeholder = 'Tekst gravure (do ' + (e.maxLen || 20) + ' znakova)';
     input.value = s.engravingText;
-    input.addEventListener('input', function () { s.engravingText = input.value; });
+    var self = this;
+    input.addEventListener('input', function () {
+      s.engravingText = input.value;
+      // live-update the 3D engraving as you type (not just on blur)
+      clearTimeout(self._engTimer);
+      self._engTimer = setTimeout(function () { self.pushScene(); }, 120);
+    });
     box.appendChild(input);
     var sides = el('div', 'zs-chips');
     (e.sides || ['inside', 'outside']).forEach(function (side) {
@@ -1074,6 +1291,9 @@
         '<span class="zs-price-label">Cena za par</span>' +
         '<span class="zs-price-value">—</span>' +
         '<span class="zs-price-sub">PDV uključen · <span class="zs-weight">—</span></span>' +
+        '<span class="zs-price-perring">' +
+          '<span data-ring="her">Njena —</span><span data-ring="his">Njegova —</span>' +
+        '</span>' +
       '</div>' +
       '<div class="zs-trust">' +
         trust('Procena izrade', '3–4 nedelje') +
@@ -1086,6 +1306,8 @@
       '</div>';
     this._priceValue = bar.querySelector('.zs-price-value');
     this._weightEl = bar.querySelector('.zs-weight');
+    this._priceHerEl = bar.querySelector('.zs-price-perring [data-ring="her"]');
+    this._priceHisEl = bar.querySelector('.zs-price-perring [data-ring="his"]');
     return bar;
   };
 
@@ -1096,11 +1318,15 @@
   Configurator.prototype.refresh = function () {
     this.renderPanel();
     var self = this;
-    this._ringTabs.querySelectorAll('.zs-ring-tab').forEach(function (b, i) {
-      b.setAttribute('aria-selected', String(RINGS[i].key === self.activeRing));
-    });
+    if (this._ringToggle) {
+      this._ringToggle.querySelectorAll('.zs-ring-btn').forEach(function (b) {
+        b.setAttribute('aria-pressed', String(b.dataset.ring === self.activeRing));
+      });
+    }
     this.recalc();
     this.pushScene();
+    // Keep "view solo" locked to whichever ring is now active.
+    this.applyViewSolo();
   };
 
   Configurator.prototype.recalc = function () {
@@ -1110,6 +1336,9 @@
     var wPair = this.ringWeight('her') + this.ringWeight('his');
     if (this._weightEl) this._weightEl.textContent = wPair > 0 ? ('≈ ' + fmtNum(wPair) + ' g za par') : '';
     if (this._priceValue) this._priceValue.textContent = priceable ? money(Math.round(total), this.c) : 'Cena na upit';
+    // Per-ring price line (client/Breuning: price shown per ring beside the pair total).
+    if (this._priceHerEl) this._priceHerEl.textContent = 'Njena ' + (her.priceable ? money(Math.round(her.total), this.c) : 'na upit');
+    if (this._priceHisEl) this._priceHisEl.textContent = 'Njegova ' + (his.priceable ? money(Math.round(his.total), this.c) : 'na upit');
   };
 
   Configurator.prototype._ringPrice = function (ringKey) {
@@ -1135,8 +1364,11 @@
     var c = this.c, g = c.groups || {}, s = this.state[ringKey];
     var mat = bySlug(g.material, s.material);
     var prof = bySlug(g.profile, s.profile);
-    var density = (mat && mat.price && mat.price.density) || 0;
-    if (!density) return 0;
+    var baseDensity = (mat && mat.price && mat.price.density) || 0;
+    if (!baseDensity) return 0;
+    // Fineness picks the specific gravity (18k gold is denser → heavier ring).
+    var fdef = finocaDef(s.finoca);
+    var density = fdef.dens[s.material] || baseDensity;
     var fill = num(prof && prof.params && prof.params.fill, 1.0);
     var meanCirc = s.size + Math.PI * s.thickness;      // mm
     var area = s.width * s.thickness * fill;            // mm²
@@ -1148,6 +1380,15 @@
 
   function railBtn(k, glyph, title) { return '<button type="button" class="zs-rail-btn" data-k="' + k + '" title="' + title + '" aria-label="' + title + '">' + glyph + '</button>'; }
   function toolBtn(glyph, label) { return '<button type="button" class="zs-tool-btn"><span aria-hidden="true">' + glyph + '</span>' + esc(label) + '</button>'; }
+  function mixHex(a, b, t) {
+    function p(h) { h = String(h).replace('#', ''); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
+    var x = p(a), y = p(b), o = '#';
+    for (var i = 0; i < 3; i++) {
+      var v = Math.round(x[i] + (y[i] - x[i]) * Math.max(0, Math.min(1, t)));
+      o += ('0' + v.toString(16)).slice(-2);
+    }
+    return o;
+  }
   function trust(a, b) { return '<div class="zs-trust-item"><strong>' + esc(a) + '</strong><span>' + esc(b) + '</span></div>'; }
 
   function field(label, control) {
@@ -1240,6 +1481,10 @@
   function profileShapeOf(g, profileSlug) {
     var prof = bySlug(g.profile, profileSlug);
     return (prof && prof.params && prof.params.shape) || 'flat';
+  }
+  function profileParamsOf(g, profileSlug) {
+    var prof = bySlug(g.profile, profileSlug);
+    return (prof && prof.params) || null;
   }
   // "Količina" resolves to N flush stones spaced evenly AROUND the band's
   // circumference (v1 only ever places flush stones directly into the band,

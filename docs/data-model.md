@@ -85,11 +85,18 @@ MODEL i (ako ih bude) jedinstvene GLAVE mogu biti CPT `zs_ring_model` / `zs_head
     "diamond":  [ { "slug": "round-0_30-vs-f", "label": "Rund 0.30ct VS/F", "shape": "round",
                     "carat": 0.30, "quality": "VS/F", "available": false,
                     "price": { "type": "flat", "amount": 61000 } } ],
-    "engraving": { "maxLen": 20, "fonts": ["serif","script"], "sides": ["inside","outside"],
+    "engraving": { "maxLen": 30, "fonts": ["serif","script"], "sides": ["inside","outside"],
                    "price": { "type": "flat", "amount": 3000 } }
   }
 }
 ```
+
+> **Ažurirano 2026-09-08/09** (decisions #44–47): `engraving.maxLen` 20→30.
+> Diamond redovi su `available: true` (bili stock-gate off). Profil grupa ima
+> `params.group` (Osnovni / Zaobljeni / Ravni / Šiljati profili) + parametarske
+> knobove za novih 10 profila. **Finoća** (585/750) je klijentski izbor u
+> `configurator.js` (`FINOCA` tabela — `density` po metalu + `deepen` za boju),
+> NE zaseban `wp_zs_options` red za sada; menja masu → cenu.
 
 ## Cena — formula (skica)
 
