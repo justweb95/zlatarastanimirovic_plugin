@@ -1,61 +1,85 @@
-/* ZS Configurator — design tokens (docs/design-system.md, Figma "Stanimirović - konfigurator").
-   px type sizes are still estimates until pulled from Figma Dev Mode (question H). */
+/* ZS Configurator — design tokens.
+   Re-skinned 2026-09-09 to match the live site zlatarastanimirovic.rs
+   (Woodmart theme): gold #D4AF37 as the brand action colour, ink #262626,
+   near-black utility bar, Belleza (display) + Lato (body), near-square
+   corners. See docs/design-system.md and decisions.md #16 / #49.
+
+   Accent rule after the re-skin:
+   - GOLD  = navigation + actions: step nav, view-toolbar toggles, CTAs, price,
+             every hover accent (borders, links).
+   - GREEN = a chosen product option only: swatches, chips, profile / pattern /
+             setting / groove-shape boxes. Never "just a shadow" (golden rule #2). */
 
 :root {
-  /* Palette — locked (decisions.md #16). 75–85% neutral; green/bronze are accents only. */
+  /* --- Palette ---------------------------------------------------------- */
+  /* Gold — the live site's primary colour (.color-primary, buttons, prices,
+     active menu item, hairline dividers). */
+  --zs-gold:        #D4AF37;
+  --zs-gold-hover:  #BE982B;   /* darker gold for :hover / :active on CTAs */
+
+  /* Green — reserved for "this option is selected". Present in the site's
+     hero artwork, so still on-brand; keeps golden rule #2 intact. */
   --zs-green:        #1F3D2E;
   --zs-green-hover:  #16291F;
   --zs-success:      #3E6E52;
-  --zs-bronze:       #8B5A34;
-  --zs-gold:         #B8974F;
-  /* White refresh (client, 2026-09-06): the old warm cream/ivory background
-     and surfaces read as "yellowish" — flattened to clean white + neutral
-     light-grey surfaces. Green/bronze/gold accents unchanged. */
+
+  /* Warm mid-gold — hover borders + cross-section line art. Deliberately a
+     touch muted so it never reads as the bright CTA gold. */
+  --zs-bronze:       #B58E3A;
+
+  /* Near-black utility bar (site top bar is ~#242424 with white text). */
+  --zs-ink-bar:      #242424;
+  --zs-ink-bar-line: #333333;
+  --zs-on-dark:        rgba(255, 255, 255, 0.64);
+  --zs-on-dark-strong: #FFFFFF;
+
+  /* Surfaces — clean white + neutral light greys (site uses #fff + ~#f7f7f7,
+     hairlines ~#e1e1e1). */
   --zs-bg:           #FFFFFF;
-  --zs-surface:      #F7F7F5;
-  --zs-surface-2:    #ECECE8;
-  --zs-border:       #E3E3DF;
-  --zs-text:         #221F1B;
-  --zs-text-muted:   #7C7568;
-  --zs-disabled:     #C7C0B0;
+  --zs-surface:      #F6F6F4;
+  --zs-surface-2:    #ECECEA;
+  --zs-border:       #E3E1DC;
+  --zs-text:         #262626;
+  --zs-text-muted:   #767676;
+  --zs-disabled:     #C4C4C0;
 
-  /* Type — Fraunces (display/H1–H3, price, model names) + Inter (everything technical) */
-  --zs-font-serif: "Fraunces", Georgia, "Times New Roman", serif;
-  --zs-font-sans:  "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* --- Type — Belleza (display / H1–H3 / price / model names, 400 only) +
+         Lato (body + every technical control). Mirrors the site's
+         .font-primary / .font-text split. --------------------------------- */
+  --zs-font-serif: "Belleza", "Times New Roman", Georgia, serif;
+  --zs-font-sans:  "Lato", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 
-  --zs-fs-display: 48px;
+  /* Belleza has a smaller x-height than Fraunces — display sizes nudged up. */
+  --zs-fs-display: 46px;
   --zs-fs-h2:      30px;
   --zs-fs-h3:      22px;
-  --zs-fs-price:   28px;
+  --zs-fs-price:   30px;
   --zs-fs-body-lg: 18px;
   --zs-fs-body:    16px;
-  --zs-fs-button:  15px;
+  --zs-fs-button:  14px;
   --zs-fs-label:   12px;
   --zs-fs-micro:   13px;
-  --zs-ls-label:   0.08em;
+  --zs-ls-label:   0.12em;   /* site nav / labels are generously tracked */
 
-  /* Spacing scale — 4 · 8 · 12 · 16 · 24 · 32 · 48 · 64 */
+  /* --- Spacing — 4 · 8 · 12 · 16 · 24 · 32 · 48 · 64 ------------------- */
   --zs-space-1: 4px;  --zs-space-2: 8px;  --zs-space-3: 12px; --zs-space-4: 16px;
   --zs-space-5: 24px; --zs-space-6: 32px; --zs-space-7: 48px; --zs-space-8: 64px;
 
-  --zs-radius: 10px;
-  --zs-radius-pill: 999px;
+  /* --- Shape — the live site is near-square; only true circles stay round. */
+  --zs-radius: 2px;
+  --zs-radius-pill: 2px;
   --zs-radius-swatch: 50%;
   --zs-border-w: 1px;
 
-  /* Wider shell + roomier options panel (client, 2026-09-08: "povećaj desni
-     box da bolje stane", "promeni širinu kontejnera"). */
+  /* --- Layout --------------------------------------------------------- */
   --zs-maxw: 1600px;
   --zs-panelw: 380px;
-  /* 3D viewport · right options panel (client, 2026-09-06: the old left
-     model-list column is gone — the viewport runs from the left edge). */
   --zs-grid: 1fr var(--zs-panelw);
-  /* Fixed viewport height (client, 2026-09-06: "render ima fixnu visinu
-     uvek") — never grows/shrinks with window size or panel content. */
   --zs-view-h: 560px;
 
-  --zs-shadow-sm: 0 1px 2px rgba(34, 31, 27, 0.05);
-  --zs-shadow-md: 0 6px 24px rgba(34, 31, 27, 0.08);
+  /* --- Elevation — flatter than before, neutral ink shadow ------------ */
+  --zs-shadow-sm: 0 1px 2px rgba(38, 38, 38, 0.06);
+  --zs-shadow-md: 0 4px 18px rgba(38, 38, 38, 0.10);
 
   --zs-ease: cubic-bezier(0.4, 0, 0.2, 1);
 }

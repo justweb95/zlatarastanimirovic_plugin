@@ -82,9 +82,9 @@ MODEL i (ako ih bude) jedinstvene GLAVE mogu biti CPT `zs_ring_model` / `zs_head
     ],
     "finish":   [ { "slug": "polished", "label": "Polirano", "available": true,
                     "pbr": { "roughness": 0.05 }, "price": { "type": "flat", "amount": 0 } } ],
-    "diamond":  [ { "slug": "round-0_30-vs-f", "label": "Rund 0.30ct VS/F", "shape": "round",
-                    "carat": 0.30, "quality": "VS/F", "available": false,
-                    "price": { "type": "flat", "amount": 61000 } } ],
+    "diamond":  [ { "slug": "round-1_5", "label": "Ø 1,5 mm", "shape": "round",
+                    "mm": 1.5, "quality": "H/SI", "available": true,
+                    "price": { "type": "flat", "amount": 12000 } } ],
     "engraving": { "maxLen": 30, "fonts": ["serif","script"], "sides": ["inside","outside"],
                    "price": { "type": "flat", "amount": 3000 } }
   }

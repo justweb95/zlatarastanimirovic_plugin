@@ -207,9 +207,9 @@ final class Seeder
             'params_json' => ['shape' => null, 'mm' => 0, 'count' => 0],
         ];
         $diamonds = [
-            ['round-1_0', 'Rund Ø1.0 mm', 'round', 1.0, 6000],
-            ['round-1_5', 'Rund Ø1.5 mm', 'round', 1.5, 12000],
-            ['round-2_0', 'Rund Ø2.0 mm', 'round', 2.0, 22000],
+            ['round-1_0', 'Ø 1,0 mm', 'round', 1.0, 6000],
+            ['round-1_5', 'Ø 1,5 mm', 'round', 1.5, 12000],
+            ['round-2_0', 'Ø 2,0 mm', 'round', 2.0, 22000],
         ];
         foreach ($diamonds as $i => [$slug, $label, $shape, $mm, $amount]) {
             $rows[] = [

@@ -153,13 +153,18 @@ function create(canvas, opts = {}) {
   const homeTarget = new THREE.Vector3(0, 0, 0);
   camera.position.copy(homePos);
 
-  // OrbitControls orbits the camera around the pair — drag to rotate, wheel
-  // to dolly. Polar clamp opened up so it can be viewed from nearly straight
-  // above/below; pan is off so it stays centred over its shadow.
+  // OrbitControls orbits the camera around the pair — drag to rotate only.
+  // Polar clamp opened up so it can be viewed from nearly straight above/
+  // below; pan is off so it stays centred over its shadow.
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.05;
   controls.enablePan = false;
+  // Wheel-zoom OFF (client, 2026-09-10): with it on, scrolling the page while
+  // the pointer is over the canvas got swallowed by OrbitControls and zoomed
+  // the ring instead of scrolling — the page scroll would "stick". The +/−
+  // toolbar buttons (scene.zoom()) still dolly the camera, so no feature lost.
+  controls.enableZoom = false;
   controls.minDistance = 10;
   controls.maxDistance = 160;
   // The camera can rise all the way to a full flat-lay top-down shot
@@ -333,12 +338,90 @@ function create(canvas, opts = {}) {
   // rings could never have independently different shine even in principle.
   // Assigning the same PMREM texture as an explicit envMap on each material
   // opts it back into per-material control.
+  // -------------------------------------------------------------- diamond
+  //
+  // Rebuilt 2026-09-10 (client: the old stone was "samo bela tačkica"; target
+  // = the competitor's 4-prong raised solitaire on konfigurator.breuning.de).
+  // Every choice here is driven by ONE hard constraint: it must read as a
+  // faceted gem on SOFTWARE GL too. The WSL dev box runs SwiftShader, which
+  // renders NO transmission / dispersion / thickness refraction — so the
+  // "diamond look" can NOT lean on those. It comes from:
+  //   (a) non-indexed geometry → computeVertexNormals() gives every facet its
+  //       OWN flat normal, so each one mirrors the studio env at a different
+  //       angle = real facet-to-facet contrast even with zero refraction;
+  //   (b) baked vertex colours — light crown, progressively darker pavilion
+  //       into a near-black culet = a fake "looking down through the stone"
+  //       depth cue, the only one that survives without refraction;
+  //   (c) an optional additive sparkle sprite (how real jewellery
+  //       configurators fake "it twinkles" in a soft-box studio).
+  // transmission / dispersion are kept LOW here and only add a bonus on a
+  // real GPU — they are never the primary read. All of these are live-tunable
+  // via the ?zscdebug=1 panel → stoneParams below.
+  let stoneParams = {
+    // geometry (unit stone: girdle circle r=0.5 at y=0, table at +crownH,
+    // culet at -pavD; buildStoneFor scales by the mm Ø). Real round-brilliant
+    // total depth ≈ 0.60× Ø → crownH + pavD ≈ 0.60 for a natural silhouette.
+    tableRatio: 0.53,        // table Ø / girdle Ø
+    crownH: 0.16,            // crown height  (× girdle radius)
+    pavD: 0.40,              // pavilion depth (× girdle radius)
+    prominence: 1.9,         // stone mm → scene units (burma stones read big)
+    raise: 0.6,              // girdle plane height above band surface (× pavD × scale) — low so it nestles, not on stilts
+    // material — tuned for SOFTWARE GL first (see note above sharedStoneMat):
+    // low transmission + modest env so the baked facet colours actually read
+    // instead of washing to a white blob. A real GPU can push these up via
+    // the ?zscdebug=1 "Fotorealan" preset.
+    envMapIntensity: 1.15, transmission: 0.03, roughness: 0.16, ior: 2.4,
+    clearcoat: 0.25, clearcoatRoughness: 0.2,
+    iridescence: 0.12, iridescenceIOR: 1.3, dispersion: 4.0,
+    // baked facet colours (the depth cue) — cool greys, deliberately NOT
+    // near-white: on software GL a smooth dielectric reflects the white studio
+    // broadly, so the colours have to be dark enough that facet-to-facet
+    // contrast still reads through that reflection
+    colTable: '#93a3af', colCrown: '#c0ccd4', colGirdle: '#a7b5bf',
+    colPav: '#70808d', colCulet: '#333f4a',
+    // sparkle sprite
+    sparkle: true, sparkleScale: 1.25, sparkleOpacity: 0.4,
+  };
+
   const sharedStoneMat = new THREE.MeshPhysicalMaterial({
-    color: 0xffffff, metalness: 0, roughness: 0.02,
-    transmission: 0.85, ior: 2.42, thickness: 0.35, specularIntensity: 1,
-    clearcoat: 1, clearcoatRoughness: 0.02,
-    iridescence: 0.45, iridescenceIOR: 1.6, iridescenceThicknessRange: [120, 420],
-    envMap: envRT.texture, envMapIntensity: 4.5, transparent: true, side: THREE.DoubleSide,
+    vertexColors: true, color: 0xffffff, metalness: 0,
+    roughness: stoneParams.roughness, ior: stoneParams.ior, thickness: 0.5,
+    transmission: stoneParams.transmission, specularIntensity: 1,
+    clearcoat: stoneParams.clearcoat, clearcoatRoughness: stoneParams.clearcoatRoughness,
+    iridescence: stoneParams.iridescence, iridescenceIOR: stoneParams.iridescenceIOR,
+    iridescenceThicknessRange: [120, 480], dispersion: stoneParams.dispersion,
+    envMap: envRT.texture, envMapIntensity: stoneParams.envMapIntensity,
+    transparent: true, side: THREE.DoubleSide,
+  });
+
+  // Additive sparkle sprite — a white core + a faint 4-point star flare,
+  // always facing the camera. Shared texture/material; one Sprite per stone.
+  function makeSparkleTexture() {
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const x = c.getContext('2d'), cx = 64;
+    const g = x.createRadialGradient(cx, cx, 0, cx, cx, 46);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.22, 'rgba(255,255,255,.5)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = g; x.beginPath(); x.arc(cx, cx, 46, 0, Math.PI * 2); x.fill();
+    for (let i = 0; i < 2; i++) {
+      x.save(); x.translate(cx, cx); x.rotate(i * Math.PI / 4); x.lineWidth = 2;
+      [1, -1].forEach((dir) => {
+        const grd = x.createLinearGradient(0, 0, dir * 62, 0);
+        grd.addColorStop(0, 'rgba(255,255,255,.85)');
+        grd.addColorStop(1, 'rgba(255,255,255,0)');
+        x.strokeStyle = grd; x.beginPath(); x.moveTo(0, 0); x.lineTo(dir * 62, 0); x.stroke();
+      });
+      x.restore();
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  }
+  const sparkleTex = makeSparkleTexture();
+  const sparkleMat = new THREE.SpriteMaterial({
+    map: sparkleTex, color: 0xffffff, blending: THREE.AdditiveBlending,
+    depthWrite: false, transparent: true, opacity: stoneParams.sparkleOpacity,
   });
 
   // Client (2026-09-05): the flat base gold colour reads as plain/generic
@@ -422,8 +505,16 @@ function create(canvas, opts = {}) {
       side: THREE.DoubleSide,
     });
     attachBottomShade(mat);
+    // Metal for the diamond's prongs + basket. Its own material (not `mat`) so
+    // it can be a touch rougher/duller than the polished band and skip the
+    // band's bottom-shade shader; loop() copies the band's (tweening) colour
+    // into it every frame, same trick the grooves use.
+    const stoneMetal = new THREE.MeshPhysicalMaterial({
+      color: new THREE.Color('#D9A945'), metalness: 1.0, roughness: 0.14,
+      envMap: envRT.texture, envMapIntensity: 1.3, side: THREE.DoubleSide,
+    });
     return {
-      key, root, mat, band: null, stone: null, outer: 8,
+      key, root, mat, stoneMetal, band: null, stone: null, outer: 8,
       blob: pairMode ? makeContactBlob() : null,
       target: { color: new THREE.Color('#D9A945'), roughness: 0.08 },
     };
@@ -515,6 +606,80 @@ function create(canvas, opts = {}) {
 
   const LATHE_SEGMENTS = 260;
 
+  // ---- grooves: cut a real channel INTO the band silhouette --------------
+  //
+  // Client, 2026-09-10: the old grooves stood OUT (a raised applied ridge);
+  // a groove is a channel cut IN. Instead of per-profile-shape surgery this
+  // works on the finished band mesh: buildBandFor densifies the cross-section
+  // along its WIDTH (so there are enough vertex rows for crisp groove walls),
+  // then carveGroovesIntoGeometry() pushes the OUTER-surface vertices
+  // radially inward by a per-shape depth profile wherever they fall inside a
+  // groove's width span. The inner wall never moves. One code path for flat /
+  // round / court / d-comfort / all 14 param profiles. Grooves wrap the full
+  // circumference here; a partial-wrap 'horizontal'/'wave' groove stays a v2
+  // job (needs a per-angle cut).
+  function grooveCut(shape, t, depth) {
+    const s = Math.max(0, Math.min(1, t));               // position across groove width
+    switch (shape) {
+      case 'v90':
+      case 'vsharp':
+        return depth * (1 - Math.abs(2 * s - 1));        // sharp V
+      case 'angular':
+      case 'square':
+      case 'kanal': {
+        const r = 0.16;                                  // flat bottom, ramped walls
+        return depth * (s < r ? s / r : s > 1 - r ? (1 - s) / r : 1);
+      }
+      default:
+        return depth * Math.sqrt(Math.max(0, 1 - (2 * s - 1) ** 2)); // round U
+    }
+  }
+
+  function densifyLoop(pts, maxLen) {
+    const out = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1];
+      out.push(a);
+      const d = a.distanceTo(b);
+      if (d > maxLen) {
+        const steps = Math.ceil(d / maxLen);
+        for (let k = 1; k < steps; k++) out.push(a.clone().lerp(b, k / steps));
+      }
+    }
+    out.push(pts[pts.length - 1]);
+    return out;
+  }
+
+  const _gv = new THREE.Vector3();
+  // geo: band LatheGeometry AFTER rotateY(-90°) — Y stays the width axis.
+  function carveGroovesIntoGeometry(geo, grooves, innerR, outerR) {
+    if (!grooves || !grooves.length) return;
+    const pos = geo.attributes.position;
+    const mid = (innerR + outerR) / 2;
+    const minR = innerR + 0.22;                          // keep a wall
+    for (let idx = 0; idx < pos.count; idx++) {
+      _gv.fromBufferAttribute(pos, idx);
+      const rad = Math.hypot(_gv.x, _gv.z);
+      if (rad <= mid) continue;                          // inner half — never carved
+      const w = _gv.y;                                   // mm from band centre (width axis)
+      const outerness = Math.min(1, (rad - mid) / Math.max(outerR - mid, 1e-4));
+      let sink = 0;
+      for (let g = 0; g < grooves.length; g++) {
+        const gr = grooves[g];
+        const gw = Math.max(gr.width || 0.3, 0.06);
+        const t = (w - ((gr.position || 0) - gw / 2)) / gw;
+        if (t < 0 || t > 1) continue;
+        sink = Math.max(sink, grooveCut(gr.shape, t, Math.max(gr.depth || 0.15, 0.03)));
+      }
+      if (sink <= 0) continue;
+      const f = Math.max(minR, rad - sink * outerness) / rad;
+      pos.setX(idx, _gv.x * f);
+      pos.setZ(idx, _gv.z * f);
+    }
+    pos.needsUpdate = true;
+    geo.computeVertexNormals();
+  }
+
   // World-space (minY, x, z) of a rig's actual lowest vertex. A plain Box3
   // only gives an AABB min corner — fine while every ring stood dead
   // upright, but once a ring can lean/roll (POSE above) the AABB's min.y
@@ -547,7 +712,11 @@ function create(canvas, opts = {}) {
     const innerR = size / (2 * Math.PI);
     const thickness = state.thickness || 1.4;
     const outerR = innerR + thickness;
-    const pts = profilePoints(state.profileShape || 'flat', innerR, thickness, state.width || 4, state.profileOutline);
+    let pts = profilePoints(state.profileShape || 'flat', innerR, thickness, state.width || 4, state.profileOutline);
+    const grooves = state.grooves || [];
+    // Grooves are cut into the band itself now — densify the cross-section so
+    // the carve below has enough vertex rows for sharp groove walls.
+    if (grooves.length) pts = densifyLoop(pts, 0.18);
     const geo = new THREE.LatheGeometry(pts, LATHE_SEGMENTS);
     // Custom per-vertex attribute carrying each vertex's LOCAL width-axis
     // position (same y profilePoints() already works in) — feeds the
@@ -566,6 +735,7 @@ function create(canvas, opts = {}) {
     }
     geo.rotateY(-Math.PI / 2);     // move the lathe seam to the left silhouette edge
     geo.computeVertexNormals();
+    carveGroovesIntoGeometry(geo, grooves, innerR, outerR);
     weldLatheSeam(geo, pts.length, LATHE_SEGMENTS);
     if (rig.band) { rig.band.geometry.dispose(); rig.band.geometry = geo; }
     else {
@@ -618,188 +788,150 @@ function create(canvas, opts = {}) {
     return outerR;
   }
 
-  // Faceted round-brilliant (client, 2026-09-09: "neka bude baš baš dijamant
-  // svetlucav, ne samo beli kvadratić"). Non-indexed → computeVertexNormals()
-  // gives every facet its OWN normal, so each one mirrors the studio env at a
-  // different angle = real sparkle (works even on software GL, unlike relying
-  // on transmission alone). Unit stone: girdle plane at y=0 (radius 0.5),
-  // table at y=+TABLE_UP, culet at y=-PAV_DOWN — so scaling by the mm Ø and
-  // placing the origin at the band's outer surface seats it table-flush.
-  const TABLE_UP = 0.20, PAV_DOWN = 0.52;
-  let brilliantGeo = null;
+  // Round-brilliant geometry — non-indexed so computeVertexNormals() bakes one
+  // flat normal per facet (see the big note above sharedStoneMat). Carries a
+  // per-vertex `color` attribute: light crown → darker pavilion → near-black
+  // culet, the fake "depth through the stone" cue. Rebuilt (not just re-scaled)
+  // whenever a stoneParams geometry/colour knob changes — cheap, ~230 tris.
+  let brilliantGeo = makeBrilliantGeometry();
   function makeBrilliantGeometry() {
-    const N = 12, rG = 0.5, rT = 0.30;
-    const yT = TABLE_UP, yGT = 0.04, yGB = -0.02, yC = -PAV_DOWN;
-    const pos = [];
-    const P = (r, y, i) => { const a = (i / N) * Math.PI * 2; return [Math.cos(a) * r, y, Math.sin(a) * r]; };
-    const tri = (a, b, c) => { pos.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]); };
+    const P = stoneParams;
+    const N = 16, rG = 0.5, rT = rG * P.tableRatio;
+    const rStar = rG * (P.tableRatio + (1 - P.tableRatio) * 0.5); // star-facet ring
+    const rPav = rG * 0.55;                                       // pavilion-main mid ring
+    const yT = P.crownH, yStar = P.crownH * 0.5, yGt = 0.035, yGb = -0.035;
+    const yPav = -P.pavD * 0.52, yC = -P.pavD;
+    const cT = new THREE.Color(P.colTable), cC = new THREE.Color(P.colCrown),
+      cG = new THREE.Color(P.colGirdle), cP = new THREE.Color(P.colPav),
+      cU = new THREE.Color(P.colCulet);
+    const pos = [], col = [];
+    const V = (r, y, i) => { const a = (i / N) * Math.PI * 2; return [Math.cos(a) * r, y, Math.sin(a) * r]; };
+    const tri = (a, b, c, ca, cb, cc) => {
+      pos.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
+      col.push(ca.r, ca.g, ca.b, cb.r, cb.g, cb.b, cc.r, cc.g, cc.b);
+    };
     const TC = [0, yT, 0], CU = [0, yC, 0];
     for (let i = 0; i < N; i++) {
-      const t0 = P(rT, yT, i), t1 = P(rT, yT, i + 1);
-      const gt0 = P(rG, yGT, i), gt1 = P(rG, yGT, i + 1);
-      const gb0 = P(rG, yGB, i), gb1 = P(rG, yGB, i + 1);
-      tri(TC, t0, t1);                 // table facet
-      tri(t0, gt0, gt1); tri(t0, gt1, t1); // crown facets (split for per-face normals)
-      tri(gt0, gb0, gb1); tri(gt0, gb1, gt1); // girdle
-      tri(gb0, CU, gb1);              // pavilion facet
+      const t0 = V(rT, yT, i), t1 = V(rT, yT, i + 1);
+      const s0 = V(rStar, yStar, i), s1 = V(rStar, yStar, i + 1);
+      const gt0 = V(rG, yGt, i), gt1 = V(rG, yGt, i + 1);
+      const gb0 = V(rG, yGb, i), gb1 = V(rG, yGb, i + 1);
+      const p0 = V(rPav, yPav, i), p1 = V(rPav, yPav, i + 1);
+      tri(TC, t0, t1, cT, cC, cC);                                  // table (fan)
+      tri(t0, s0, s1, cC, cC, cC); tri(t0, s1, t1, cC, cC, cC);     // star facets
+      tri(s0, gt0, gt1, cC, cG, cG); tri(s0, gt1, s1, cC, cG, cC);  // bezel/upper-girdle
+      tri(gt0, gb0, gb1, cG, cG, cG); tri(gt0, gb1, gt1, cG, cG, cG); // girdle band
+      tri(gb0, p0, p1, cG, cP, cP); tri(gb0, p1, gb1, cG, cP, cG);  // pavilion upper
+      tri(p0, CU, p1, cP, cU, cP);                                  // pavilion → culet
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
     g.computeVertexNormals();
     return g;
   }
-  function makeStoneMesh() {
-    if (!brilliantGeo) brilliantGeo = makeBrilliantGeometry();
-    const m = new THREE.Mesh(brilliantGeo, sharedStoneMat);
-    m.renderOrder = 3;
-    return m;
+
+  // The 4-claw setting, built in UNIT-STONE space (so it scales/rotates with
+  // the gem): claw bases sit at the band surface (local y = -pavD, which
+  // buildStoneFor's `raise` lines up with `outerR`), tips fold just over the
+  // girdle. Basket ring links them under the pavilion. Uses the rig's
+  // stoneMetal so it always matches the band colour/finish.
+  function makeSettingGroup(metal) {
+    const P = stoneParams;
+    const g = new THREE.Group();
+    const up = new THREE.Vector3(0, 1, 0), a = new THREE.Vector3(), b = new THREE.Vector3(), d = new THREE.Vector3();
+    // Claws grip the girdle and fold JUST over the crown edge (rTip < girdle
+    // radius, yTip a hair above the table). They only bridge girdle→band on
+    // the upper pavilion; the basket ring covers the rest.
+    const yBase = -P.pavD * 0.35, yTip = P.crownH + 0.03, rBase = 0.48, rTip = 0.36;
+    for (let k = 0; k < 4; k++) {
+      const ang = Math.PI / 4 + k * Math.PI / 2, cx = Math.cos(ang), cz = Math.sin(ang);
+      a.set(cx * rBase, yBase, cz * rBase);
+      b.set(cx * rTip, yTip, cz * rTip);
+      const len = a.distanceTo(b);
+      const claw = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.05, len, 6), metal);
+      claw.position.copy(a).add(b).multiplyScalar(0.5);
+      claw.quaternion.setFromUnitVectors(up, d.subVectors(b, a).normalize());
+      g.add(claw);
+      const tip = new THREE.Mesh(new THREE.SphereGeometry(0.042, 8, 6), metal);
+      tip.position.copy(b);
+      g.add(tip);
+    }
+    const basket = new THREE.Mesh(new THREE.TorusGeometry(0.44, 0.024, 8, 22), metal);
+    basket.rotation.x = Math.PI / 2;
+    basket.position.y = -P.pavD * 0.42;
+    g.add(basket);
+    return g;
+  }
+
+  // One pooled stone "unit" = gem mesh + claw setting + sparkle sprite, under
+  // a Group that buildStoneFor positions/rotates/scales as a whole.
+  function makeStoneUnit(rig) {
+    const unit = new THREE.Group();
+    const gem = new THREE.Mesh(brilliantGeo, sharedStoneMat);
+    gem.renderOrder = 3;
+    unit.add(gem);
+    unit.add(makeSettingGroup(rig.stoneMetal));
+    const spr = new THREE.Sprite(sparkleMat);
+    spr.position.y = stoneParams.crownH * 0.85;
+    spr.renderOrder = 4;
+    spr.visible = stoneParams.sparkle;
+    unit.add(spr);
+    unit.userData = { gem, sparkle: spr };
+    return unit;
   }
   const _stoneUp = new THREE.Vector3(0, 1, 0);
   const _stoneOut = new THREE.Vector3();
 
-  // state.stone = { mm, positions: [mm along band, ...] } — v1 only ever
-  // places flush round stones directly into the band's outer surface (no
-  // prong/crown setting yet, decisions.md #22/roadmap "Tehnički dug"). Several
-  // "Pozicioniranje"/"Količina" UI choices (configurator.js) resolve to
-  // several entries in `positions` here — e.g. quantity=3 "Kanal" style
-  // produces 3 evenly-spaced positions server^Wclient-side before this ever
-  // sees it; this function just places whatever list it's given.
-  // `position` (singular, legacy/thumbnail use) is still accepted as a
-  // single-stone shorthand.
+  // state.stone = { mm, positions: [mm along band, ...], widthPos }. v1 = one
+  // raised prong-set round stone (client 2026-09-10, target =
+  // konfigurator.breuning.de 4-prong solitaire). "Količina"/"Pozicioniranje"
+  // UI choices in configurator.js resolve to the `positions` list before this
+  // sees it; this just places whatever it's given. `position` (singular) is
+  // still accepted as single-stone shorthand.
   function buildStoneFor(key, state) {
     const rig = rigs[key];
     const s = state.stone;
     const positions = s && s.mm ? (s.positions || [typeof s.position === 'number' ? s.position : 0]) : [];
     const n = positions.length;
     if (!rig.stones) rig.stones = [];
-    // Grow/shrink the pool to match. Instances are cheap (shared geometry);
-    // just toggle visibility rather than dispose/recreate on every tweak.
     while (rig.stones.length < n) {
-      const m = makeStoneMesh();
-      rig.root.add(m);
-      rig.stones.push(m);
+      const u = makeStoneUnit(rig);
+      rig.root.add(u);
+      rig.stones.push(u);
     }
-    rig.stones.forEach((m, i) => { m.visible = i < n; });
+    rig.stones.forEach((u, i) => { u.visible = i < n; });
     if (!n) return;
 
+    const P = stoneParams;
     const size = state.size || 54;
     const innerR = size / (2 * Math.PI);
     const thickness = state.thickness || 1.4;
     const outerR = innerR + thickness;
     const meanCirc = Math.PI * (innerR + outerR);
-    // Flush-set on the OUTER surface (client, 2026-09-09: "dijamant si stavio
-    // iznutra, treba spolja"). Clamp the stone so its culet can't punch
-    // through the inner wall on a thin band — a 2mm stone genuinely can't
-    // flush-set into a 1mm band, so it's shown a touch smaller instead of
-    // poking out inside the ring.
-    const d = s.mm;
-    const wall = 0.12;
-    const maxScale = Math.max(0.4, (thickness - wall) / (TABLE_UP + PAV_DOWN));
-    const scale = Math.min(d, maxScale);
-    const tableR = outerR + 0.01;                 // table ~flush, a hair proud
-    const originR = tableR - TABLE_UP * scale;    // stone origin = girdle plane
-    // widthPos = position ACROSS the band's width (configurator.js clamps it
-    // to the real width minus margins and away from grooves) — same local Y
-    // axis profilePoints()/aBandY use.
+    // Raised prong setting (NOT flush): the girdle plane sits `raise·pavD·scale`
+    // above the band's outer surface, claws bridge the gap. With raise ≥ 1 the
+    // culet (local y = -pavD) clears the band surface. Clamp so a big stone on
+    // a thin band still reads sensibly rather than dwarfing it.
+    const maxScale = Math.max(0.6, thickness * 2.2);
+    const scale = Math.min(s.mm * P.prominence, maxScale);
+    const girdleR = outerR + P.raise * P.pavD * scale;
     const widthPos = s.widthPos || 0;
     positions.forEach((posMm, i) => {
-      const m = rig.stones[i];
-      m.scale.setScalar(scale);
-      const theta = ((posMm || 0) / meanCirc) * Math.PI * 2; // 0 = +Z
-      _stoneOut.set(Math.sin(theta), 0, Math.cos(theta));    // radial outward
-      m.position.set(_stoneOut.x * originR, widthPos, _stoneOut.z * originR);
-      m.quaternion.setFromUnitVectors(_stoneUp, _stoneOut);  // table faces outward
+      const u = rig.stones[i];
+      u.scale.setScalar(scale);
+      if (u.userData.sparkle) u.userData.sparkle.scale.setScalar(P.sparkleScale);
+      const theta = ((posMm || 0) / meanCirc) * Math.PI * 2;   // 0 = +Z
+      _stoneOut.set(Math.sin(theta), 0, Math.cos(theta));      // radial outward
+      u.position.set(_stoneOut.x * girdleR, widthPos, _stoneOut.z * girdleR);
+      u.quaternion.setFromUnitVectors(_stoneUp, _stoneOut);    // table faces outward
     });
   }
 
-  // ---------------------------------------------------------------- grooves
-  //
-  // Groove render (client, 2026-09-07 — was UI/state-only, decisions.md #33):
-  // each groove is its own tiny LatheGeometry ring (exact same revolve
-  // technique as the band itself, just a much smaller profile) sitting
-  // flush at the band's outer surface at the groove's width-position,
-  // reading as a fine decorative ridge/inlay line — NOT a true carved notch
-  // into the band's own silhouette. Real carving would need shape-specific
-  // surgery on profilePoints() (its geometry differs per profile —
-  // round/flat/court/d-comfort — so a notch that's correct for all 4 is a
-  // separate per-shape job); a small applied ridge is shape-agnostic, can't
-  // self-intersect, and is a legitimate real technique too (millgrain/inlay
-  // strips are physically applied, not always carved). This always wraps
-  // fully around the band, which is really only strictly what
-  // orientation:'vertical' (the default) means — 'horizontal'/'wave'
-  // grooves (a per-ANGLE feature) render the same way for now, logged as a
-  // v2 follow-up in roadmap.md.
-  function grooveProfilePoints(shape, outerR, width, depth) {
-    const halfW = Math.max(width, 0.05) / 2;
-    const rise = Math.max(depth, 0.02) * 0.6; // small raised ridge, proportional to "depth"
-    const pts = [];
-    if (shape === 'v90') {
-      pts.push(new THREE.Vector2(outerR, -halfW));
-      pts.push(new THREE.Vector2(outerR + rise, 0));
-      pts.push(new THREE.Vector2(outerR, halfW));
-    } else if (shape === 'angular') {
-      const flat = halfW * 0.35;
-      pts.push(new THREE.Vector2(outerR, -halfW));
-      pts.push(new THREE.Vector2(outerR + rise, -flat));
-      pts.push(new THREE.Vector2(outerR + rise, flat));
-      pts.push(new THREE.Vector2(outerR, halfW));
-    } else {
-      // u-round / perlage / carbon — one smooth arced ridge (v1 approximation)
-      const steps = 12;
-      for (let i = 0; i <= steps; i++) {
-        const t = i / steps;
-        pts.push(new THREE.Vector2(outerR + rise * Math.sin(Math.PI * t), -halfW + t * halfW * 2));
-      }
-    }
-    // NOT closed back to the first point — unlike the band's own profilePoints()
-    // (a closed cross-section loop), this is a thin OPEN ridge running from
-    // one edge of the groove's width to the other; closing it would revolve
-    // an extra seam jumping back across the width and produce a visible
-    // pinch/artifact.
-    return pts;
-  }
-  const GROOVE_SEGMENTS = 120; // thin decorative ring — doesn't need the band's full 260
-  function buildGroovesFor(key, state) {
-    const rig = rigs[key];
-    const grooves = state.grooves || [];
-    if (!rig.grooveMeshes) rig.grooveMeshes = [];
-    while (rig.grooveMeshes.length > grooves.length) {
-      const m = rig.grooveMeshes.pop();
-      rig.root.remove(m);
-      m.geometry.dispose(); m.material.dispose();
-    }
-    while (rig.grooveMeshes.length < grooves.length) {
-      const mat = new THREE.MeshPhysicalMaterial({
-        color: rig.mat.color.clone(), metalness: 1.0, roughness: 0.2,
-        envMap: envRT.texture, envMapIntensity: 1.1, side: THREE.DoubleSide,
-      });
-      const m = new THREE.Mesh(new THREE.BufferGeometry(), mat);
-      rig.root.add(m);
-      rig.grooveMeshes.push(m);
-    }
-    if (!grooves.length) return;
+  // Grooves are cut straight into the band geometry — see
+  // carveGroovesIntoGeometry() up near profilePoints(). No separate groove
+  // meshes any more (client, 2026-09-10: a groove goes IN, not OUT).
 
-    const size = state.size || 54;
-    const innerR = size / (2 * Math.PI);
-    const outerR = innerR + (state.thickness || 1.4);
-    grooves.forEach((grv, i) => {
-      const m = rig.grooveMeshes[i];
-      m.geometry.dispose();
-      const pts = grooveProfilePoints(grv.shape, outerR, grv.width || 0.3, grv.depth || 0.15);
-      const geo = new THREE.LatheGeometry(pts, GROOVE_SEGMENTS);
-      geo.rotateY(-Math.PI / 2);
-      geo.computeVertexNormals();
-      weldLatheSeam(geo, pts.length, GROOVE_SEGMENTS);
-      m.geometry = geo;
-      // Slide the groove ring along the band's WIDTH axis (root-local Y — the
-      // same axis profilePoints()/aBandY and the stone's widthPos use) so
-      // "Pozicija (mm od centra trake)" actually moves it left/right (client,
-      // 2026-09-08: "žlebovi ne mogu da se pomeraju levo desno").
-      m.position.set(0, grv.position || 0, 0);
-      m.material.color.copy(rig.mat.color);
-      m.material.roughness = grv.roughness || 0.2;
-    });
-  }
 
   // --------------------------------------------------------------- engraving
   //
@@ -956,12 +1088,9 @@ function create(canvas, opts = {}) {
       const rig = rigs[k];
       rig.mat.color.lerp(rig.target.color, 0.09);
       rig.mat.roughness += (rig.target.roughness - rig.mat.roughness) * 0.09;
-      // Grooves only rebuild on discrete state changes (buildGroovesFor), so
-      // their colour is kept tracking the band's own (tweening) colour here
-      // instead, each frame — otherwise a metal-colour change wouldn't
-      // repaint existing grooves until some geometry-changing field also
-      // happened to change.
-      if (rig.grooveMeshes) rig.grooveMeshes.forEach((m) => m.material.color.copy(rig.mat.color));
+      // Diamond prongs/basket track the band's (tweening) colour each frame
+      // (grooves are part of the band geometry now, so they follow for free).
+      rig.stoneMetal.color.copy(rig.mat.color);
     });
     const moving = controls.update();       // true while damping / auto-rotating
     renderer.render(scene, camera);
@@ -996,9 +1125,10 @@ function create(canvas, opts = {}) {
       const stoneChanged = JSON.stringify(s.stone || null) !== JSON.stringify(last.stone || null);
       const groovesChanged = JSON.stringify(s.grooves || null) !== JSON.stringify(last.grooves || null);
       const engChanged = JSON.stringify(s.engraving || null) !== JSON.stringify(last.engraving || null);
-      if (geomChanged || !rigs.her.band) outerHer = buildBandFor('her', s);
+      // Grooves are carved into the band geometry, so a groove change is a
+      // band rebuild now (was a separate ridge-mesh pass).
+      if (geomChanged || groovesChanged || !rigs.her.band) outerHer = buildBandFor('her', s);
       if (geomChanged || stoneChanged) buildStoneFor('her', s);
-      if (geomChanged || groovesChanged) buildGroovesFor('her', s);
       if (geomChanged || engChanged) buildEngravingFor('her', s);
       applyMaterialFor('her', s);
       rigs.her.last = { ...s, stone: s.stone ? { ...s.stone } : null, grooves: s.grooves ? s.grooves.map((g) => ({ ...g })) : null, engraving: s.engraving ? { ...s.engraving } : null };
@@ -1010,9 +1140,8 @@ function create(canvas, opts = {}) {
       const stoneChanged = JSON.stringify(s.stone || null) !== JSON.stringify(last.stone || null);
       const groovesChanged = JSON.stringify(s.grooves || null) !== JSON.stringify(last.grooves || null);
       const engChanged = JSON.stringify(s.engraving || null) !== JSON.stringify(last.engraving || null);
-      if (geomChanged || !rigs.his.band) outerHis = buildBandFor('his', s);
+      if (geomChanged || groovesChanged || !rigs.his.band) outerHis = buildBandFor('his', s);
       if (geomChanged || stoneChanged) buildStoneFor('his', s);
-      if (geomChanged || groovesChanged) buildGroovesFor('his', s);
       if (geomChanged || engChanged) buildEngravingFor('his', s);
       applyMaterialFor('his', s);
       rigs.his.last = { ...s, stone: s.stone ? { ...s.stone } : null, grooves: s.grooves ? s.grooves.map((g) => ({ ...g })) : null, engraving: s.engraving ? { ...s.engraving } : null };
@@ -1086,7 +1215,7 @@ function create(canvas, opts = {}) {
     const old = envRT;
     envRT = pmrem.fromScene(buildStudio(), studioParams.blur);
     scene.environment = envRT.texture;
-    [rigs.her.mat, rigs.his.mat, sharedStoneMat].forEach((m) => {
+    [rigs.her.mat, rigs.his.mat, rigs.her.stoneMetal, rigs.his.stoneMetal, sharedStoneMat].forEach((m) => {
       m.envMap = envRT.texture;
       m.needsUpdate = true;
     });
@@ -1145,6 +1274,48 @@ function create(canvas, opts = {}) {
       invalidate(20);
     },
     getShadeStrength: (ringKey) => rigs[ringKey].mat.userData.bottomShade.strength,
+
+    // ---- diamond (?zscdebug=1 "Dijamant" sections) --------------------
+    // The panel mutates stoneParams in place, then calls one of these to push
+    // the change into the live scene. setStoneMat = cheap material uniforms;
+    // rebuildStone = regenerate geometry (needed for shape + baked colours);
+    // setSparkle = the additive sprite.
+    stoneParams,
+    setStoneMat() {
+      const m = sharedStoneMat, P = stoneParams;
+      m.transmission = P.transmission;
+      m.roughness = P.roughness;
+      m.ior = P.ior;
+      m.envMapIntensity = P.envMapIntensity;
+      m.clearcoat = P.clearcoat;
+      m.clearcoatRoughness = P.clearcoatRoughness;
+      m.iridescence = P.iridescence;
+      m.iridescenceIOR = P.iridescenceIOR;
+      if ('dispersion' in m) m.dispersion = P.dispersion;
+      m.needsUpdate = true;
+      invalidate(20);
+    },
+    rebuildStone() {
+      const old = brilliantGeo;
+      brilliantGeo = makeBrilliantGeometry();
+      ['her', 'his'].forEach((k) => {
+        (rigs[k].stones || []).forEach((u) => { if (u.userData.gem) u.userData.gem.geometry = brilliantGeo; });
+        if (rigs[k].last) buildStoneFor(k, rigs[k].last);
+      });
+      if (old) old.dispose();
+      invalidate(30);
+    },
+    setSparkle() {
+      const P = stoneParams;
+      sparkleMat.opacity = P.sparkleOpacity;
+      ['her', 'his'].forEach((k) => (rigs[k].stones || []).forEach((u) => {
+        if (u.userData.sparkle) {
+          u.userData.sparkle.visible = P.sparkle;
+          u.userData.sparkle.scale.setScalar(P.sparkleScale);
+        }
+      }));
+      invalidate(20);
+    },
   };
 
   function dispose() {
@@ -1156,17 +1327,21 @@ function create(canvas, opts = {}) {
     rigs.his.mat.dispose();
     rigs.her.blob && rigs.her.blob.material.dispose();
     rigs.his.blob && rigs.his.blob.material.dispose();
-    ['her', 'his'].forEach((k) => (rigs[k].grooveMeshes || []).forEach((m) => { m.geometry.dispose(); m.material.dispose(); }));
     ['her', 'his'].forEach((k) => {
       const rg = rigs[k];
       if (rg.engrave) { rg.engrave.geometry.dispose(); rg.engrave.material.dispose(); }
       if (rg.engraveTex) rg.engraveTex.dispose();
+      rg.stoneMetal.dispose();
+      (rg.stones || []).forEach((u) => u.traverse((o) => { if (o.isMesh) o.geometry.dispose(); }));
     });
     contactTex.dispose();
     glowTex.dispose();
     ground.material.dispose();
     ground.geometry.dispose();
+    brilliantGeo.dispose();
     sharedStoneMat.dispose();
+    sparkleMat.dispose();
+    sparkleTex.dispose();
     envRT.texture.dispose();
     pmrem.dispose();
     renderer.dispose();

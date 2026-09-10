@@ -33,24 +33,27 @@ body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
 
 /* ------------------------------------------------------------------- top bar */
 
+/* Near-black utility bar to match the live site's top bar. The shop logo is
+   gold line-art on a transparent PNG, so it reads on the dark ground. */
 .zs-topbar {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: var(--zs-space-4);
   padding: var(--zs-space-4) var(--zs-space-6);
-  border-bottom: 1px solid var(--zs-border);
-  background: var(--zs-bg);
+  border-bottom: 1px solid var(--zs-ink-bar-line);
+  background: var(--zs-ink-bar);
+  color: var(--zs-on-dark-strong);
   /* Client (2026-09-08): every text in the header at 13px. */
   font-size: 13px;
 }
 .zs-topbar * { font-size: 13px; }
 .zs-topbar-back {
   justify-self: start;
-  border: 0; background: none; color: var(--zs-text-muted);
+  border: 0; background: none; color: var(--zs-on-dark);
   letter-spacing: .04em; text-transform: uppercase;
 }
-.zs-topbar-back:hover { color: var(--zs-bronze); }
+.zs-topbar-back:hover { color: var(--zs-gold); }
 .zs-brand { display: flex; align-items: center; gap: var(--zs-space-3); }
 /* Client (2026-09-08): logo height 55px. */
 .zs-brand-logo-full { display: block; height: 55px; width: auto; }
@@ -59,20 +62,21 @@ body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
   .zs-brand-logo-full { display: none; }
   .zs-brand-logo-mark { display: block; }
 }
-.zs-brand-mark { color: var(--zs-bronze); font-size: 22px; line-height: 1; }
+.zs-brand-mark { color: var(--zs-gold); line-height: 0; display: inline-flex; }
+.zs-brand-mark .zs-icon { width: 24px; height: 24px; }
 .zs-brand-text { display: flex; flex-direction: column; line-height: 1.2; }
 .zs-brand-text strong {
-  font-family: var(--zs-font-serif); font-weight: 500; font-size: var(--zs-fs-h3);
-  letter-spacing: .02em;
+  font-family: var(--zs-font-serif); font-weight: 400; font-size: var(--zs-fs-h3);
+  letter-spacing: .04em;
 }
-.zs-brand-text em { font-style: normal; font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--zs-text-muted); }
+.zs-brand-text em { font-style: normal; font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--zs-on-dark); }
 .zs-topbar-actions { justify-self: end; display: flex; gap: var(--zs-space-4); }
 .zs-linkbtn {
-  border: 0; background: none; color: var(--zs-text-muted); font-size: var(--zs-fs-micro);
+  border: 0; background: none; color: var(--zs-on-dark); font-size: var(--zs-fs-micro);
   text-transform: uppercase; letter-spacing: .04em;
   display: inline-flex; align-items: center; gap: 6px;
 }
-.zs-linkbtn:hover { color: var(--zs-bronze); }
+.zs-linkbtn:hover { color: var(--zs-gold); }
 
 /* --------------------------------------------------------------- step nav */
 
@@ -90,15 +94,17 @@ body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
 .zs-step-n {
   width: 22px; height: 22px; border-radius: 50%;
   border: 1px solid var(--zs-border); display: grid; place-items: center;
-  font-size: 11px; font-weight: 600; background: #fff;
+  font-size: 11px; font-weight: 700; background: #fff;
 }
 .zs-step-l { font-size: var(--zs-fs-micro); letter-spacing: .06em; text-transform: uppercase; }
 .zs-step:hover { color: var(--zs-text); }
-.zs-step.is-active { color: var(--zs-green); }
-.zs-step.is-active .zs-step-n { background: var(--zs-green); border-color: var(--zs-green); color: #fff; }
+/* Step nav is navigation, not an option choice → gold, like the live site's
+   active menu item. Green stays reserved for a chosen product option. */
+.zs-step.is-active { color: var(--zs-gold); }
+.zs-step.is-active .zs-step-n { background: var(--zs-gold); border-color: var(--zs-gold); color: #fff; }
 .zs-step.is-active::after {
   content: ""; position: absolute; left: 0; right: 0; bottom: calc(-1 * var(--zs-space-4) - 1px);
-  height: 2px; background: var(--zs-green);
+  height: 2px; background: var(--zs-gold);
 }
 
 /* ---------------------------------------------------------------- shell grid */
@@ -126,7 +132,7 @@ body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
 
 .zs-eyebrow {
   font-size: var(--zs-fs-label); letter-spacing: var(--zs-ls-label);
-  text-transform: uppercase; font-weight: 600; color: var(--zs-text-muted);
+  text-transform: uppercase; font-weight: 700; color: var(--zs-text-muted);
   margin: 0 0 var(--zs-space-3);
 }
 .zs-micro { font-size: var(--zs-fs-micro); color: var(--zs-text-muted); margin: var(--zs-space-2) 0 0; }
@@ -153,8 +159,9 @@ body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
   text-align: center; color: var(--zs-text-muted); max-width: 320px; padding: var(--zs-space-6);
   display: flex; flex-direction: column; align-items: center; gap: var(--zs-space-2);
 }
-.zs-view-mark { color: var(--zs-bronze); font-size: 30px; }
-.zs-view-placeholder strong { font-family: var(--zs-font-serif); font-size: var(--zs-fs-h3); color: var(--zs-text); font-weight: 500; }
+.zs-view-mark { color: var(--zs-bronze); line-height: 0; display: inline-flex; }
+.zs-view-mark .zs-icon { width: 32px; height: 32px; }
+.zs-view-placeholder strong { font-family: var(--zs-font-serif); font-size: var(--zs-fs-h3); color: var(--zs-text); font-weight: 400; }
 .zs-view-placeholder span { font-size: var(--zs-fs-micro); }
 
 .zs-view-rail {
@@ -183,7 +190,7 @@ body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
   padding: var(--zs-space-2) var(--zs-space-3); border-radius: var(--zs-radius-pill);
 }
 .zs-tool-btn:hover { background: var(--zs-surface); color: var(--zs-text); }
-.zs-tool-btn[aria-pressed="true"] { background: var(--zs-surface); color: var(--zs-green); }
+.zs-tool-btn[aria-pressed="true"] { background: var(--zs-surface); color: var(--zs-gold); }
 
 /* Client (2026-09-08): Njegova/Njena moved off the top of the viewport and
    down into the toolbar as bare ♂/♀ symbols, sitting to the LEFT of the
@@ -196,7 +203,8 @@ body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
   font-size: 16px; line-height: 1; display: grid; place-items: center;
 }
 .zs-ring-btn:hover { border-color: var(--zs-bronze); color: var(--zs-bronze); }
-.zs-ring-btn[aria-pressed="true"] { border-color: var(--zs-green); background: var(--zs-green); color: #fff; }
+/* ♂/♀ + "view solo" are view controls, not option choices → gold. */
+.zs-ring-btn[aria-pressed="true"] { border-color: var(--zs-gold); background: var(--zs-gold); color: #fff; }
 .zs-tool-sep { width: 1px; align-self: stretch; background: var(--zs-border); margin: 2px var(--zs-space-1); }
 
 /* ------------------------------------------------------------------ accordion */
@@ -219,28 +227,36 @@ body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
   width: 100%; display: flex; align-items: center; justify-content: space-between;
   border: 0; background: none; padding: var(--zs-space-4) var(--zs-space-5); color: inherit;
 }
-.zs-acc-title { font-size: var(--zs-fs-button); font-weight: 600; letter-spacing: .04em; }
+.zs-acc-title { font-size: var(--zs-fs-button); font-weight: 700; letter-spacing: .04em; }
 .zs-acc-n { color: var(--zs-text-muted); margin-right: var(--zs-space-1); }
-.zs-acc-chevron { transition: transform .2s var(--zs-ease); color: var(--zs-text-muted); font-size: 18px; }
+.zs-acc-chevron { transition: transform .2s var(--zs-ease); color: var(--zs-text-muted); display: inline-flex; line-height: 0; }
+.zs-acc-chevron .zs-icon { width: 16px; height: 16px; }
 .zs-acc.is-open .zs-acc-chevron { transform: rotate(90deg); }
 .zs-acc-body { display: none; padding: 0 var(--zs-space-5) var(--zs-space-5); }
 .zs-acc.is-open .zs-acc-body { display: block; }
 
-/* swatches */
-.zs-swatches { display: flex; flex-wrap: wrap; gap: var(--zs-space-4); }
-.zs-swatch-wrap { display: flex; flex-direction: column; align-items: center; gap: var(--zs-space-2); width: 60px; }
+/* metal swatches — jeweller's sample chip, not a glossy orb (2026-09-09) */
+.zs-swatches { display: flex; flex-wrap: wrap; gap: var(--zs-space-5); margin: var(--zs-space-1) 0 var(--zs-space-5); }
+.zs-swatch-wrap { display: flex; flex-direction: column; align-items: center; gap: var(--zs-space-3); width: 64px; }
 .zs-swatch {
-  width: 46px; height: 46px; border-radius: 50%; padding: 0;
-  border: 2px solid transparent; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08), var(--zs-shadow-sm);
-  position: relative;
+  width: 52px; height: 52px; border-radius: 50%; padding: 0;
+  border: 0; position: relative; cursor: pointer;
+  /* a hairline metal rim + a soft lift, no heavy inset */
+  box-shadow: 0 0 0 1px rgba(38, 38, 38, .12), 0 2px 6px rgba(38, 38, 38, .12);
+  transition: box-shadow .15s var(--zs-ease), transform .15s var(--zs-ease);
 }
-.zs-swatch[aria-pressed="true"] { border-color: var(--zs-green); }
+.zs-swatch:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 0 0 1px rgba(38, 38, 38, .2), 0 4px 12px rgba(38, 38, 38, .16); }
+/* selected = green ring sitting just outside the chip + a check disc */
+.zs-swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--zs-green), 0 2px 8px rgba(38, 38, 38, .16); }
 .zs-swatch[aria-pressed="true"]::after {
-  content: "\2713"; position: absolute; inset: 0; display: grid; place-items: center;
-  color: #fff; font-size: 15px; text-shadow: 0 1px 3px rgba(0,0,0,.55);
+  content: "\2713"; position: absolute; right: -3px; bottom: -3px;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--zs-green); color: #fff; font-size: 11px; font-weight: 700;
+  display: grid; place-items: center; box-shadow: 0 1px 3px rgba(38, 38, 38, .3);
 }
-.zs-swatch:disabled { opacity: .38; }
+.zs-swatch:disabled { opacity: .34; cursor: not-allowed; }
 .zs-swatch-label { font-size: 11px; color: var(--zs-text-muted); text-align: center; line-height: 1.25; }
+.zs-swatch[aria-pressed="true"] + .zs-swatch-label { color: var(--zs-text); font-weight: 700; }
 
 /* chips */
 .zs-chips { display: flex; flex-wrap: wrap; gap: var(--zs-space-2); }
@@ -250,14 +266,14 @@ body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
   font-size: var(--zs-fs-button);
 }
 .zs-chip:hover:not(:disabled) { border-color: var(--zs-bronze); }
-.zs-chip[aria-pressed="true"] { border-color: var(--zs-green); background: var(--zs-surface); color: var(--zs-green); font-weight: 600; }
+.zs-chip[aria-pressed="true"] { border-color: var(--zs-green); background: var(--zs-surface); color: var(--zs-green); font-weight: 700; }
 .zs-chip:disabled { color: var(--zs-disabled); border-style: dashed; }
 
 /* sliders */
 .zs-sliders { display: flex; flex-direction: column; gap: var(--zs-space-5); }
 .zs-slider-top { display: flex; justify-content: space-between; font-size: var(--zs-fs-micro); color: var(--zs-text-muted); margin-bottom: var(--zs-space-2); }
 .zs-slider-val { font-family: var(--zs-font-serif); font-size: var(--zs-fs-body); color: var(--zs-text); }
-.zs-slider input[type="range"] { width: 100%; accent-color: var(--zs-green); }
+.zs-slider input[type="range"] { width: 100%; accent-color: var(--zs-gold); }
 .zs-slider-ticks { display: flex; justify-content: space-between; font-size: 10px; color: var(--zs-text-muted); margin-top: var(--zs-space-1); }
 
 /* engraving */
@@ -265,7 +281,7 @@ body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
   width: 100%; border: 1px solid var(--zs-border); border-radius: var(--zs-radius);
   padding: var(--zs-space-3); font: inherit; margin-bottom: var(--zs-space-3);
 }
-.zs-engrave input[type="text"]:focus { outline: 2px solid var(--zs-green); outline-offset: 1px; }
+.zs-engrave input[type="text"]:focus { outline: 2px solid var(--zs-gold); outline-offset: 1px; }
 
 /* ---------------------------------------------------------------- bottom bar */
 
@@ -283,24 +299,27 @@ body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
 }
 .zs-price { display: flex; flex-direction: column; }
 .zs-price-label { font-size: var(--zs-fs-label); letter-spacing: var(--zs-ls-label); text-transform: uppercase; color: var(--zs-text-muted); }
-.zs-price-value { font-family: var(--zs-font-serif); font-weight: 500; font-size: var(--zs-fs-price); }
+/* Prices on the live site are gold (.amount / .price → #d4af37). */
+.zs-price-value { font-family: var(--zs-font-serif); font-weight: 400; font-size: var(--zs-fs-price); color: var(--zs-gold); }
 .zs-price-sub { font-size: var(--zs-fs-micro); color: var(--zs-text-muted); }
 /* Per-ring price line beside the pair total (client, 2026-09-08). */
 .zs-price-perring { display: flex; gap: var(--zs-space-4); font-size: var(--zs-fs-micro); color: var(--zs-text-muted); margin-top: 2px; }
 .zs-price-perring span { white-space: nowrap; }
 .zs-trust { display: flex; justify-content: center; gap: var(--zs-space-7); }
 .zs-trust-item { display: flex; flex-direction: column; font-size: var(--zs-fs-micro); }
-.zs-trust-item strong { font-weight: 600; text-transform: uppercase; letter-spacing: .04em; font-size: 11px; }
+.zs-trust-item strong { font-weight: 700; text-transform: uppercase; letter-spacing: .04em; font-size: 11px; }
 .zs-trust-item span { color: var(--zs-text-muted); }
 .zs-cta-group { display: flex; gap: var(--zs-space-3); }
+/* Primary action = gold, like every button on the live site. */
 .zs-cta {
-  border: 0; background: var(--zs-green); color: #fff;
-  border-radius: 8px; padding: var(--zs-space-3) var(--zs-space-6);
-  font-weight: 600; font-size: var(--zs-fs-button);
+  border: 0; background: var(--zs-gold); color: #fff;
+  border-radius: var(--zs-radius); padding: var(--zs-space-3) var(--zs-space-6);
+  font-weight: 700; font-size: var(--zs-fs-button);
+  text-transform: uppercase; letter-spacing: .04em;
 }
-.zs-cta:hover { background: var(--zs-green-hover); }
+.zs-cta:hover { background: var(--zs-gold-hover); }
 .zs-cta.is-secondary { background: #fff; color: var(--zs-text); border: 1px solid var(--zs-border); }
-.zs-cta.is-secondary:hover { border-color: var(--zs-green); color: var(--zs-green); }
+.zs-cta.is-secondary:hover { border-color: var(--zs-gold); color: var(--zs-gold); }
 
 @media (max-width: 1180px) {
   .zs-bottombar { grid-template-columns: 1fr; text-align: center; gap: var(--zs-space-4); }
@@ -323,7 +342,7 @@ body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
   font-size: var(--zs-fs-micro); color: var(--zs-text-muted); margin: var(--zs-space-4) 0;
   cursor: pointer;
 }
-.zs-check-row input { accent-color: var(--zs-green); }
+.zs-check-row input { accent-color: var(--zs-gold); }
 .zs-slider.is-locked { opacity: .55; }
 .zs-select {
   width: 100%; border: 1px solid var(--zs-border); border-radius: var(--zs-radius);
@@ -334,10 +353,11 @@ body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
 .zs-acc-next {
   display: inline-flex; align-items: center; gap: var(--zs-space-2);
   margin-top: var(--zs-space-5); border: 1px solid var(--zs-border); background: #fff;
-  color: var(--zs-green); font-weight: 600; font-size: var(--zs-fs-button);
+  color: var(--zs-gold); font-weight: 700; font-size: var(--zs-fs-button);
   border-radius: var(--zs-radius-pill); padding: var(--zs-space-2) var(--zs-space-5);
+  text-transform: uppercase; letter-spacing: .04em;
 }
-.zs-acc-next:hover { border-color: var(--zs-green); background: var(--zs-surface); }
+.zs-acc-next:hover { border-color: var(--zs-gold); background: var(--zs-surface); }
 .zs-acc-next .zs-icon { width: 14px; height: 14px; }
 
 /* "Primeni na drugu burmu" — per-section copy to the other ring (client, 2026-09-08). */
@@ -423,7 +443,7 @@ body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
   padding: var(--zs-space-2) var(--zs-space-3); font-size: var(--zs-fs-micro); color: inherit; text-align: left;
 }
 .zs-pattern-sub:hover { border-color: var(--zs-bronze); }
-.zs-pattern-sub[aria-pressed="true"] { border-color: var(--zs-green); color: var(--zs-green); font-weight: 600; }
+.zs-pattern-sub[aria-pressed="true"] { border-color: var(--zs-green); color: var(--zs-green); font-weight: 700; }
 
 /* ----------------------------------------------------------------- Žlebovi
    Redesigned to the Breuning "Fugen / Stufen" layout (client, 2026-09-09):
@@ -439,33 +459,35 @@ body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
   font-size: var(--zs-fs-micro); color: var(--zs-text-muted);
 }
 .zs-groove-tab:hover { color: var(--zs-text); }
-.zs-groove-tab[aria-pressed="true"] { color: var(--zs-green); font-weight: 600; border-bottom-color: var(--zs-green); }
+.zs-groove-tab[aria-pressed="true"] { color: var(--zs-gold); font-weight: 700; border-bottom-color: var(--zs-gold); }
 
 .zs-groove-shapes { margin-bottom: var(--zs-space-4); }
 
 .zs-groove-addrow {
-  display: flex; align-items: center; justify-content: space-between; gap: var(--zs-space-3);
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--zs-space-2) var(--zs-space-3);
   padding: var(--zs-space-3) 0; border-top: 1px solid var(--zs-border); margin-bottom: var(--zs-space-4);
 }
-.zs-groove-count { font-size: var(--zs-fs-button); font-weight: 600; }
-.zs-groove-actions { display: flex; align-items: center; gap: var(--zs-space-4); }
-.zs-groove-actions .zs-linkbtn { color: var(--zs-text-muted); }
+.zs-groove-count { font-size: var(--zs-fs-button); font-weight: 700; white-space: nowrap; }
+.zs-groove-actions { display: flex; align-items: center; gap: var(--zs-space-3); flex-wrap: wrap; }
+.zs-groove-actions .zs-linkbtn { color: var(--zs-text-muted); text-transform: none; letter-spacing: 0; white-space: nowrap; }
 .zs-groove-actions .zs-linkbtn:hover { color: var(--zs-bronze); }
+/* outline, not a solid slab (2026-09-09: matched to the competitor's
+   restraint — the big gold block read as too shouty) */
 .zs-groove-add {
   display: inline-flex; align-items: center; gap: var(--zs-space-2);
-  border: 0; background: var(--zs-green); color: #fff; font-weight: 600;
-  font-size: var(--zs-fs-button); border-radius: var(--zs-radius-pill);
-  padding: var(--zs-space-2) var(--zs-space-5);
+  border: 1px solid var(--zs-gold); background: #fff; color: var(--zs-gold); font-weight: 700;
+  font-size: var(--zs-fs-micro); border-radius: var(--zs-radius-pill);
+  padding: var(--zs-space-2) var(--zs-space-4); white-space: nowrap;
 }
-.zs-groove-add:hover { background: var(--zs-green-hover); }
-.zs-groove-add .zs-icon { width: 15px; height: 15px; }
+.zs-groove-add:hover { background: var(--zs-surface); }
+.zs-groove-add .zs-icon { width: 14px; height: 14px; }
 
 .zs-groove-list { display: flex; flex-direction: column; gap: var(--zs-space-4); }
 .zs-groove-item { border: 1px solid var(--zs-border); border-radius: var(--zs-radius); overflow: hidden; }
 .zs-groove-item-head {
   display: flex; align-items: center; gap: var(--zs-space-3);
   padding: var(--zs-space-3) var(--zs-space-4); background: var(--zs-surface);
-  border-bottom: 1px solid var(--zs-border); font-size: var(--zs-fs-micro); font-weight: 600;
+  border-bottom: 1px solid var(--zs-border); font-size: var(--zs-fs-micro); font-weight: 700;
 }
 .zs-groove-badge {
   width: 20px; height: 20px; border-radius: 50%; background: var(--zs-green); color: #fff;
@@ -474,10 +496,31 @@ body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
 .zs-groove-del { margin-left: auto; color: var(--zs-bronze); }
 .zs-groove-del .zs-icon { width: 13px; height: 13px; }
 
-.zs-groove-body { display: grid; grid-template-columns: 56px 1fr; gap: var(--zs-space-4); padding: var(--zs-space-4); }
-.zs-groove-preview { position: relative; width: 56px; height: 100%; min-height: 120px; border-radius: 6px; overflow: hidden; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
-.zs-groove-preview-line { position: absolute; top: 0; bottom: 0; width: 2px; background: rgba(34,31,27,.4); transform: translateX(-50%); }
-.zs-groove-preview-line.is-h { top: 50%; left: 0; right: 0; width: auto; height: 2px; transform: translateY(-50%); }
+/* preview is now a full-width landscape "band surface" tile above the params
+   (2026-09-09: the tall 56×120 vertical strip read as an empty bar). The
+   groove shows as a carved channel — dark core, bright edges — at its real
+   width-position and orientation. */
+.zs-groove-body { display: block; padding: var(--zs-space-4); }
+.zs-groove-preview {
+  position: relative; width: 100%; height: 54px;
+  border-radius: var(--zs-radius); overflow: hidden;
+  margin-bottom: var(--zs-space-4);
+  box-shadow: inset 0 0 0 1px rgba(38, 38, 38, .10);
+}
+.zs-groove-preview-line {
+  position: absolute; top: 7px; bottom: 7px; width: 4px;
+  left: 50%; transform: translateX(-50%); border-radius: 2px;
+  background: linear-gradient(90deg, rgba(255,255,255,.30), rgba(38,38,38,.52) 45%, rgba(38,38,38,.52) 55%, rgba(255,255,255,.30));
+}
+.zs-groove-preview-line.is-h {
+  top: 50%; left: 7px; right: 7px; bottom: auto; width: auto; height: 4px;
+  transform: translateY(-50%);
+  background: linear-gradient(180deg, rgba(255,255,255,.30), rgba(38,38,38,.52) 45%, rgba(38,38,38,.52) 55%, rgba(255,255,255,.30));
+}
+.zs-groove-preview-line.is-wave {
+  top: 6px; bottom: 6px; width: 11px; left: 50%; transform: translateX(-50%);
+  background: repeating-linear-gradient(-35deg, rgba(38,38,38,.5) 0 2px, rgba(255,255,255,.16) 2px 5px);
+}
 
 .zs-groove-rows { display: flex; flex-direction: column; }
 .zs-groove-row {
@@ -497,26 +540,51 @@ body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
 .zs-groove-posunit { font-size: var(--zs-fs-micro); color: var(--zs-text-muted); }
 .zs-groove-poshint { grid-column: 2; font-size: 10px; color: var(--zs-text-muted); }
 
-/* --------------------------------------------------------------- Dijamanti */
-.zs-diamond-card {
-  display: flex; align-items: center; gap: var(--zs-space-4);
-  border: 1px solid var(--zs-border); border-radius: var(--zs-radius); background: var(--zs-surface);
-  padding: var(--zs-space-4); margin-bottom: var(--zs-space-5);
+/* --------------------------------------------------------------- Dijamanti
+   Rebuilt 2026-09-09 (client: "grupa dijamanata nije dobro"): flat stacked
+   layout like Materijal/Žlebovi — no summary card, no popover. The size chips
+   come first; everything else (setting type, brus, quantity, position) only
+   renders once a stone is chosen. */
+.zs-diamonds > .zs-eyebrow { margin-top: var(--zs-space-5); }
+.zs-diamonds > .zs-eyebrow:first-child { margin-top: 0; }
+
+.zs-diamond-setting-group { margin-bottom: var(--zs-space-2); }
+.zs-eyebrow-sub {
+  font-size: 11px; font-weight: 400; letter-spacing: .06em;
+  color: var(--zs-text-muted); margin: var(--zs-space-3) 0 var(--zs-space-2);
 }
-.zs-diamond-card-icon { font-size: 22px; }
-.zs-diamond-card-label { flex: 1; font-family: var(--zs-font-serif); font-size: var(--zs-fs-body); }
-.zs-diamond-setting-panel { border: 1px solid var(--zs-border); border-radius: var(--zs-radius); padding: var(--zs-space-4); margin-bottom: var(--zs-space-5); }
-.zs-setting-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: var(--zs-space-2); margin-bottom: var(--zs-space-4); }
+
+.zs-setting-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: var(--zs-space-2); }
 .zs-setting-box {
   position: relative; border: 1px solid var(--zs-border); border-radius: var(--zs-radius); background: #fff;
-  padding: var(--zs-space-3); font-size: var(--zs-fs-micro); color: inherit;
+  padding: var(--zs-space-3); font-size: var(--zs-fs-micro); color: inherit; text-align: left;
 }
 .zs-setting-box:hover:not(:disabled) { border-color: var(--zs-bronze); }
-.zs-setting-box[aria-pressed="true"] { border-color: var(--zs-green); background: var(--zs-surface); color: var(--zs-green); font-weight: 600; }
+.zs-setting-box[aria-pressed="true"] { border-color: var(--zs-green); background: var(--zs-surface); color: var(--zs-green); font-weight: 700; }
 .zs-setting-box:disabled { opacity: .5; cursor: not-allowed; }
-.zs-position-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--zs-space-2); }
-.zs-position-box { padding: var(--zs-space-3) var(--zs-space-2); }
-@media (max-width: 480px) { .zs-position-grid { grid-template-columns: repeat(2, 1fr); } }
+/* keep the label clear of the absolutely-positioned "Uskoro" tag (every
+   disabled setting box carries one) */
+.zs-setting-box .zs-setting-label { display: block; }
+.zs-setting-box:disabled .zs-setting-label { padding-right: 44px; }
+
+/* compact numeric input (diamond count, and any future small number field) */
+.zs-num {
+  width: 88px; border: 1px solid var(--zs-border); border-radius: var(--zs-radius);
+  padding: var(--zs-space-2) var(--zs-space-3); font: inherit; color: inherit; background: #fff;
+}
+.zs-num:focus { outline: 2px solid var(--zs-gold); outline-offset: 1px; }
+
+/* --------------------------------------------------- selected-option ring
+   Golden rule #2: a chosen option must never be "just a shadow". After the
+   re-skin the accent is green (#1F3D2E) on a light fill; this crisp inset ring
+   makes the selection unmistakable at a glance without shifting layout. */
+.zs-chip[aria-pressed="true"],
+.zs-profile-box[aria-pressed="true"],
+.zs-pattern-box[aria-pressed="true"],
+.zs-setting-box[aria-pressed="true"],
+.zs-pattern-sub[aria-pressed="true"] {
+  box-shadow: inset 0 0 0 1px var(--zs-green);
+}
 
 /* ----------------------------------------------------------------- skeleton */
 

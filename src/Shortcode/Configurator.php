@@ -85,10 +85,12 @@ final class Configurator
             file_exists($css) ? (string) filemtime($css) : ZSC_VERSION
         );
 
-        // Google Fonts: Fraunces + Inter (design-system.md).
+        // Google Fonts: Belleza (display) + Lato (body) — the same pair the live
+        // site zlatarastanimirovic.rs uses, so the configurator reads as one
+        // brand (design-system.md, decisions.md #49). Belleza ships weight 400.
         wp_enqueue_style(
             'zs-fonts',
-            'https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap',
+            'https://fonts.googleapis.com/css2?family=Belleza&family=Lato:wght@400;700&display=swap',
             [],
             null
         );
@@ -101,22 +103,21 @@ final class Configurator
             true
         );
 
-        // TEMPORARY (commented out, not deleted — client wants it back for
-        // more shadow/light/pose polish soon): live-tuning panel, see
-        // assets/js/debug-panel.js. Was enqueued when ?zscdebug=1 was on the
-        // URL, so normal visitors never loaded it. v1 numbers are locked in
-        // (baked into scene.module.js/configurator.js) as of 2026-09-05 —
-        // uncomment this block to bring the panel back for the next round.
-        // if (isset($_GET['zscdebug'])) { // phpcs:ignore WordPress.Security.NonceVerification -- read-only dev toggle, no state change
-        //     $debugJs = ZSC_DIR . 'assets/js/debug-panel.js';
-        //     wp_enqueue_script(
-        //         'zs-configurator-debug',
-        //         ZSC_URL . 'assets/js/debug-panel.js',
-        //         ['zs-configurator'],
-        //         file_exists($debugJs) ? (string) filemtime($debugJs) : ZSC_VERSION,
-        //         true
-        //     );
-        // }
+        // TEMPORARY live-tuning panel (assets/js/debug-panel.js), only loaded
+        // when ?zscdebug=1 is on the URL so normal visitors never see it.
+        // Re-enabled 2026-09-10 for the diamond rebuild pass (docs 3d.md
+        // "Dijamanti"); comment this back out once the stone numbers are baked
+        // into scene.module.js's stoneParams.
+        if (isset($_GET['zscdebug'])) { // phpcs:ignore WordPress.Security.NonceVerification -- read-only dev toggle, no state change
+            $debugJs = ZSC_DIR . 'assets/js/debug-panel.js';
+            wp_enqueue_script(
+                'zs-configurator-debug',
+                ZSC_URL . 'assets/js/debug-panel.js',
+                ['zs-configurator'],
+                file_exists($debugJs) ? (string) filemtime($debugJs) : ZSC_VERSION,
+                true
+            );
+        }
     }
 
     /**

@@ -23,6 +23,11 @@ final class Screen
 
     /* ---------------------------------------------------------------- dispatch */
 
+    /**
+     * Plain-POST entry (no-JS fallback): run the mutation, then redirect back
+     * to the screen. admin.js intercepts the same forms and calls ajax()
+     * instead so only the touched group re-renders — see that method.
+     */
     public static function dispatch(string $action): void
     {
         $back = add_query_arg(
@@ -30,11 +35,75 @@ final class Screen
             admin_url('admin.php')
         );
 
+        $res = self::mutate($action);
+        if ($res['msg'] !== '') {
+            $back = add_query_arg('msg', $res['msg'], $back);
+        }
+        wp_safe_redirect($back);
+        exit;
+    }
+
+    /**
+     * AJAX entry (wp_ajax_zs_admin). Same mutations as dispatch(), but returns
+     * JSON with a freshly-rendered HTML fragment for the affected options
+     * group so the page can swap just that block — no reload, no scroll jump
+     * (client, 2026-09-10). Falls through to the plain POST flow if JS is off.
+     */
+    public static function ajax(): void
+    {
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['msg' => 'Nedozvoljeno.'], 403);
+        }
+        check_ajax_referer('zs_admin');
+
+        $action = sanitize_key(wp_unslash($_POST['zs_action'] ?? ''));
+
+        // "Izmeni" / "Otkaži" just need a rendered fragment, no DB write.
+        if ($action === 'edit_form') {
+            $id  = (int) ($_POST['id'] ?? 0);
+            $add = sanitize_key(wp_unslash($_POST['add'] ?? ''));
+            $row = $id ? Options::find($id) : ($add ? ['group_key' => $add] : null);
+            if ($row === null) {
+                wp_send_json_error(['msg' => 'Opcija nije pronađena.'], 404);
+            }
+            wp_send_json_success([
+                'group' => $row['group_key'] ?? '',
+                'mode'  => 'form',
+                'html'  => self::option_form_html($row),
+            ]);
+        }
+        if ($action === 'cancel_form') {
+            $gkey = sanitize_key(wp_unslash($_POST['group_key'] ?? ''));
+            wp_send_json_success([
+                'group' => $gkey,
+                'mode'  => 'table',
+                'html'  => self::group_block_html($gkey),
+            ]);
+        }
+
+        $res  = self::mutate($action);
+        $gkey = $res['group'];
+        wp_send_json_success([
+            'group' => $gkey,
+            'mode'  => 'table',
+            'msg'   => $res['msg'],
+            'html'  => $gkey ? self::group_block_html($gkey) : '',
+        ]);
+    }
+
+    /**
+     * The DB side of every admin action, shared by dispatch() and ajax().
+     *
+     * @return array{group: ?string, msg: string}
+     */
+    private static function mutate(string $action): array
+    {
         switch ($action) {
             case 'save_option':
-                $id = Options::save([
+                $gkey = sanitize_key($_POST['group_key'] ?? '');
+                Options::save([
                     'id'          => (int) ($_POST['id'] ?? 0),
-                    'group_key'   => sanitize_key($_POST['group_key'] ?? ''),
+                    'group_key'   => $gkey,
                     'slug'        => sanitize_key($_POST['slug'] ?? ''),
                     'label_sr'    => sanitize_text_field(wp_unslash($_POST['label_sr'] ?? '')),
                     'sort'        => (int) ($_POST['sort'] ?? 0),
@@ -46,27 +115,26 @@ final class Screen
                     'params_json' => wp_unslash($_POST['params_json'] ?? ''),
                     'compat_json' => wp_unslash($_POST['compat_json'] ?? ''),
                 ]);
-                self::redirect(add_query_arg('msg', 'saved', $back));
-                break;
+
+                return ['group' => $gkey, 'msg' => 'saved'];
 
             case 'delete_option':
-                Options::delete((int) ($_POST['id'] ?? 0));
-                self::redirect(add_query_arg('msg', 'deleted', $back));
-                break;
+                $id   = (int) ($_POST['id'] ?? 0);
+                $gkey = Options::find($id)['group_key'] ?? sanitize_key($_POST['group_key'] ?? '');
+                Options::delete($id);
+
+                return ['group' => $gkey, 'msg' => 'deleted'];
 
             case 'toggle':
-                Options::set_flag(
-                    (int) ($_POST['id'] ?? 0),
-                    sanitize_key($_POST['flag'] ?? ''),
-                    !empty($_POST['value'])
-                );
-                self::redirect($back);
-                break;
+                $id = (int) ($_POST['id'] ?? 0);
+                Options::set_flag($id, sanitize_key($_POST['flag'] ?? ''), !empty($_POST['value']));
+
+                return ['group' => Options::find($id)['group_key'] ?? sanitize_key($_POST['group_key'] ?? ''), 'msg' => ''];
 
             case 'reseed':
                 Seeder::run();
-                self::redirect(add_query_arg('msg', 'seeded', $back));
-                break;
+
+                return ['group' => null, 'msg' => 'seeded'];
 
             case 'save_settings':
                 Settings::update([
@@ -79,8 +147,8 @@ final class Screen
                         (array) ($_POST['spot_prices'] ?? [])
                     ),
                 ]);
-                self::redirect(add_query_arg('msg', 'saved', $back));
-                break;
+
+                return ['group' => null, 'msg' => 'saved'];
 
             case 'save_erp':
                 Settings::update([
@@ -88,15 +156,11 @@ final class Screen
                     'erp_api_key'    => sanitize_text_field(wp_unslash($_POST['erp_api_key'] ?? '')),
                     'erp_api_secret' => sanitize_text_field(wp_unslash($_POST['erp_api_secret'] ?? '')),
                 ]);
-                self::redirect(add_query_arg('msg', 'saved', $back));
-                break;
-        }
-    }
 
-    private static function redirect(string $url): void
-    {
-        wp_safe_redirect($url);
-        exit;
+                return ['group' => null, 'msg' => 'saved'];
+        }
+
+        return ['group' => null, 'msg' => ''];
     }
 
     /* ------------------------------------------------------------------ render */
@@ -108,28 +172,69 @@ final class Screen
             $tab = 'opcije';
         }
 
+        $logo    = ZSC_URL . 'assets/img/logo-full.png';
+        $pageUrl = self::configurator_page_url();
+
         echo '<div class="wrap zs-admin">';
+
+        // Brand header — replaces the stock <h1>Konfigurator</h1>.
+        echo '<header class="zs-adminbar">';
+        printf('<img class="zs-adminbar-logo" src="%s" alt="Zlatara Stanimirović">', esc_url($logo));
+        echo '<div class="zs-adminbar-titles">';
         echo '<h1>Konfigurator</h1>';
+        echo '<p>3D konfigurator burmi — opcije, cene i okruženje</p>';
+        echo '</div>';
+        echo '<div class="zs-adminbar-actions">';
+        if ($pageUrl !== '') {
+            printf(
+                '<a class="zs-btn zs-btn-ghost" href="%s" target="_blank" rel="noopener">Otvori konfigurator &#8599;</a>',
+                esc_url($pageUrl)
+            );
+        }
+        printf('<span class="zs-adminbar-ver">v%s</span>', esc_html(ZSC_VERSION));
+        echo '</div>';
+        echo '</header>';
+
+        echo '<hr class="wp-header-end">'; // where WP drops admin notices
         self::notice();
 
-        echo '<h2 class="nav-tab-wrapper">';
+        echo '<nav class="zs-tabs">';
         foreach (self::TABS as $key => $label) {
             printf(
-                '<a href="%s" class="nav-tab %s">%s</a>',
+                '<a href="%s" class="zs-tab%s">%s</a>',
                 esc_url(add_query_arg(['page' => Menu::SLUG, 'tab' => $key], admin_url('admin.php'))),
-                $key === $tab ? 'nav-tab-active' : '',
+                $key === $tab ? ' is-active' : '',
                 esc_html($label)
             );
         }
-        echo '</h2>';
+        echo '</nav>';
 
+        echo '<div class="zs-tabpane">';
         match ($tab) {
             'podesavanja' => self::tab_settings(),
             'erpnext'     => self::tab_erp(),
             default       => self::tab_options(),
         };
+        echo '</div>';
 
         echo '</div>';
+    }
+
+    /** URL of the first published page/post carrying the [zs_configurator]
+     *  shortcode (page preferred), or '' — powers the header "open" button. */
+    private static function configurator_page_url(): string
+    {
+        global $wpdb;
+        $id = (int) $wpdb->get_var(
+            "SELECT ID FROM {$wpdb->posts}
+             WHERE post_status = 'publish'
+               AND post_type IN ('page', 'post')
+               AND post_content LIKE '%[zs_configurator%'
+             ORDER BY (post_type = 'page') DESC, ID ASC
+             LIMIT 1"
+        );
+
+        return $id ? (string) get_permalink($id) : '';
     }
 
     private static function notice(): void
@@ -157,11 +262,18 @@ final class Screen
 
     private static function tab_options(): void
     {
+        // Deep-linked ?edit / ?add still render the full-page form (works with
+        // JS off). With JS on, admin.js swaps just one group's block in place
+        // via ajax() — see group_block_html() / option_form_html().
         $editId = isset($_GET['edit']) ? (int) $_GET['edit'] : 0;
         $adding = isset($_GET['add']) ? sanitize_key($_GET['add']) : '';
-
         if ($editId || $adding) {
-            self::option_form($editId ? Options::find($editId) : ['group_key' => $adding]);
+            $row = $editId ? Options::find($editId) : ['group_key' => $adding];
+            printf(
+                '<div class="zs-group" data-group="%s">%s</div>',
+                esc_attr($row['group_key'] ?? ''),
+                self::option_form_html($row)
+            );
 
             return;
         }
@@ -173,42 +285,57 @@ final class Screen
         echo '</form>';
 
         foreach (Options::GROUPS as $gkey => $glabel) {
-            $rows = Options::all($gkey);
-            echo '<h3 class="zs-group-h">' . esc_html($glabel) . ' <span class="zs-muted">(' . esc_html($gkey) . ')</span></h3>';
-            echo '<table class="widefat striped zs-opt-table"><thead><tr>';
-            echo '<th>Slug</th><th>Naziv (SR)</th><th>Sort</th><th>Prikazano</th><th>Na stanju</th><th>Zaliha</th><th></th>';
-            echo '</tr></thead><tbody>';
-
-            if (!$rows) {
-                echo '<tr><td colspan="7" class="zs-muted">— nema opcija —</td></tr>';
-            }
-            foreach ($rows as $r) {
-                echo '<tr>';
-                echo '<td><code>' . esc_html($r['slug']) . '</code></td>';
-                echo '<td>' . esc_html($r['label_sr']) . '</td>';
-                echo '<td>' . (int) $r['sort'] . '</td>';
-                echo '<td>' . self::toggle_btn($r['id'], 'enabled', $r['enabled']) . '</td>';
-                echo '<td>' . self::toggle_btn($r['id'], 'available', $r['available']) . '</td>';
-                echo '<td>' . ($r['stock_qty'] === null ? '—' : (int) $r['stock_qty']) . '</td>';
-                echo '<td class="zs-row-actions">';
-                printf(
-                    '<a href="%s">Izmeni</a> ',
-                    esc_url(add_query_arg(['page' => Menu::SLUG, 'tab' => 'opcije', 'edit' => $r['id']], admin_url('admin.php')))
-                );
-                self::form_open('delete_option', 'opcije');
-                printf('<input type="hidden" name="id" value="%d">', (int) $r['id']);
-                echo '<button class="button-link delete zs-link-danger" onclick="return confirm(\'Obrisati opciju?\')">Obriši</button>';
-                echo '</form>';
-                echo '</td>';
-                echo '</tr>';
-            }
-            echo '</tbody></table>';
-            printf(
-                '<p><a class="button" href="%s">+ Dodaj u “%s”</a></p>',
-                esc_url(add_query_arg(['page' => Menu::SLUG, 'tab' => 'opcije', 'add' => $gkey], admin_url('admin.php'))),
-                esc_html($glabel)
-            );
+            printf('<div class="zs-group" data-group="%s">%s</div>', esc_attr($gkey), self::group_block_html($gkey));
         }
+    }
+
+    /** One options group: heading + table + "add" button. Returned as HTML so
+     *  ajax() can re-render just this block after a mutation. */
+    private static function group_block_html(string $gkey): string
+    {
+        $glabel = Options::GROUPS[$gkey] ?? $gkey;
+        $rows   = Options::all($gkey);
+
+        ob_start();
+        echo '<h3 class="zs-group-h">' . esc_html($glabel) . ' <span class="zs-muted">(' . esc_html($gkey) . ')</span></h3>';
+        echo '<table class="widefat striped zs-opt-table"><thead><tr>';
+        echo '<th>Slug</th><th>Naziv (SR)</th><th>Sort</th><th>Prikazano</th><th>Na stanju</th><th>Zaliha</th><th></th>';
+        echo '</tr></thead><tbody>';
+
+        if (!$rows) {
+            echo '<tr><td colspan="7" class="zs-muted">— nema opcija —</td></tr>';
+        }
+        foreach ($rows as $r) {
+            echo '<tr>';
+            echo '<td><code>' . esc_html($r['slug']) . '</code></td>';
+            echo '<td>' . esc_html($r['label_sr']) . '</td>';
+            echo '<td>' . (int) $r['sort'] . '</td>';
+            echo '<td>' . self::toggle_btn($r['id'], 'enabled', $r['enabled']) . '</td>';
+            echo '<td>' . self::toggle_btn($r['id'], 'available', $r['available']) . '</td>';
+            echo '<td>' . ($r['stock_qty'] === null ? '—' : (int) $r['stock_qty']) . '</td>';
+            echo '<td class="zs-row-actions">';
+            printf(
+                '<a href="%s" data-zs-edit="%d">Izmeni</a> ',
+                esc_url(add_query_arg(['page' => Menu::SLUG, 'tab' => 'opcije', 'edit' => $r['id']], admin_url('admin.php'))),
+                (int) $r['id']
+            );
+            self::form_open('delete_option', 'opcije');
+            printf('<input type="hidden" name="id" value="%d">', (int) $r['id']);
+            printf('<input type="hidden" name="group_key" value="%s">', esc_attr($gkey));
+            echo '<button class="button-link delete zs-link-danger" onclick="return confirm(\'Obrisati opciju?\')">Obriši</button>';
+            echo '</form>';
+            echo '</td>';
+            echo '</tr>';
+        }
+        echo '</tbody></table>';
+        printf(
+            '<p><a class="button" href="%s" data-zs-add="%s">+ Dodaj u “%s”</a></p>',
+            esc_url(add_query_arg(['page' => Menu::SLUG, 'tab' => 'opcije', 'add' => $gkey], admin_url('admin.php'))),
+            esc_attr($gkey),
+            esc_html($glabel)
+        );
+
+        return (string) ob_get_clean();
     }
 
     private static function toggle_btn(int $id, string $flag, bool $on): string
@@ -228,15 +355,22 @@ final class Screen
         return (string) ob_get_clean();
     }
 
-    /** @param array<string,mixed>|null $row */
-    private static function option_form(?array $row): void
+    /**
+     * The add/edit option form, as an HTML string.
+     *
+     * @param array<string,mixed>|null $row
+     */
+    private static function option_form_html(?array $row): string
     {
         if ($row === null) {
-            echo '<div class="notice notice-error"><p>Opcija nije pronađena.</p></div>';
-
-            return;
+            return '<div class="notice notice-error"><p>Opcija nije pronađena.</p></div>';
         }
         $g = $row['group_key'] ?? '';
+
+        // Inner HTML only — the caller (tab_options / admin.js) keeps it inside
+        // the stable <div class="zs-group" data-group="…"> wrapper, so every
+        // AJAX swap is just `container.innerHTML = html`.
+        ob_start();
         $j = static fn ($v) => $v ? esc_textarea(wp_json_encode($v, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) : '';
 
         echo '<h3>' . (!empty($row['id']) ? 'Izmena opcije' : 'Nova opcija') . '</h3>';
@@ -282,10 +416,13 @@ final class Screen
         echo '</tbody></table>';
         submit_button('Sačuvaj opciju');
         printf(
-            ' <a class="button" href="%s">Otkaži</a>',
-            esc_url(add_query_arg(['page' => Menu::SLUG, 'tab' => 'opcije'], admin_url('admin.php')))
+            ' <a class="button" href="%s" data-zs-cancel="%s">Otkaži</a>',
+            esc_url(add_query_arg(['page' => Menu::SLUG, 'tab' => 'opcije'], admin_url('admin.php'))),
+            esc_attr($g)
         );
         echo '</form>';
+
+        return (string) ob_get_clean();
     }
 
     private static function text_row(string $name, string $label, string $value, string $desc = '', string $type = 'text'): void

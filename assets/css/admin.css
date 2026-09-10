@@ -1,16 +1,225 @@
-/* ZS Configurator — admin screen only (enqueued solely on the plugin page). */
+/* ZS Configurator — admin screen (enqueued only on the plugin page).
+   Re-skinned 2026-09-11 to the Zlatara Stanimirović brand: gold #D4AF37
+   actions, ink #262626, Belleza (display) + Lato (body), near-square corners.
+   Mirrors assets/css/tokens.css / the configurator front end. Everything is
+   scoped under .zs-admin so the rest of wp-admin is untouched. Functionality
+   and markup semantics are unchanged — this is purely presentation. */
 
-.zs-admin .zs-muted { color: #646970; }
-.zs-admin .zs-group-h { margin-top: 2em; padding-bottom: .4em; border-bottom: 1px solid #dcdcde; }
-.zs-admin .zs-opt-table { margin-top: .6em; }
-.zs-admin .zs-opt-table code { font-size: 12px; }
-.zs-admin .zs-row-actions { white-space: nowrap; }
-.zs-admin .zs-row-actions form { display: inline; }
-.zs-admin .zs-link-danger { color: #b32d2e; }
+.zs-admin {
+  --zs-gold: #D4AF37;
+  --zs-gold-hover: #BE982B;
+  --zs-green: #1F3D2E;
+  --zs-green-hover: #16291F;
+  --zs-ink: #262626;
+  --zs-muted: #767676;
+  --zs-bg: #FFFFFF;
+  --zs-surface: #F6F6F4;
+  --zs-surface-2: #ECECEA;
+  --zs-border: #E3E1DC;
+  --zs-danger: #B32D2E;
+  --zs-radius: 2px;
+  --zs-serif: "Belleza", "Times New Roman", Georgia, serif;
+  --zs-sans: "Lato", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --zs-ls: 0.12em;
+  --zs-shadow: 0 1px 2px rgba(38, 38, 38, .06), 0 8px 24px rgba(38, 38, 38, .06);
 
-.zs-admin .zs-toggle { min-width: 44px; text-align: center; }
-.zs-admin .zs-toggle.is-on { background: #1F3D2E; border-color: #1F3D2E; color: #fff; }
-.zs-admin .zs-toggle.is-off { background: #fff; }
+  margin-right: 20px;
+  font-family: var(--zs-sans);
+  color: var(--zs-ink);
+}
 
-.zs-admin form.inline, .zs-admin td form { display: inline-block; margin: 0; }
+/* ---- brand header ---------------------------------------------------- */
+.zs-admin .zs-adminbar {
+  display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+  margin: 16px 0 0; padding: 18px 22px;
+  background: var(--zs-bg);
+  border: 1px solid var(--zs-border);
+  border-bottom: 3px solid var(--zs-gold);
+  border-radius: var(--zs-radius);
+  box-shadow: var(--zs-shadow);
+}
+.zs-admin .zs-adminbar-logo { height: 40px; width: auto; display: block; }
+.zs-admin .zs-adminbar-titles { flex: 1 1 auto; min-width: 200px; }
+.zs-admin .zs-adminbar-titles h1 {
+  margin: 0; padding: 0;
+  font-family: var(--zs-serif); font-weight: 400;
+  font-size: 30px; line-height: 1.15; color: var(--zs-ink);
+}
+.zs-admin .zs-adminbar-titles p {
+  margin: 3px 0 0; color: var(--zs-muted); font-size: 13px;
+}
+.zs-admin .zs-adminbar-actions {
+  display: flex; align-items: center; gap: 12px;
+}
+.zs-admin .zs-adminbar-ver {
+  font-size: 11px; letter-spacing: .06em; color: var(--zs-muted);
+  padding: 3px 8px; background: var(--zs-surface); border: 1px solid var(--zs-border);
+  border-radius: var(--zs-radius);
+}
+
+/* ---- tabs ---------------------------------------------------------- */
+.zs-admin .zs-tabs {
+  display: flex; gap: 4px; margin: 22px 0 0;
+  border-bottom: 1px solid var(--zs-border);
+}
+.zs-admin .zs-tab {
+  padding: 12px 18px; text-decoration: none;
+  font-size: 12px; font-weight: 700; letter-spacing: var(--zs-ls);
+  text-transform: uppercase; color: var(--zs-muted);
+  border-bottom: 3px solid transparent; margin-bottom: -1px;
+  transition: color .12s, border-color .12s;
+}
+.zs-admin .zs-tab:hover { color: var(--zs-ink); }
+.zs-admin .zs-tab:focus { box-shadow: none; outline: 2px solid var(--zs-gold); outline-offset: -2px; }
+.zs-admin .zs-tab.is-active { color: var(--zs-ink); border-bottom-color: var(--zs-gold); }
+
+/* ---- tab pane / cards -------------------------------------------------- */
+.zs-admin .zs-tabpane {
+  margin-top: 22px; padding: 26px 28px;
+  background: var(--zs-bg); border: 1px solid var(--zs-border);
+  border-radius: var(--zs-radius); box-shadow: var(--zs-shadow);
+}
+.zs-admin .zs-muted { color: var(--zs-muted); }
+.zs-admin > .zs-tabpane > p:first-child { margin-top: 0; }
+
+.zs-admin .zs-group-h {
+  margin: 30px 0 0; padding: 0 0 8px;
+  font-family: var(--zs-serif); font-weight: 400; font-size: 20px;
+  color: var(--zs-ink); border-bottom: 1px solid var(--zs-border);
+}
+.zs-admin .zs-group-h .zs-muted { font-family: var(--zs-sans); font-size: 12px; letter-spacing: .04em; }
+.zs-admin .zs-group:first-of-type .zs-group-h,
+.zs-admin .zs-tabpane > .zs-group-h:first-of-type { margin-top: 8px; }
+
+/* ---- tables --------------------------------------------------------- */
+.zs-admin .zs-opt-table {
+  margin: 12px 0 10px; border-collapse: collapse; width: 100%;
+  border: 1px solid var(--zs-border); border-radius: var(--zs-radius); overflow: hidden;
+  background: var(--zs-bg); box-shadow: none;
+}
+.zs-admin .zs-opt-table thead th {
+  background: var(--zs-surface); color: var(--zs-muted);
+  font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  padding: 10px 12px; border-bottom: 1px solid var(--zs-border); text-align: left;
+}
+.zs-admin .zs-opt-table tbody td {
+  padding: 11px 12px; border-bottom: 1px solid var(--zs-surface-2);
+  font-size: 13px; vertical-align: middle;
+}
+.zs-admin .zs-opt-table tbody tr:last-child td { border-bottom: 0; }
+.zs-admin .zs-opt-table tbody tr:hover td { background: #faf8f2; }
+.zs-admin .zs-opt-table code {
+  font-size: 12px; background: var(--zs-surface); color: var(--zs-ink);
+  padding: 2px 7px; border: 1px solid var(--zs-border); border-radius: var(--zs-radius);
+}
+.zs-admin .zs-row-actions { white-space: nowrap; text-align: right; }
+.zs-admin .zs-row-actions form { display: inline-block; margin: 0; }
+.zs-admin .zs-row-actions a { color: var(--zs-ink); text-decoration: none; font-weight: 700; font-size: 12px; }
+.zs-admin .zs-row-actions a:hover { color: var(--zs-gold-hover); }
+.zs-admin .zs-link-danger,
+.zs-admin .button-link.delete { color: var(--zs-danger); font-weight: 700; font-size: 12px; text-decoration: none; }
+.zs-admin .zs-link-danger:hover { text-decoration: underline; }
+
+/* ---- toggle DA / NE (green = "on / selected", brand rule) ----------- */
+.zs-admin .zs-toggle {
+  min-width: 46px; text-align: center; font-weight: 700; font-size: 11px;
+  letter-spacing: .06em; padding: 4px 10px; border-radius: var(--zs-radius);
+  border: 1px solid var(--zs-border); background: var(--zs-bg); color: var(--zs-muted);
+  cursor: pointer; transition: background .12s, color .12s, border-color .12s;
+}
+.zs-admin .zs-toggle.is-on { background: var(--zs-green); border-color: var(--zs-green); color: #fff; }
+.zs-admin .zs-toggle.is-on:hover { background: var(--zs-green-hover); border-color: var(--zs-green-hover); }
+.zs-admin .zs-toggle.is-off:hover { border-color: var(--zs-ink); color: var(--zs-ink); }
+
+/* ---- buttons ------------------------------------------------------- */
+.zs-admin .button,
+.zs-admin .zs-btn {
+  height: auto; line-height: 1.4; padding: 8px 16px;
+  font-family: var(--zs-sans); font-size: 13px; font-weight: 700;
+  border-radius: var(--zs-radius); border: 1px solid var(--zs-border);
+  background: var(--zs-bg); color: var(--zs-ink); box-shadow: none;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.zs-admin .button:hover,
+.zs-admin .zs-btn:hover { border-color: var(--zs-gold); color: var(--zs-gold-hover); background: var(--zs-bg); }
+.zs-admin .button:focus,
+.zs-admin .zs-btn:focus { box-shadow: 0 0 0 2px rgba(212, 175, 55, .4); border-color: var(--zs-gold); }
+
+.zs-admin .button-primary,
+.zs-admin #submit,
+.zs-admin input[type="submit"] {
+  background: var(--zs-gold); border-color: var(--zs-gold); color: #1c1c17;
+  text-shadow: none;
+}
+.zs-admin .button-primary:hover,
+.zs-admin #submit:hover,
+.zs-admin input[type="submit"]:hover { background: var(--zs-gold-hover); border-color: var(--zs-gold-hover); color: #1c1c17; }
+
+.zs-admin .zs-btn-ghost { background: transparent; }
+.zs-admin p .button + .button,
+.zs-admin .zs-adminbar-actions .zs-btn { text-decoration: none; }
+
+/* "+ Dodaj u …" — quiet add affordance */
+.zs-admin .zs-group > p:last-child .button,
+.zs-admin p [data-zs-add] {
+  border-style: dashed; color: var(--zs-muted); background: transparent;
+}
+.zs-admin p [data-zs-add]:hover { border-color: var(--zs-gold); color: var(--zs-gold-hover); }
+
+/* ---- forms -------------------------------------------------------- */
+.zs-admin .form-table th {
+  font-family: var(--zs-sans); font-weight: 700; font-size: 13px; color: var(--zs-ink);
+  padding: 16px 10px 16px 0;
+}
+.zs-admin .form-table td { padding: 12px 10px; }
+.zs-admin input[type="text"],
+.zs-admin input[type="number"],
+.zs-admin input[type="url"],
+.zs-admin input[type="email"],
+.zs-admin select,
+.zs-admin textarea {
+  border: 1px solid var(--zs-border); border-radius: var(--zs-radius);
+  background: var(--zs-bg); color: var(--zs-ink); box-shadow: none;
+  font-family: var(--zs-sans); font-size: 13px; padding: 7px 10px;
+}
 .zs-admin textarea.code { font-family: Menlo, Consolas, monospace; font-size: 12px; }
+.zs-admin input:focus,
+.zs-admin select:focus,
+.zs-admin textarea:focus {
+  border-color: var(--zs-gold); box-shadow: 0 0 0 2px rgba(212, 175, 55, .28); outline: none;
+}
+.zs-admin .description { color: var(--zs-muted); font-size: 12px; font-style: normal; }
+.zs-admin .description code {
+  background: var(--zs-surface); border: 1px solid var(--zs-border);
+  border-radius: var(--zs-radius); padding: 1px 5px; font-size: 11px;
+}
+.zs-admin h3 { font-family: var(--zs-serif); font-weight: 400; }
+
+/* ---- notices & flash -------------------------------------------------- */
+.zs-admin .notice {
+  border: 1px solid var(--zs-border); border-left-width: 4px;
+  border-radius: var(--zs-radius); box-shadow: var(--zs-shadow); margin: 16px 0 0;
+}
+.zs-admin .notice-success { border-left-color: var(--zs-green); }
+
+.zs-admin .zs-flash {
+  margin: 12px 0 0; padding: 9px 14px;
+  border: 1px solid var(--zs-border); border-left: 4px solid var(--zs-green);
+  background: #f0f6f2; color: var(--zs-green); font-weight: 700;
+  border-radius: var(--zs-radius);
+  opacity: 0; transform: translateY(-4px); transition: opacity .15s, transform .15s;
+}
+.zs-admin .zs-flash.is-show { opacity: 1; transform: none; }
+
+/* ---- inline (no-reload) editing — see assets/js/admin.js ------------- */
+.zs-admin .zs-group { position: relative; }
+.zs-admin .zs-group.zs-busy { opacity: .55; pointer-events: none; }
+
+/* ---- responsive -------------------------------------------------- */
+@media (max-width: 782px) {
+  .zs-admin { margin-right: 10px; }
+  .zs-admin .zs-adminbar { padding: 14px 16px; gap: 14px; }
+  .zs-admin .zs-tabpane { padding: 18px 16px; }
+  .zs-admin .zs-tab { padding: 10px 12px; }
+  .zs-admin .zs-opt-table thead { display: none; }
+}

@@ -6,6 +6,36 @@ Screenshotovi u `docs/reference/`. Vrednosti hex/tekst su iz same Figme; **px ve
 
 ---
 
+## ⚠️ 2026-09-09 — re-skin uz živi sajt (supersedes Boje / Tipografija / Spacing→radius)
+
+Klijent (2026-09-09): konfigurator treba da se vizuelno uklopi u živi sajt
+**zlatarastanimirovic.rs** (Woodmart tema) — „da se vidi da je to to isto".
+Brend-kit izvučen iz `xts-theme_settings_default.css`. Vidi `decisions.md #49`.
+Figma paleta/tipografija ispod ostaju kao istorijski zapis; primenjuje se ovo:
+
+| Aspekt | Novo (živi sajt) | Bilo (Figma) |
+|---|---|---|
+| Primarna akcija / cena / aktivna navigacija / hover | **zlatna `#D4AF37`** (`--zs-gold`), hover `#BE982B` | zelena `#1F3D2E` |
+| **Selektovana opcija** (swatch/chip/profil/pattern/setting box) | **zelena `#1F3D2E`** + `inset 0 0 0 1px` prsten + fill `--zs-surface` | isto (zelena), sad samo za izbor opcije |
+| Mastilo / tekst | `#262626` | `#221F1B` |
+| Muted tekst | `#767676` | `#7C7568` |
+| Gornja traka | skoro crna `#242424`, beli tekst, zlatni logo/hover (`--zs-ink-bar`) | bela |
+| Display font | **Belleza** (400, verzal, `ls` ~0.12em) | Fraunces 400/500/600 |
+| Body / kontrole font | **Lato** (400/700) | Inter 400/500/600 |
+| Border radius | **2px** (`--zs-radius` i `--zs-radius-pill`); samo pravi krugovi ostaju `50%` | 8–12px + pill 999px |
+| Senke | pljosnatije, neutralne — `rgba(38,38,38,·)` | `rgba(34,31,27,·)` |
+
+**Akcenat-pravilo posle re-skina:** zlatna = navigacija + akcije (koraci, view-toolbar
+toggle-ovi, CTA, „Sledeće", „Dodaj žleb", cena). Zelena = *izabrana opcija* i ništa
+drugo. Golden rule #2 ostaje: izbor se vidi bojom + prstenom, nikad samo senkom.
+
+Fontovi se enqueue-uju iz `Configurator.php`:
+`https://fonts.googleapis.com/css2?family=Belleza&family=Lato:wght@400;700&display=swap`.
+
+Aktuelne vrednosti su uvek u `assets/css/tokens.css`.
+
+---
+
 ## Ličnost brenda — 7 karakteristika
 
 > Svaka odluka u interfejsu (razmak, boja, ton teksta) treba da potvrđuje jednu od ovih.

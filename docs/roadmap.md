@@ -43,8 +43,12 @@ Faze su inkrementalne; svaka se može demonstrirati. Acceptance = merljiv kriter
 - [x] **Finoća 585/750** → `density` → masa + produbljena boja (2026-09-08, decisions #45)
 - [x] **Gravura vidljiva u renderu** — aproksimacija: tamna slova na tankom cilindru uz zid trake, Unutra/Spolja (2026-09-08/09, decisions #46/#47). Pravo urezivanje (canvas→height/normal) = Faza 3.
 - [x] **Žlebovi**: „Pozicija" stvarno pomera greben po širini; korak-UI preuređen po Breuning „Fugen/Stufen" (decisions #46/#47)
+- [x] **Žlebovi se USECAJU u traku** (bio aplicirani greben naviše) — `carveGroovesIntoGeometry()` gura temena spoljne površine unutra po `grooveCut(shape,t,depth)`, shape-agnostičko (2026-09-11, decisions #55). v2: `horizontal`/`wave` (delimičan obim → per-ugao rez).
+- [x] **Dijamant v1 REBUILD**: 4-kandže podignuti solitaire (ne flush), `stoneParams` + `?zscdebug=1` „Dijamant" panel (2026-09-10, decisions #54). Sjaj/vatra čeka GPU tuning klijenta.
+- [x] **Admin bez reloada** (Opcije tab inline AJAX) + **ceo admin rebrendiran** (Belleza/Lato, zlatna/mastilo, logo header) (2026-09-11, decisions #56/#57)
+- [x] **Wheel-zoom isključen** na sceni; klik u navigaciji ne skroluje stranicu (2026-09-11, decisions #58)
 - [ ] Normal mape za "Grebano" (anizotropno) i "Čekićano"; brušeni pravac
-- [ ] `dispose()` na unmount — delimično (gravura/žlebovi se čiste; band/mat dispose još nije zakačen za unmount); WebGL2 fallback poruka
+- [ ] `dispose()` na unmount — delimično (gravura se čisti; band/mat dispose još nije zakačen za unmount); WebGL2 fallback poruka
 
 ### 2b — Svelte UI ljuska + Vite build
 - [ ] `app/` Vite + Svelte projekat; migracija panela iz `assets/js/configurator.js`
@@ -135,12 +139,11 @@ Confmetrix engine-u).
   dodat 2026-09-06** (5 oblika, lista dodatih žlebova sa punim podešavanjima — decisions.md
   #33). ~~Nema 3D efekta~~ **✅ vidljivo na render-u od 2026-09-07** (decisions.md #40) +
   ~~pozicija po širini~~ **✅ 2026-09-08** (`m.position.y = grv.position`, decisions #46) +
-  ~~korak-UI~~ **✅ preuređen po Breuning „Fugen/Stufen" 2026-09-09** (decisions #47) —
-  ALI i dalje kao aplicirani greben, NE prava karvana šara u siluetu trake, i uvek se
-  "omotava" oko celog obima (samo orijentacija:'vertical' je geometrijski tačna). Pravo
-  urezivanje ostaje v2: modifikovati `profilePoints()` po obliku — CSG/displacement,
-  analogno gravuri (odluka #8). Sub-tabovi „Razdvajajući žlebovi"/„Slojevi" i dalje
-  placeholderi.
+  ~~korak-UI~~ **✅ preuređen po Breuning „Fugen/Stufen" 2026-09-09** (decisions #47) +
+  ~~aplicirani greben~~ **✅ PRAVO USECANJE u traku 2026-09-11** (`carveGroovesIntoGeometry`,
+  decisions #55 — gura temena spoljne površine radijalno unutra, shape-agnostičko, bez CSG).
+  Ostaje v2: `horizontal`/`wave` žleb (delimičan obim → per-ugao rez); sub-tabovi
+  „Razdvajajući žlebovi"/„Slojevi" i dalje placeholderi.
 - ~~**Veličina prstena**: korak 0.5, checkbox "optimalni odnos širina/debljina"~~ **✅ urađeno
   2026-09-06** (Dimenzije korak — decisions.md #26/#29). Ostaje: alternativni sistemi
   veličina (US/UK/Swiss).

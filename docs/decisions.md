@@ -323,6 +323,252 @@ Sve odluke donete 2026-08-31 osim gde je drugačije navedeno. Format: odluka →
     ima pristup internetu — korišćen za poređenje sa `konfigurator.breuning.de`
     i za QA našeg UI-ja. `playwright-core` vozi već prisutni binarni fajl.
 
+## Odluke — 2026-09-09 (klijent, šesti krug — uklapanje u živi sajt)
+
+49. **Re-skin da se konfigurator uklopi u živi sajt `zlatarastanimirovic.rs`**
+    (v0.5.0). Klijent: „mozemo od njega pokupiti malo stajlove … da se vidi da
+    je to to isto". Brend-kit izvučen iz Woodmart tema-podešavanja
+    (`xts-theme_settings_default.css`): primarna boja **zlatna `#D4AF37`**,
+    mastilo `#262626`, fontovi **Belleza** (display) + **Lato** (body), skoro
+    oštri uglovi, skoro crna gornja utility traka.
+    - **Paleta**: dodato `--zs-gold #D4AF37` / `--zs-gold-hover #BE982B`;
+      `--zs-text` → `#262626`, `--zs-text-muted` → `#767676`; surface/border
+      pretočeni u neutralno sivo (`#F6F6F4` / `#ECECEA` / `#E3E1DC`); dodato
+      `--zs-ink-bar #242424` + `--zs-on-dark`. `--zs-bronze` prebačen na muku
+      zlatnu `#B58E3A` (hover border-i + line-art poprečnog preseka).
+    - **Akcenat-pravilo**: **zlatna = navigacija + akcije** (step nav, view-toolbar
+      toggle-ovi ♂/♀/oko, CTA „Pošalji upit", „Sledeće", „Dodaj žleb", groove
+      tabovi, cena). **Zelena `#1F3D2E` = isključivo izabrana opcija** (swatch /
+      chip / profil / pattern / setting box) — sad pojačana `inset 0 0 0 1px`
+      prstenom da golden rule #2 („nikad samo senka") ostaje ispunjen.
+      Form kontrole (`accent-color` klizača i checkbox-a, focus outline gravure)
+      idu na **zlatnu** — kao form kontrole na živom sajtu; zelena je samo za
+      diskretne „kartice" izbora.
+    - **Tipografija**: Fraunces→**Belleza** (400 only; display/H1–H3/cena/imena),
+      Inter→**Lato** (400/700; body + sve kontrole). Enqueue u `Configurator.php`
+      promenjen na `family=Belleza&family=Lato:wght@400;700`. Svi `font-weight:600`
+      u `configurator.css` → `700` (Belleza/Lato nemaju 600). Serif spanovi sa
+      `500`/`600` spušteni na `400`. Display px nudge (Belleza manji x-height):
+      display 48→46, price 28→30. `--zs-ls-label` 0.08em→0.12em.
+    - **Oblik**: `--zs-radius` 10px→**2px**, `--zs-radius-pill` 999px→**2px**
+      (pilule spljoštene; pravi krugovi — swatch/step-n/rail/badge — koriste
+      literalni `50%`, netaknuti). Senke pljosnatije, baza `rgba(38,38,38,·)`.
+    - **Gornja traka**: `background --zs-ink-bar`, beli tekst, zlatni logo-mark i
+      hover; logo PNG je zlatna linijska grafika na providnom → radi na tamnom.
+    - **Nije dirano**: 3D scena / materijali (metal hex-ovi u `Seeder.php` /
+      `configurator.js` su fizičke boje zlata, ne UI), layout grid, admin CSS.
+    - `design-system.md` dobija banner-sekciju na vrhu koja supersede-uje
+      Figma paletu/tipografiju/radius; Figma vrednosti ostaju kao istorija.
+
+50. **Dijamanti korak prepravljen + emojiji izbačeni (Round 6b, 2026-09-09).**
+    Klijent: „sredi grupu dijamanata, nije dobro; izbaci emojije".
+    - **Emojiji**: `&#128142;` (💎 na summary kartici) uklonjen; `&#9670;` (◆
+      brand-mark / view-mark, fallback bez logoa) → novi `icon('diamond')`
+      inline SVG; `&#8250;` (› akordeon chevron) → `icon('chevronRight')` SVG.
+      U UI-ju više nema nijednog glifa-kao-ikone (ostaje samo `&larr;` na
+      „Nazad" dugmetu — tipografska strelica, ne emoji).
+    - **`uiDiamonds` layout**: uklonjeni usamljeni tab „Grupa dijamanata",
+      summary kartica i popover toggle. Sad ravan, složen raspored kao
+      Materijal/Žlebovi: prvo „Veličina kamena" (čipovi), a **Tip postavke /
+      Brus / Kvalitet / Broj kamenova / Pozicioniranje se prikazuju tek kad je
+      izabran pravi kamen** (`sel.params.mm > 0`) — default „Bez dijamanta"
+      ostaje tih. „Tip postavke" = grupisani `zs-setting-grid` inline (bez
+      popovera). „Pozicioniranje" prebačeno sa `zs-profile-box` na `zs-chip`
+      pilule. Nova `.zs-num` klasa za uski number input.
+    - **Seeder**: labele dijamanata `Rund Ø1.0 mm` (nemački „Rund") →
+      `Ø 1,0 mm` / `Ø 1,5 mm` / `Ø 2,0 mm`. Zahteva reseed
+      (`TRUNCATE wp_zs_options` + `Seeder::run()` + `Compiler::flush_all()`).
+    - Size čipovi grade se inline (ne preko deljenog `uiChips`) da promena
+      veličine može da okine pun `renderPanel()` — kontrole ispod su gejtovane.
+
+51. **Pravi fasetiran dijamant u 3D (Round 6c, 2026-09-09).** Klijent: „kamen je
+    samo bela tačkica, napravi pravi dijamant kao na konkurentskom sajtu".
+    - `makeBrilliantGeometry()` prepravljen sa grubog 12-stranog konusa na pun
+      round brilliant: 8-strana simetrija, ~112 trouglova (oktagonalni sto, 2
+      reda krune, nazubljen rondiš, 2 reda paviliona do kuleta). I dalje
+      non-indexed → normala po faseti (sjaj i na software GL-u).
+    - Materijal: `transmission` 0.85→1.0, dodato `dispersion: 3.0` (prava vatra
+      na GPU-u, r166+), `envMapIntensity` 4.5→2.5 (spušteno da faseti pokažu
+      kontrast umesto belog bleštanja), `iridescence` 0.45→0.15, dodato
+      `attenuationColor`.
+    - **Novi metalni obrub** `makeBezelMesh()` — torus oko rondiša, boja prati
+      traku svaki frame (isti obrazac kao `grooveMeshes`), po `stone.setting`
+      (bezel/kanal da, prong/tension buduće ne). Rešava „bela tačkica" i bez
+      GPU efekata jer daje jasan metalni okvir. Dispose + `rebuildEnvironment`
+      prošireni da pokriju bezele (i žlebove).
+    - `STONE_PROMINENCE = 1.35` — blaga egzageracija veličine (burma-kamen je
+      fizički 1–2 mm, na konkurentskom konfiguratoru deluje veći).
+    - `sceneStateFor` payload: `stone.setting = s.diamondSetting`.
+    - **Verifikacija čeka pravi GPU** — SwiftShader (WSL headless) ne renderuje
+      transmisiju/disperziju, kamen tamo izgleda kao pljosnat beli oktagon;
+      geometrija/obrub/pozicija su potvrđeni headless, sjaj/vatra ne mogu.
+
+52. **Diamond „vatra" + redizajn metal swatch-eva i žleb preview-a (Round 6d,
+    2026-09-09).** Klijent: „kamen je i dalje samo belo, kod konkurencije se
+    cakli / ima spektar" + dva screenshota naše UI za redizajn „kao kod njih".
+    - **Diamant — 3 izvora sjaja da se vidi i bez GPU refrakcije:**
+      (1) `iridescence` 0.15→0.6, `iridescenceIOR` 1.32, opseg `[60,800]` —
+      široka thin-film duga, deo standardnog BRDF-a (renderuje se svuda);
+      (2) `dispersion` 3→8 — jaka prizmatična vatra na pravom GPU-u;
+      (3) **per-faset spektralni vertex-color** upečen u `makeBrilliantGeometry`
+      (`color` atribut, `vertexColors: true`): kruna svetli tint, pavilion
+      dublji komplementarni tint → obojeni odsjaji čak i na SwiftShader-u
+      (potvrđeno headless). `envMapIntensity` 2.5→1.9 (manje belog pranja).
+    - **Metal swatch-evi** (`swatchGradient`): stari „plastični mramor"
+      radial-gradient → conic sweep (predeni metal) + meki off-centre
+      highlight + tamni vignette = „uzorak metala kod zlatara". `.zs-swatch`
+      52px, tanak rim, hover lift, selektovano = zeleni prsten + mala ✓ značka
+      u uglu (ne preko sredine).
+    - **Žleb preview** (`.zs-groove-preview`): visoka prazna 56×120 vertikalna
+      traka → **landscape „površina trake" pločica** iznad parametara; žleb =
+      urezan kanal (tamno jezgro, svetle ivice) na pravoj poziciji/orijentaciji
+      (`is-h` = vodoravno pomeranje po `top`, `is-wave` = dijagonalna tekstura).
+      `.zs-groove-body` grid → block. „Dodaj žleb" pun zlatni blok → outline
+      dugme (konkurent je uzdržaniji); addrow `flex-wrap`, linkovi `nowrap`.
+
+53. **Flush-set dijamant: izbušeno ležište + obrub + kontrast (Round 6e,
+    2026-09-10).** Klijent uporedio konkurentov render (sitna sjajna tačka u
+    izbušenom ležištu sa metalnim prstenom) sa našim (sivi oktagon na
+    površini). Rađeno kroz **fork subagenta** (piše kod) + ja nadgledam i
+    sudim naspram konkurentske slike.
+    - **`makeSeatGeometry`** — konusni countersink (`ConeGeometry(0.60,0.44,
+      36,1,true)`, apex u traku, `side: BackSide`) = tamna udubljena rupa oko
+      kamena. Materijal `#2a2113` metal, `roughness .38`, `envMapIntensity .15`;
+      boja svaki frame = `rig.mat.color × 0.22`. Nov `rig.seats` pool.
+    - **`makeBezelGeometry`** — tanak gladak torus (`0.52, 0.026, 18×56` — bilo
+      `8` seg → „opruga"), sopstveni polirani materijal, `renderOrder 4`,
+      podignut hair proud od ruba ležišta.
+    - **Kamen**: `STONE_FRAC = 0.66` — mesh se crta osetno manji od ležišta/
+      obruba (konkurent: sitan kamen, „chunky" obrub); `tableR = surfaceR −
+      0.07·scale` (kruna utonula u rupu, obrub pokriva rondiš).
+    - **Materijal**: `transmission` 1.0 → **0.6** — na 1.0 materijal skoro
+      ignoriše sopstveno senčenje i pokazuje šta je iza (na software GL =
+      mlečna fleka); na 0.6 faseti/vertex-boje/clearcoat doprinose pa se čita
+      kao brušen kamen svuda, a GPU i dalje prelama+disperguje 0.6.
+      `envMapIntensity` 3.3→2.5.
+    - **Vertex boje** (`makeBrilliantGeometry`): dodat `tri3()` (boja po
+      temenu) — **tamno jezgro na stolu** (`HEART` ≈ near-black) = culet/dubina
+      „kroz kamen", svetao obod; pavilion tamniji ka kuletu. Ovo je jedini
+      „diamond depth" cue koji radi bez refrakcije.
+    - **Zlato omekšano**: `toneMappingExposure` 1.08 → **1.02**, band
+      `envMapIntensity` 1.5 → **1.2** (ogroman beli odsjaj naspram konkurentovog
+      foto-realnog zlata).
+    - **Round 6f (posle klijentovog GPU screenshota, 2026-09-10):** i na PRAVOM
+      GPU-u kamen je ostao mlečna prozirna fleka — `transmission ≥0.6` pusti
+      zlato iza da opere senčenje faseta, a `roughness 0` `metalness 0`
+      MeshPhysical je skoro čisto ogledalo pa se `vertexColors` (tamno jezgro)
+      i ne vide. Zaokret:
+      * `transmission` 0.6 → **0.12** (uglavnom neproziran, sjajan — CZ/moissanite
+        „look" izbliza), `dispersion` 8→5, `iridescence` 0.6→0.35,
+        `envMapIntensity` 2.5→2.8. `STONE_FRAC` 0.66→0.74, `tableR` recess
+        0.07→0.035 (kruna se vidi).
+      * **Sparkle sprite** (`makeSparkleTexture` canvas + `THREE.Sprite`,
+        `AdditiveBlending`, uvek gleda u kameru) — beli core + slab 4-krak
+        flare, `scale = stoneScale·1.5`, `opacity .8`. Pool `rig.sparkles`.
+        Ovako pravi jewelry konfiguratori i fejkuju „cakli se" — proceduralni
+        kamen ne može fotorealno u soft-box studiju bez pinpoint svetala.
+    - **NIJE FINALNO POTVRĐENO** — SwiftShader ne renderuje transmisiju/
+      disperziju; struktura (ležište/obrub/sprite/veličina) je potvrđena na
+      umerenom zumu. Klijent proverava na GPU-u: da li je sparkle prejak/preslab,
+      da li je kamen i dalje previše mlečan, veličina.
+
+## Odluke — 2026-09-10 (klijent, sedmi krug — dijamant iz nule)
+
+54. **Dijamant REBUILD (v1, 2026-09-10).** Prethodni pokušaji (#51–#53, Round
+    6c–6f: flush kamen u izbušenom konusnom ležištu + obrub) su bili „veoma
+    loše" — na klijentovom prikazu samo bela/mlečna tačka. Taj kod nikad nije
+    ni ušao u `scene.module.js` (radna kopija je bila čista, na `b3b6b4b`);
+    ostale su samo beleške #51–#53, koje `3d.md` „Dijamanti" sada supersede-uje.
+    - **Nova meta** = konkurentov **4-kandže podignuti solitaire**
+      (`konfigurator.breuning.de`), NE flush/ležište. Klijentov v1 kriterijum
+      doslovno: „za sada samo da liči na prsten, da nije bela tačka."
+    - **Jedna tvrda granica:** WSL dev = SwiftShader → nema `transmission`/
+      `dispersion`/refrakcije. Look stoji na (1) non-indexed geo → normala po
+      faseti, (2) upečene vertex boje (svetla kruna → taman kulet) kao depth
+      cue, (3) additive sparkle sprite. transmission/dispersion su LOW, bonus
+      na pravom GPU-u.
+    - **Kod** (`scene.module.js`): `stoneParams` objekat (sve vrednosti),
+      `makeBrilliantGeometry()` (16-strana, ~230 tri, `position`+`color`),
+      `makeSettingGroup()` (4 kandže + basket, koristi novi `rig.stoneMetal`),
+      `makeStoneUnit()` (Group = gem + setting + sparkle Sprite), prepisan
+      `buildStoneFor()` — podignut (`girdleR = outerR + raise·pavD·scale`), NE
+      flush. `makeSparkleTexture()` + deljeni `sparkleMat`.
+    - **Debug panel VRAĆEN** (`?zscdebug=1`): enqueue u `Configurator.php` i
+      `window.zscApp` hook u `configurator.js` od-komentarisani. `debug-panel.js`
+      dobio sekcije „Dijamant — oblik / materijal / boje faseta / sparkle /
+      presets"; `debugApi` dobio `stoneParams` + `setStoneMat()` +
+      `rebuildStone()` + `setSparkle()`; „Kopiraj JSON" nosi i `stone: {}`.
+    - **Verifikovano headless** (Playwright/SwiftShader): proporcije/kandže/
+      veličina/pozicija — čita se kao prsten sa kamenom. Sjaj/vatra NIJE —
+      čeka klijentov tuning na pravom GPU-u → JSON nazad → zapeći u `stoneParams`.
+    - **Otvoreno:** ima li klijentova mašina GPU koji renderuje WebGL
+      transmisiju (bira „Fotorealan" vs „Stilizovan" pravac); da li kandže
+      previše vire; final veličina/sparkle.
+
+## Odluke — 2026-09-11 (klijent, osmi krug — admin bez refresha, žlebovi, scroll)
+
+55. **Žlebovi se usecaju U traku (bilo greben NAVIŠE).** Klijent: „napravio si
+    ih da izlaze nagore, a treba da se usecaju U prsten." `#40` (zaseban mali
+    `LatheGeometry` greben `outerR + rise`) izbačen ceo — `grooveProfilePoints`
+    / `GROOVE_SEGMENTS` / `buildGroovesFor` / `rig.grooveMeshes` obrisani.
+    - Novo: `buildBandFor()` → `densifyLoop(pts, 0.18)` (gusti presek po
+      širini) + `carveGroovesIntoGeometry(geo, grooves, innerR, outerR)` gura
+      temena SPOLJNE površine radijalno unutra po `grooveCut(shape, t, depth)`
+      (V / ravno dno / U). `outerness` faktor → unutrašnji zid se ne mrda;
+      clamp `innerR + 0.22`. Shape-agnostičko (radi na gotovom mešu).
+    - `groovesChanged` je sada rebuild trake, ne zaseban pass. Boju nasleđuje.
+    - Caveat: uvek pun obim; `horizontal`/`wave` (delimičan) = v2 (per-ugao rez).
+    - `3d.md` dobio novu „Žlebovi (Fugen)" sekciju.
+
+56. **Admin „Opcije" tab — bez reload-a stranice.** Klijent: „kad izmenim npr.
+    Materijal ne bi da mi se ceo plugin refrešuje, samo taj deo."
+    - `Screen::dispatch()` razdvojen: `mutate()` (samo DB) + `dispatch()`
+      (mutate + redirect, no-JS put) + nova `ajax()` (mutate + vrati svež HTML
+      fragment za samo tu grupu). `wp_ajax_zs_admin` → `Screen::ajax`.
+      `Menu::handle_post()` sada `return`-uje na `wp_doing_ajax()` (admin_init
+      se pali i na admin-ajax.php — inače je mutate išao 2×, 302 pre AJAX-a).
+    - `assets/js/admin.js` (novo): presreće forme (`toggle`/`save_option`/
+      `delete_option`) i `Izmeni`/`+ Dodaj`/`Otkaži` linkove, `fetch` na
+      admin-ajax, zameni `innerHTML` unutar `<div class="zs-group"
+      data-group="…">`. Bez JS-a → native submit (fallback netaknut).
+      `wp_localize_script` → `ZS_ADMIN {ajax, nonce}`; forme nose svoj `_wpnonce`.
+    - Verifikovano headless: toggle / izmena labele+sačuvaj / dodaj+otkaži —
+      **0 navigacija** stranice.
+
+57. **Ceo admin rebrendiran (premium look).** Klijent: „rebrendiraj ceo
+    plugin — logo, fontovi, boje, da izgleda premijum; funkcionalnost ostavi."
+    `#49` je eksplicitno ostavio admin CSS netaknut — sad je urađen, isti
+    brend-kit kao front (`tokens.css`): zlatna `#D4AF37` akcije, mastilo
+    `#262626`, **Belleza** (display) + **Lato** (body), uglovi 2px.
+    - `Menu::assets()` dodatno enqueue-uje Google Fonts (Belleza + Lato) —
+      samo na plugin ekranu.
+    - `Menu::add_page()` ikona menija = mali inline diamond SVG (data URI; WP
+      ga sam skalira na 20px i prefarba). Rasterski logo NIJE ikona menija —
+      probano, `logo-mark.png` je bežao iz kontejnera kao ogroman watermark.
+    - `Screen::render()`: stock `<h1>` + `nav-tab-wrapper` → brend header
+      (`logo-full.png` + naslov Belleza + podnaslov + „Otvori konfigurator
+      &#8599;" ghost dugme + verzija chip) + `<hr class="wp-header-end">`
+      (sidro za WP notice) + `.zs-tabs` (uppercase, gold underline na aktivnom)
+      + `.zs-tabpane` kartica. Nova `configurator_page_url()` (`$wpdb` LIKE
+      `%[zs_configurator%`) hrani „Otvori" dugme.
+    - `admin.css` prepisan: kartice, tabele (uppercase spaced th, code
+      pilule, hover), toggle DA/NE (zeleni = „on", brend pravilo), dugmad
+      (primary = zlatna, secondary = bela+border, ghost, dashed „+ Dodaj"),
+      form polja (2px, gold focus ring), `.notice`/`.zs-flash`. Sve pod
+      `.zs-admin` — ostatak wp-admina netaknut. Responsive breakpoint 782px.
+    - **Funkcionalnost 1:1** — isti markup semantika, iste akcije, AJAX iz
+      #56 i dalje radi (verifikovano headless, 0 navigacija). Admin već
+      pokriva sve što plugin ima (7 grupa + sve kolone + `wp_zs_options` puna
+      šema + sva `Settings` polja) — ništa novo za surface-ovati.
+
+58. **Isključen wheel-zoom na 3D sceni + klik u navigaciji ne skroluje.**
+    - `controls.enableZoom = false` — skrol preko canvasa je zapinjao (Orbit
+      Controls je gutao wheel event pa je stranica stajala). `+/−` dugmad
+      (`scene.zoom()`) i dalje rade.
+    - `gotoStep()`: `sec.scrollIntoView({behavior:'smooth'})` → samo
+      `this._panel.scrollTop = 0` (reset scroll-a desnog panela, stranica se
+      ne mrda). Klijent: „kad se klikne u navigaciji ne treba da skroluje."
+
 ## Otvorena pitanja (blokiraju procenu obima)
 
 | # | Pitanje | Zašto je bitno |

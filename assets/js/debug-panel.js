@@ -46,14 +46,94 @@
       return opts;
     }
 
-    // Client (2026-09-05): ring pose + camera angle + AO-blob placement are
-    // "relatively done" for now — hide those sliders so the panel focuses on
-    // "odsjaj" (shine/reflection). Do NOT delete the section defs below (see
-    // POSITION_SECTIONS) — they'll be wanted again soon (client revisions).
-    // Flip this back to true to bring the whole position toolkit back.
-    var SHOW_POSITION_CONTROLS = false;
+    // Full toolkit ON (client, 2026-09-10: "vrati sva podešavanja koja smo
+    // imali") — pose (rot/offset per ring), camera polar range, and the
+    // per-ring contact-AO blob sliders, alongside every light/reflection/
+    // studio section below.
+    var SHOW_POSITION_CONTROLS = true;
 
     var sections = [
+      {
+        title: 'Dijamant — oblik (rebuild geo)',
+        fields: [
+          field({ label: 'Veličina (prominence)', min: 0.5, max: 4, step: 0.05, stone: 'geo',
+            get: function () { return dbg.stoneParams.prominence; },
+            set: function (v) { dbg.stoneParams.prominence = v; } }),
+          field({ label: 'Podignutost (raise)', min: 0.4, max: 2, step: 0.02, stone: 'geo',
+            get: function () { return dbg.stoneParams.raise; },
+            set: function (v) { dbg.stoneParams.raise = v; } }),
+          field({ label: 'Tabela / Ø (tableRatio)', min: 0.35, max: 0.75, step: 0.01, stone: 'geo',
+            get: function () { return dbg.stoneParams.tableRatio; },
+            set: function (v) { dbg.stoneParams.tableRatio = v; } }),
+          field({ label: 'Visina krune (crownH)', min: 0.10, max: 0.55, step: 0.01, stone: 'geo',
+            get: function () { return dbg.stoneParams.crownH; },
+            set: function (v) { dbg.stoneParams.crownH = v; } }),
+          field({ label: 'Dubina paviliona (pavD)', min: 0.5, max: 1.3, step: 0.02, stone: 'geo',
+            get: function () { return dbg.stoneParams.pavD; },
+            set: function (v) { dbg.stoneParams.pavD = v; } }),
+        ],
+      },
+      {
+        title: 'Dijamant — materijal',
+        fields: [
+          field({ label: 'Env intensity (sjaj)', min: 0, max: 6, step: 0.1, stone: 'mat',
+            get: function () { return dbg.stoneParams.envMapIntensity; },
+            set: function (v) { dbg.stoneParams.envMapIntensity = v; } }),
+          field({ label: 'Providnost (transmission)', min: 0, max: 1, step: 0.02, stone: 'mat',
+            get: function () { return dbg.stoneParams.transmission; },
+            set: function (v) { dbg.stoneParams.transmission = v; } }),
+          field({ label: 'Hrapavost (roughness)', min: 0, max: 0.4, step: 0.005, decimals: 3, stone: 'mat',
+            get: function () { return dbg.stoneParams.roughness; },
+            set: function (v) { dbg.stoneParams.roughness = v; } }),
+          field({ label: 'IOR', min: 1.3, max: 2.6, step: 0.02, stone: 'mat',
+            get: function () { return dbg.stoneParams.ior; },
+            set: function (v) { dbg.stoneParams.ior = v; } }),
+          field({ label: 'Clearcoat rough.', min: 0, max: 0.3, step: 0.005, decimals: 3, stone: 'mat',
+            get: function () { return dbg.stoneParams.clearcoatRoughness; },
+            set: function (v) { dbg.stoneParams.clearcoatRoughness = v; } }),
+          field({ label: 'Iridescence (duga)', min: 0, max: 1, step: 0.02, stone: 'mat',
+            get: function () { return dbg.stoneParams.iridescence; },
+            set: function (v) { dbg.stoneParams.iridescence = v; } }),
+          field({ label: 'Disperzija — vatra (samo pravi GPU)', min: 0, max: 12, step: 0.5, stone: 'mat',
+            get: function () { return dbg.stoneParams.dispersion; },
+            set: function (v) { dbg.stoneParams.dispersion = v; } }),
+        ],
+      },
+      {
+        title: 'Dijamant — boje faseta (depth cue)',
+        stoneColors: [
+          { key: 'colTable', label: 'Tabela (vrh)' },
+          { key: 'colCrown', label: 'Kruna' },
+          { key: 'colGirdle', label: 'Rondiš (ivica)' },
+          { key: 'colPav', label: 'Pavilion' },
+          { key: 'colCulet', label: 'Kulet (dno)' },
+        ],
+      },
+      {
+        title: 'Dijamant — sparkle (lažni bljesak)',
+        fields: [
+          field({ label: 'Sparkle veličina', min: 0.3, max: 3, step: 0.05, stone: 'sparkle',
+            get: function () { return dbg.stoneParams.sparkleScale; },
+            set: function (v) { dbg.stoneParams.sparkleScale = v; } }),
+          field({ label: 'Sparkle jačina (0 = isklj.)', min: 0, max: 1.5, step: 0.02, stone: 'sparkle',
+            get: function () { return dbg.stoneParams.sparkleOpacity; },
+            set: function (v) { dbg.stoneParams.sparkleOpacity = v; dbg.stoneParams.sparkle = v > 0.001; } }),
+        ],
+      },
+      {
+        title: 'Dijamant — presets',
+        presets: [
+          { label: 'Stilizovan (radi i bez GPU-a)',
+            p: { transmission: 0.10, roughness: 0.05, envMapIntensity: 3.0, iridescence: 0.32,
+                 dispersion: 4, sparkle: true, sparkleOpacity: 0.7 } },
+          { label: 'CZ / moissanite (izbliza)',
+            p: { transmission: 0.20, roughness: 0.03, envMapIntensity: 2.6, iridescence: 0.5,
+                 dispersion: 6, sparkle: true, sparkleOpacity: 0.5 } },
+          { label: 'Fotorealan (traži pravi GPU)',
+            p: { transmission: 0.92, roughness: 0.0, envMapIntensity: 2.2, iridescence: 0.15,
+                 dispersion: 9, sparkle: false, sparkleOpacity: 0 } },
+        ],
+      },
       {
         title: 'Glavno svetlo (key)',
         fields: [
@@ -328,7 +408,8 @@
 
     var note = document.createElement('p');
     note.className = 'zsc-note';
-    note.textContent = 'Menjaj klizače dok izgled ne bude savršen, onda klikni "Kopiraj JSON" i pošalji mi to u chatu.';
+    note.textContent = 'Fokus: DIJAMANT (gornje sekcije). Izaberi kamen u panelu desno da se pojavi. '
+      + 'Vrti sliku, menjaj klizače/boje, probaj presete. Kad je dobro → "Kopiraj JSON" → pošalji u chat.';
     root.appendChild(note);
 
     var actions = document.createElement('div');
@@ -377,6 +458,47 @@
         return;
       }
 
+      if (section.stoneColors) {
+        section.stoneColors.forEach(function (sc) {
+          var r = document.createElement('label');
+          var t = document.createElement('span');
+          t.textContent = sc.label;
+          r.appendChild(t);
+          var inp = document.createElement('input');
+          inp.type = 'color';
+          inp.value = dbg.stoneParams[sc.key];
+          inp.style.cssText = 'width:96px;height:22px;border:1px solid #3a352b;background:none;cursor:pointer;';
+          inp.addEventListener('input', function () {
+            dbg.stoneParams[sc.key] = inp.value;
+            dbg.rebuildStone();
+          });
+          r.appendChild(inp);
+          fs.appendChild(r);
+        });
+        root.appendChild(fs);
+        return;
+      }
+
+      if (section.presets) {
+        section.presets.forEach(function (pr) {
+          var b = document.createElement('button');
+          b.type = 'button';
+          b.textContent = pr.label;
+          b.style.cssText = 'display:block;width:100%;margin-top:5px;padding:6px 4px;background:#3a352b;'
+            + 'color:#f2ede2;border:1px solid #665;border-radius:3px;cursor:pointer;font:11px monospace;';
+          b.addEventListener('click', function () {
+            var k;
+            for (k in pr.p) if (Object.prototype.hasOwnProperty.call(pr.p, k)) dbg.stoneParams[k] = pr.p[k];
+            dbg.setStoneMat();
+            dbg.setSparkle();
+            dbg.rebuildStone();
+          });
+          fs.appendChild(b);
+        });
+        root.appendChild(fs);
+        return;
+      }
+
       if (section.custom) {
         var row = document.createElement('label');
         var rowText = document.createElement('span');
@@ -421,6 +543,9 @@
           val.textContent = fmt(v, f.decimals);
           if (f.pose) dbg.refreshPose();
           if (f.env) dbg.rebuildEnvironment();
+          if (f.stone === 'geo') dbg.rebuildStone();
+          else if (f.stone === 'mat') dbg.setStoneMat();
+          else if (f.stone === 'sparkle') dbg.setSparkle();
           dbg.invalidate(20);
         });
 
@@ -440,6 +565,7 @@
         d.field._val.textContent = fmt(d.value, d.field.decimals);
       });
       dbg.refreshPose();
+      if (dbg.setStoneMat) { dbg.setStoneMat(); dbg.setSparkle(); dbg.rebuildStone(); }
       dbg.invalidate(30);
     });
 
@@ -488,6 +614,7 @@
           clearcoatRoughness: dbg.rigs.her.mat.clearcoatRoughness,
           bottomShadeStrength: dbg.getShadeStrength('her'),
         },
+        stone: JSON.parse(JSON.stringify(dbg.stoneParams)),
       };
     }
 

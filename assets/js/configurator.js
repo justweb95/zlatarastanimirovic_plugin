@@ -76,6 +76,7 @@
     heart: '<path d="M12 20s-7-4.35-9.5-8.8C1 8 2.4 5 5.6 5c1.9 0 3.3 1 4.4 2.6C11.1 6 12.5 5 14.4 5 17.6 5 19 8 18.5 11.2 16 15.65 12 20 12 20Z"/>',
     share: '<path d="M12 4v11"/><path d="M8 8l4-4 4 4"/><path d="M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/>',
     chevronRight: '<path d="M9 5l7 7-7 7"/>',
+    diamond: '<path d="M12 3.5 5 10l7 10.5L19 10z"/><path d="M5 10h14M9.5 3.5 8 10l4 10.5M14.5 3.5 16 10l-4 10.5"/>',
     eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
     copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/>',
     plusCircle: '<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>',
@@ -332,11 +333,10 @@
       this.scene = window.ZSCScene.create(this._canvas, { pair: true });
       this._view.classList.add('has-3d');
       this.pushScene();
-      // TEMPORARY (commented out with the panel's enqueue in
-      // Configurator.php — see there): exposes the app for the ?zscdebug=1
-      // live-tuning panel (assets/js/debug-panel.js). Uncomment alongside
-      // that block to bring the panel back.
-      // if (/[?&]zscdebug=/.test(location.search)) window.zscApp = this;
+      // Exposes the app for the ?zscdebug=1 live-tuning panel
+      // (assets/js/debug-panel.js, enqueued in Configurator.php under the same
+      // query flag). Re-enabled 2026-09-10 for the diamond rebuild pass.
+      if (/[?&]zscdebug=/.test(location.search)) window.zscApp = this;
     } else {
       document.addEventListener('zsc:scene-ready', function () { self.initScene(); }, { once: true });
     }
@@ -408,7 +408,7 @@
         (full
           ? '<img class="zs-brand-logo-full" src="' + esc(full) + '" alt="Zlatara Stanimirović" height="34">' +
             '<img class="zs-brand-logo-mark" src="' + esc(mark) + '" alt="Zlatara Stanimirović" height="30">'
-          : '<span class="zs-brand-mark">&#9670;</span><span class="zs-brand-text"><strong>Zlatara Stanimirović</strong><em>Burme po meri</em></span>') +
+          : '<span class="zs-brand-mark">' + icon('diamond') + '</span><span class="zs-brand-text"><strong>Zlatara Stanimirović</strong><em>Burme po meri</em></span>') +
       '</div>' +
       '<div class="zs-topbar-actions">' +
         '<button type="button" class="zs-linkbtn">' + icon('heart') + ' Sačuvaj</button>' +
@@ -441,8 +441,11 @@
     this.openSections[label] = true;
     this.renderPanel();
     this.updateStepsActive();
-    var sec = this._panel.querySelector('[data-section="' + cssEsc(label) + '"]');
-    if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Just reset the OPTIONS PANEL's own scroll to the top — never
+    // scrollIntoView(), which scrolled the whole page (client, 2026-09-10:
+    // "kad se klikne u navigaciji ne treba da skroluje"). Single-open wizard,
+    // so the target section is the only thing rendered anyway.
+    if (this._panel) this._panel.scrollTop = 0;
   };
 
   Configurator.prototype.goNext = function (label) {
@@ -467,7 +470,7 @@
     stage.innerHTML =
       '<canvas class="zs-view-canvas"></canvas>' +
       '<div class="zs-view-placeholder">' +
-        '<span class="zs-view-mark">&#9670;</span>' +
+        '<span class="zs-view-mark">' + icon('diamond') + '</span>' +
         '<strong>Učitavanje 3D prikaza…</strong>' +
         '<span>Ako se ne pojavi, proverite da li vaš pregledač podržava WebGL.</span>' +
       '</div>' +
@@ -976,7 +979,10 @@
       posInput.min = lo; posInput.max = hi; posInput.value = grv.position;
       posHint.textContent = 'raspon ' + fmtNum(lo) + '…' + fmtNum(hi) + ' mm';
       var posPct = 50 + Math.max(-1, Math.min(1, grv.position / Math.max(s.width / 2, 0.1))) * 40;
-      line.style.left = posPct + '%';
+      // horizontal groove runs along the band → position moves it top↔bottom;
+      // vertical / wave run across → position moves it left↔right.
+      if (grv.orientation === 'horizontal') { line.style.top = posPct + '%'; line.style.left = ''; }
+      else { line.style.left = posPct + '%'; line.style.top = ''; }
     }
 
     rows.appendChild(grooveRow('Oblik', selectEl(GROOVE_SHAPES.map(function (o) { return { value: o.id, label: o.label }; }), grv.shape, function (v) { grv.shape = v; bubble(rows); })));
@@ -993,6 +999,7 @@
       b.addEventListener('click', function () {
         grv.orientation = pair[0];
         line.className = 'zs-groove-preview-line' + (pair[0] === 'horizontal' ? ' is-h' : (pair[0] === 'wave' ? ' is-wave' : ''));
+        syncPreviewLine();
         bubble(b);
       });
       orient.appendChild(b);
@@ -1058,38 +1065,49 @@
     { id: 'emerald', label: 'Smaragd', disabled: true }
   ];
 
-  function diamondSettingLabel(id) {
-    for (var i = 0; i < DIAMOND_GROUPS.length; i++) {
-      for (var j = 0; j < DIAMOND_GROUPS[i].items.length; j++) {
-        if (DIAMOND_GROUPS[i].items[j].id === id) return DIAMOND_GROUPS[i].items[j].label;
-      }
-    }
-    return id;
-  }
+  var DIAMOND_QUALITIES = [
+    { value: 'standard', label: 'H / SI (standard)' },
+    { value: 'top', label: 'G / VS (top)', disabled: true }
+  ];
 
+  // Rebuilt 2026-09-09 (client: "sredi grupu dijamanata, nije dobro"). Flat
+  // stacked layout matching Materijal/Žlebovi — the lone tab, the summary card
+  // and the popover toggle are gone. Stone size leads; the setting type / brus /
+  // count / position controls only appear once an actual stone is chosen, so
+  // the default "Bez dijamanta" state stays quiet.
   Configurator.prototype.uiDiamonds = function (g, s) {
     var box = el('div', 'zs-diamonds');
     var self = this;
 
-    var tabs = el('div', 'zs-groove-tabs');
-    var tab = el('button', 'zs-groove-tab'); tab.type = 'button'; tab.textContent = 'Grupa dijamanata';
-    tab.setAttribute('aria-pressed', 'true');
-    tabs.appendChild(tab);
-    box.appendChild(tabs);
+    // Size chips are built inline (not via the shared uiChips) so a change can
+    // trigger a full renderPanel() — the controls below are gated on hasStone.
+    box.appendChild(hx('p', 'zs-eyebrow', 'Veličina kamena'));
+    var sizes = el('div', 'zs-chips');
+    (g.diamond || []).forEach(function (opt) {
+      var b = el('button', 'zs-chip');
+      b.type = 'button';
+      b.textContent = opt.label;
+      b.setAttribute('aria-pressed', String(opt.slug === s.diamond));
+      if (!opt.available) { b.disabled = true; b.title = 'Trenutno nedostupno'; }
+      b.addEventListener('click', function () {
+        s.diamond = opt.slug;
+        self.renderPanel(); self.recalc(); self.pushScene();
+      });
+      sizes.appendChild(b);
+    });
+    box.appendChild(sizes);
 
-    var card = el('div', 'zs-diamond-card');
-    card.innerHTML = '<span class="zs-diamond-card-icon">&#128142;</span>' +
-      '<span class="zs-diamond-card-label">' + esc(diamondSettingLabel(s.diamondSetting)) + '</span>';
-    var toggleBtn = el('button', 'zs-cta is-secondary');
-    toggleBtn.type = 'button';
-    toggleBtn.innerHTML = icon('chevronRight') + ' Odaberi tip postavke';
-    card.appendChild(toggleBtn);
-    box.appendChild(card);
+    var sel = bySlug(g.diamond, s.diamond);
+    var hasStone = !!(sel && sel.params && sel.params.mm > 0);
+    if (!hasStone) {
+      box.appendChild(hx('p', 'zs-micro', 'Izaberite veličinu kamena da otključate tip postavke, brus i poziciju.'));
+      return box;
+    }
 
-    var panel = el('div', 'zs-diamond-setting-panel');
-    panel.hidden = true;
+    box.appendChild(hx('p', 'zs-eyebrow', 'Tip postavke'));
     DIAMOND_GROUPS.forEach(function (grp) {
-      panel.appendChild(hx('p', 'zs-eyebrow', grp.title));
+      var grpBox = el('div', 'zs-diamond-setting-group');
+      grpBox.appendChild(hx('p', 'zs-eyebrow-sub', grp.title));
       var grid = el('div', 'zs-setting-grid');
       grp.items.forEach(function (it) {
         var b = el('button', 'zs-setting-box' + (it.disabled ? ' is-disabled' : ''));
@@ -1098,36 +1116,28 @@
         if (it.disabled) b.disabled = true;
         b.innerHTML = '<span class="zs-setting-label">' + esc(it.label) + '</span>' +
           (it.disabled ? '<span class="zs-badge-soon">Uskoro</span>' : '');
-        b.addEventListener('click', function () {
-          s.diamondSetting = it.id;
-          panel.hidden = true;
-          self.renderPanel();
-        });
+        b.addEventListener('click', function () { s.diamondSetting = it.id; self.renderPanel(); });
         grid.appendChild(b);
       });
-      panel.appendChild(grid);
+      grpBox.appendChild(grid);
+      box.appendChild(grpBox);
     });
-    box.appendChild(panel);
-    toggleBtn.addEventListener('click', function () { panel.hidden = !panel.hidden; });
 
     var row1 = el('div', 'zs-dim-row');
     row1.appendChild(field('Brus', selectEl(DIAMOND_CUTS.map(function (c) { return { value: c.id, label: c.label, disabled: c.disabled }; }), s.diamondCut, function (v) { s.diamondCut = v; })));
-
-    var sizeField = el('div');
-    sizeField.appendChild(hx('p', 'zs-eyebrow', 'Veličina kamena'));
-    sizeField.appendChild(this.uiChips(g.diamond, s.diamond, function (v) { s.diamond = v; }));
-    row1.appendChild(sizeField);
+    row1.appendChild(field('Kvalitet', selectEl(DIAMOND_QUALITIES, 'standard', function () {})));
     box.appendChild(row1);
 
-    var row2 = el('div', 'zs-dim-row');
-    row2.appendChild(field('Kvalitet', selectEl([{ value: 'standard', label: 'H/SI (standardno)' }], 'standard', function () {})));
-    var qtyInput = el('input');
+    var qtyField = el('div', 'zs-field');
+    qtyField.appendChild(hx('p', 'zs-eyebrow', 'Broj kamenova'));
+    var qtyInput = el('input', 'zs-num');
     qtyInput.type = 'number'; qtyInput.min = '1'; qtyInput.max = '5'; qtyInput.value = s.diamondQty;
     qtyInput.addEventListener('input', function () {
       s.diamondQty = Math.max(1, Math.min(5, parseInt(qtyInput.value, 10) || 1));
+      bubble(qtyInput);
     });
-    row2.appendChild(field('Količina', qtyInput));
-    box.appendChild(row2);
+    qtyField.appendChild(qtyInput);
+    box.appendChild(qtyField);
 
     // Position is across the band's WIDTH (client, 2026-09-07: a 5mm-wide
     // band can't take a stone at "10mm" — it must stay ≥1mm from each edge,
@@ -1137,15 +1147,14 @@
     box.appendChild(hx('p', 'zs-eyebrow', 'Pozicioniranje'));
     var bounds = widthBounds(s.width, 1);
     var forbidden = grooveForbiddenRanges(s.grooves, 0.4);
-    var posBox = el('div', 'zs-position-grid');
+    var posBox = el('div', 'zs-chips');
     [['levo', 'Levo', bounds.min], ['centar', 'Centar', 0], ['desno', 'Desno', bounds.max], ['slobodno', 'Slobodno', null]].forEach(function (pair) {
       var blocked = pair[2] !== null && Math.abs(nudgeOutOfForbidden(pair[2], bounds, forbidden) - pair[2]) > 0.05;
-      var b = el('button', 'zs-profile-box zs-position-box');
+      var b = el('button', 'zs-chip');
       b.type = 'button';
+      b.textContent = blocked ? pair[1] + ' — blokirano' : pair[1];
       b.setAttribute('aria-pressed', String(s.diamondPosMode === pair[0]));
       if (blocked) { b.disabled = true; b.title = 'Blokirano žlebom na toj poziciji'; }
-      b.innerHTML = '<span class="zs-profile-label">' + pair[1] + '</span>' +
-        (blocked ? '<span class="zs-badge-soon">Blokirano</span>' : '');
       b.addEventListener('click', function () {
         s.diamondPosMode = pair[0];
         self.renderPanel();
@@ -1186,7 +1195,7 @@
     var head = el('button', 'zs-acc-head');
     head.type = 'button';
     head.innerHTML = '<span class="zs-acc-title"><span class="zs-acc-n">' + num + '.</span> ' + esc(label.toUpperCase()) + '</span>' +
-      '<span class="zs-acc-chevron" aria-hidden="true">&#8250;</span>';
+      '<span class="zs-acc-chevron" aria-hidden="true">' + icon('chevronRight') + '</span>';
     var self = this;
     head.addEventListener('click', function () {
       self.openSections[label] = !self.openSections[label];
@@ -1569,7 +1578,19 @@
     for (var j = 0; j < parts.length - 1; j++) { acc += parts[j]; stops.push(-half + (acc / total) * (s.width || 4)); }
     return { colors: colors, stops: stops };
   }
-  function swatchGradient(hex) { return 'radial-gradient(circle at 32% 28%, #fff 0%, ' + hex + ' 42%, ' + shade(hex, -0.35) + ' 100%)'; }
+  // Refined metal-sample look (client 2026-09-09: the old glossy "plastic
+  // marble" radial gradient looked cheap next to the competitor). A conic
+  // sweep = spun/polished metal sheen, a soft off-centre highlight = form,
+  // a faint dark vignette = edge. Reads as a jeweller's metal chip.
+  function swatchGradient(hex) {
+    hex = /^#[0-9a-fA-F]{6}$/.test(hex) ? hex : '#cccccc';
+    var lite = shade(hex, 0.34), dark = shade(hex, -0.30), deep = shade(hex, -0.46);
+    return [
+      'radial-gradient(circle at 34% 30%, rgba(255,255,255,.75) 0%, rgba(255,255,255,0) 42%)',
+      'radial-gradient(circle at 68% 78%, ' + deep + ' 0%, rgba(0,0,0,0) 46%)',
+      'conic-gradient(from 128deg, ' + dark + ', ' + lite + ', ' + hex + ', ' + dark + ', ' + lite + ', ' + hex + ', ' + dark + ')'
+    ].join(', ');
+  }
   function shade(hex, amt) {
     var n = parseInt(hex.replace('#', ''), 16);
     var r = clamp((n >> 16) + amt * 255), gg = clamp(((n >> 8) & 255) + amt * 255), b = clamp((n & 255) + amt * 255);
