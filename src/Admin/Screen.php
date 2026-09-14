@@ -111,9 +111,12 @@ final class Screen
                     'available'   => !empty($_POST['available']),
                     'stock_qty'   => $_POST['stock_qty'] ?? '',
                     'erp_id'      => sanitize_text_field(wp_unslash($_POST['erp_id'] ?? '')),
-                    'price_json'  => wp_unslash($_POST['price_json'] ?? ''),
-                    'params_json' => wp_unslash($_POST['params_json'] ?? ''),
-                    'compat_json' => wp_unslash($_POST['compat_json'] ?? ''),
+                    'price_json'  => self::price_json_from_post(),
+                    // params_json i compat_json se ne uređuju kroz formu (v.
+                    // option_form_html) — uvek se vraćaju nepromenjeni preko
+                    // skrivenog polja (client, 2026-09-14: JSON polja zbunjuju).
+                    'params_json' => wp_unslash($_POST['params_json_raw'] ?? ''),
+                    'compat_json' => wp_unslash($_POST['compat_json_raw'] ?? ''),
                 ]);
 
                 return ['group' => $gkey, 'msg' => 'saved'];
@@ -356,6 +359,23 @@ final class Screen
     }
 
     /**
+     * price_json iz forme: obično prosto polje "Cena" (flat tip — v.
+     * option_form_html). Za napredne tipove (per_gram, in_mass) koji nemaju
+     * "amount", forma šalje nepromenjen JSON preko skrivenog polja.
+     */
+    private static function price_json_from_post(): string
+    {
+        $raw = wp_unslash($_POST['price_json_raw'] ?? '');
+        if ($raw !== '') {
+            return $raw;
+        }
+
+        $amount = isset($_POST['price_amount']) ? (float) $_POST['price_amount'] : 0.0;
+
+        return wp_json_encode(['type' => 'flat', 'amount' => $amount], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '';
+    }
+
+    /**
      * The add/edit option form, as an HTML string.
      *
      * @param array<string,mixed>|null $row
@@ -400,18 +420,23 @@ final class Screen
         self::text_row('stock_qty', 'Zaliha', isset($row['stock_qty']) && $row['stock_qty'] !== null ? (string) $row['stock_qty'] : '', 'opciono; iz ERPNext-a kasnije', 'number');
         self::text_row('erp_id', 'ERPNext ID', $row['erp_id'] ?? '', 'opciono; za buduću sinhronizaciju');
 
-        printf(
-            '<tr><th><label>price_json</label></th><td><textarea name="price_json" rows="5" class="large-text code">%s</textarea><p class="description">Doprinos ceni. Npr. <code>{"type":"flat","amount":3000}</code> ili <code>{"type":"per_gram","spot_key":"au_14k","purity":0.585,"density":13.4}</code></p></td></tr>',
-            $j($row['price_json'] ?? null)
-        );
-        printf(
-            '<tr><th><label>params_json</label></th><td><textarea name="params_json" rows="8" class="large-text code">%s</textarea><p class="description">3D / prezentacija: PBR set, GLB URL, parametri profila, opseg klizača…</p></td></tr>',
-            $j($row['params_json'] ?? null)
-        );
-        printf(
-            '<tr><th><label>compat_json</label></th><td><textarea name="compat_json" rows="4" class="large-text code">%s</textarea><p class="description">Allow-liste, npr. <code>{"models":["aurora-solitaire"]}</code>. Prazno = dozvoljeno svuda.</p></td></tr>',
-            $j($row['compat_json'] ?? null)
-        );
+        // price_json: klijentu prikazujemo samo prosto polje "Cena" za flat tip
+        // (najčešći slučaj — dodatna cena opcije). Napredni tipovi (per_gram za
+        // materijal, in_mass za širinu/debljinu) nemaju "amount" pa se za njih
+        // ne prikazuje ništa — JSON ostaje nepromenjen, nošen skrivenim poljem.
+        $priceType = $row['price_json']['type'] ?? 'flat';
+        if ($priceType === 'flat') {
+            self::text_row('price_amount', 'Cena (RSD)', (string) ($row['price_json']['amount'] ?? 0), 'Dodatna cena za ovu opciju. 0 = bez doplate.', 'number');
+        } else {
+            printf('<input type="hidden" name="price_json_raw" value="%s">', $j($row['price_json'] ?? null));
+        }
+
+        // params_json i compat_json: sirov JSON, zbunjivao je klijenta — sklonjeno
+        // iz forme za sada (client, 2026-09-14). Vrednosti ostaju nepromenjene
+        // (nose ih skrivena polja); i dalje se uređuju kroz ?zscdebug=1 panel
+        // ili direktno u Seeder-u.
+        printf('<input type="hidden" name="params_json_raw" value="%s">', $j($row['params_json'] ?? null));
+        printf('<input type="hidden" name="compat_json_raw" value="%s">', $j($row['compat_json'] ?? null));
 
         echo '</tbody></table>';
         submit_button('Sačuvaj opciju');

@@ -239,6 +239,8 @@ Sve odluke donete 2026-08-31 osim gde je drugačije navedeno. Format: odluka →
     korak postoji na strani, ostali su `display:none` dok se ne klikne
     "Sledeće" ili broj gore u navigaciji. Klik na naslov sekcije i dalje
     može ručno da je otvori/zatvori nezavisno.
+    **[Ispravka 2026-09-14, #62: poslednja rečenica gore opisivala je bag —
+    v. #62.]**
 
 ## Odluke — 2026-09-08/09 (klijent, četvrti/peti krug — izgled + preslikavanje opcija sa Breuning-a)
 
@@ -568,6 +570,53 @@ Sve odluke donete 2026-08-31 osim gde je drugačije navedeno. Format: odluka →
     - `gotoStep()`: `sec.scrollIntoView({behavior:'smooth'})` → samo
       `this._panel.scrollTop = 0` (reset scroll-a desnog panela, stranica se
       ne mrda). Klijent: „kad se klikne u navigaciji ne treba da skroluje."
+
+## Odluke — 2026-09-14 (klijent, deveti krug — admin polja, profil grupa, bottombar, accordion regresija)
+
+59. **Admin "Opcije" forma: `price_json`/`params_json`/`compat_json` textarea-e
+    sklonjene — sirov JSON klijentu ništa ne znači, samo zbunjuje.**
+    - `price_json`: flat tip (najčešći slučaj — sve grupe osim
+      `material`/`width`) sad ima normalno "Cena (RSD)" broj polje
+      (`Screen::text_row`), mapira se u `{"type":"flat","amount":N}`
+      (`Screen::price_json_from_post()`). Napredni tipovi (`per_gram` za
+      materijal, `in_mass` za širinu/debljinu) nemaju vidljivo polje uopšte.
+    - `params_json`/`compat_json`: potpuno sklonjeni sa forme, ali NE i iz
+      baze — skriveni `_raw` inputi nose postojeću vrednost nepromenjenu pri
+      svakom snimanju (inače bi prazan POST prepisao 3D/kompatibilnost
+      podatke sa `null` pri svakom "Sačuvaj"). I dalje se menjaju kroz
+      `?zscdebug=1` panel ili direktno u `Seeder.php`.
+
+60. **"Šiljati profili" (Nožasti, Šiljati oval) izbačeni iz ponude.** Nisu
+    obrisani iz baze (`wp db query DELETE` blokiran auto-mode permisijama) —
+    `enabled=0` preko postojećeg admin toggle mehanizma, reverzibilno.
+    Sklonjeni i iz `Seeder.php` liste (i dalje idempotentan po
+    `group_key:slug`, pa ne vraća ništa novo na reseed).
+
+61. **`.zs-bottombar` visina smanjena ~20% (137px → 108px @1440×900).**
+    Klijent: „prevelika visina bez razloga." Vertikalni padding `space-4 →
+    space-3` + zategnut `line-height` na cena-stack (label/vrednost/sub/
+    po-prstenu red); sadržaj nepromenjen, samo manje razmaka.
+
+62. **Naslov accordion sekcije više NIJE klikabilan — ispravka pravog baga,
+    amandman na #43.** Poslednja rečenica #43 ("klik na naslov i dalje može
+    ručno da je otvori/zatvori") opisivala je bag, ne feature: pošto je
+    vidljiv SAMO trenutno otvoren blok (ostali `display:none` — namerno,
+    #43), jedini naslov koji je ikad bio klikabilan bio je onaj već otvoren
+    — klik na njega ga je zatvarao i ostavljao **ceo desni panel prazan**,
+    bez ičega u panelu da se klikne nazad ("Sledeće" je i samo bilo u
+    sad-skrivenom telu; jedini izlaz je gornja navigacija). Reprodukovano i
+    potvrđeno klijentovim screenshotovima 2026-09-14. Ispravka:
+    `.zs-acc-head` više nije `<button>` sa click handlerom nego običan
+    `<div>` (ne pokupi `cursor:pointer` iz globalnog `.zs-configurator
+    button` pravila, ne izgleda klikabilno) i chevron ikonica je uklonjena
+    (bila je expand/collapse afordancija za funkciju koje više nema).
+    Navigacija ostaje isključivo `gotoStep()` — "Sledeće" dugme i brojevi
+    gore.
+    - Napomena: u istoj sesiji je nakratko probano suprotno (svi naslovi
+      trajno vidljivi + single-open preko `gotoStep()` na klik) — klijent je
+      eksplicitno odbio ("u nijednom trenutku nisam rekao da hoću da svi
+      budu na istoj stranici"), vraćeno na #43 ponašanje PRE nego što je
+      pravi bag (gore) uopšte identifikovan preko screenshotova.
 
 ## Otvorena pitanja (blokiraju procenu obima)
 

@@ -39,6 +39,16 @@ erp_id        VARCHAR(64) NULL   -- external ID za rekonsilijaciju sa ERPNext-om
 updated_at    DATETIME
 ```
 
+> **Ažurirano 2026-09-14** (decisions #59): admin "Opcije" forma više ne
+> pokazuje `price_json`/`params_json`/`compat_json` kao sirov JSON textarea —
+> zbunjivalo je klijenta. `price_json` za flat tip (najčešći slučaj — sve
+> grupe osim `material`/`width`) ima normalno "Cena (RSD)" broj polje;
+> napredni tipovi (`per_gram`, `in_mass`) i dalje postoje nepromenjeni u
+> bazi, samo bez UI za njih. `params_json`/`compat_json` se i dalje mogu
+> menjati, samo ne kroz ovu formu — preko `?zscdebug=1` panela ili direktno
+> u `Seeder.php`. Šema (kolone gore) je nepromenjena, menjano je samo kako
+> se admin UI odnosi prema njima.
+
 Globalna podešavanja (spot cena metala po finoći, email primaoci, HDRI URL, CDN baza) → jedan `wp_option` `zs_settings` (JSON).
 
 MODEL i (ako ih bude) jedinstvene GLAVE mogu biti CPT `zs_ring_model` / `zs_head` ako klijentu treba bogatiji editor (slike, opis) — odluka u `decisions.md`. Ostatak ostaje u tabeli.
@@ -93,10 +103,13 @@ MODEL i (ako ih bude) jedinstvene GLAVE mogu biti CPT `zs_ring_model` / `zs_head
 
 > **Ažurirano 2026-09-08/09** (decisions #44–47): `engraving.maxLen` 20→30.
 > Diamond redovi su `available: true` (bili stock-gate off). Profil grupa ima
-> `params.group` (Osnovni / Zaobljeni / Ravni / Šiljati profili) + parametarske
+> `params.group` (Osnovni / Zaobljeni / Ravni / ~~Šiljati profili~~) + parametarske
 > knobove za novih 10 profila. **Finoća** (585/750) je klijentski izbor u
 > `configurator.js` (`FINOCA` tabela — `density` po metalu + `deepen` za boju),
 > NE zaseban `wp_zs_options` red za sada; menja masu → cenu.
+>
+> **Ažurirano 2026-09-14** (decisions #60): grupa "Šiljati profili" (Nožasti,
+> Šiljati oval) izbačena iz ponude — `enabled=0`, redovi ostaju u bazi.
 
 ## Cena — formula (skica)
 

@@ -17,7 +17,7 @@ Faze su inkrementalne; svaka se može demonstrirati. Acceptance = merljiv kriter
 
 ## Faza 1 — Data layer
 - [ ] `wp_zs_options` tabela + migracija (dbDelta)
-- [ ] Admin stranica, **Tab 2 "Opcije"**: CRUD nad 7 grupa, `enabled`/`available`/`stock`, sort, `price_json`/`params_json`/`compat_json` editori
+- [x] Admin stranica, **Tab 2 "Opcije"**: CRUD nad 7 grupa, `enabled`/`available`/`stock`, sort — bez reload-a (decisions #56). `price_json` (flat) ima normalno "Cena" polje; sirovi `params_json`/`compat_json` editori namerno NISU napravljeni (decisions #59) — zbunjivali klijenta, menjaju se kroz `?zscdebug=1` / `Seeder.php`
 - [ ] `zs_settings` (spot cene metala po finoći, HDRI URL, CDN baza, email primaoci)
 - [ ] Kompajler: opcije → normalizovan JSON (razrešena kompatibilnost + `available`)
 - [ ] `GET /wp-json/zs/v1/config?model=slug` + transient keš + ETag/304

@@ -215,23 +215,23 @@ body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
    rows don't actually need corner-clipping in practice (no child fills all
    the way to the panel's own edge). */
 .zs-col-panel { align-self: start; border: 1px solid var(--zs-border); border-radius: var(--zs-radius); background: #fff; overflow: visible; }
-/* Client (2026-09-07): the WHOLE block (header included) must be gone for
-   an inactive step, not just its body — you shouldn't see "2. DIMENZIJE"
-   sitting there collapsed while on step 1, only the current step's own
-   block exists at all. Reachable only via "Sledeće" / the top-nav (both
-   call gotoStep(), which is the only thing that flips .is-open). */
+/* Client (2026-09-07, reaffirmed 2026-09-14): the WHOLE block (header
+   included) must be gone for an inactive step, not just its body — only the
+   current step's own block exists on the page at all. Reachable only via
+   "Sledeće" / the top-nav (both call gotoStep(), the only thing that flips
+   .is-open). Do not "fix" this into an always-visible-headers accordion
+   again — tried that on 2026-09-14, client explicitly does not want it. */
 .zs-acc { display: none; border-bottom: 1px solid var(--zs-border); }
 .zs-acc.is-open { display: block; }
 .zs-acc:last-child { border-bottom: 0; }
 .zs-acc-head {
-  width: 100%; display: flex; align-items: center; justify-content: space-between;
-  border: 0; background: none; padding: var(--zs-space-4) var(--zs-space-5); color: inherit;
+  width: 100%; display: flex; align-items: center;
+  padding: var(--zs-space-4) var(--zs-space-5); color: inherit;
 }
 .zs-acc-title { font-size: var(--zs-fs-button); font-weight: 700; letter-spacing: .04em; }
 .zs-acc-n { color: var(--zs-text-muted); margin-right: var(--zs-space-1); }
-.zs-acc-chevron { transition: transform .2s var(--zs-ease); color: var(--zs-text-muted); display: inline-flex; line-height: 0; }
-.zs-acc-chevron .zs-icon { width: 16px; height: 16px; }
-.zs-acc.is-open .zs-acc-chevron { transform: rotate(90deg); }
+/* .zs-acc-chevron removed 2026-09-14 — it was an expand/collapse affordance
+   for a header that no longer expands/collapses (see configurator.js). */
 .zs-acc-body { display: none; padding: 0 var(--zs-space-5) var(--zs-space-5); }
 .zs-acc.is-open .zs-acc-body { display: block; }
 
@@ -292,18 +292,21 @@ body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
 .zs-bottombar {
   display: grid; grid-template-columns: auto 1fr auto; align-items: center;
   gap: var(--zs-space-6);
-  padding: var(--zs-space-4) var(--zs-space-6);
+  /* Client (2026-09-14): bar felt too tall for what it shows — vertical
+     padding trimmed (space-4 → space-3) and the price stack's line-heights
+     tightened below; content unchanged, just less air around it. */
+  padding: var(--zs-space-3) var(--zs-space-6);
   border-top: 1px solid var(--zs-border); background: var(--zs-bg);
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 999;
   box-shadow: 0 -6px 24px rgba(34, 31, 27, 0.08);
 }
 .zs-price { display: flex; flex-direction: column; }
-.zs-price-label { font-size: var(--zs-fs-label); letter-spacing: var(--zs-ls-label); text-transform: uppercase; color: var(--zs-text-muted); }
+.zs-price-label { font-size: var(--zs-fs-label); letter-spacing: var(--zs-ls-label); text-transform: uppercase; color: var(--zs-text-muted); line-height: 1.3; }
 /* Prices on the live site are gold (.amount / .price → #d4af37). */
-.zs-price-value { font-family: var(--zs-font-serif); font-weight: 400; font-size: var(--zs-fs-price); color: var(--zs-gold); }
-.zs-price-sub { font-size: var(--zs-fs-micro); color: var(--zs-text-muted); }
+.zs-price-value { font-family: var(--zs-font-serif); font-weight: 400; font-size: var(--zs-fs-price); color: var(--zs-gold); line-height: 1.1; }
+.zs-price-sub { font-size: var(--zs-fs-micro); color: var(--zs-text-muted); line-height: 1.3; }
 /* Per-ring price line beside the pair total (client, 2026-09-08). */
-.zs-price-perring { display: flex; gap: var(--zs-space-4); font-size: var(--zs-fs-micro); color: var(--zs-text-muted); margin-top: 2px; }
+.zs-price-perring { display: flex; gap: var(--zs-space-4); font-size: var(--zs-fs-micro); color: var(--zs-text-muted); line-height: 1.3; margin-top: 1px; }
 .zs-price-perring span { white-space: nowrap; }
 .zs-trust { display: flex; justify-content: center; gap: var(--zs-space-7); }
 .zs-trust-item { display: flex; flex-direction: column; font-size: var(--zs-fs-micro); }

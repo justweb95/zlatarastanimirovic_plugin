@@ -158,8 +158,10 @@ final class Seeder
             ['jastucasti',      'Jastučasti',      'Ravni profili',      ['shape' => 'param', 'dome' => 0.28, 'cham' => 0.5, 'belly' => 0.22],  0.90],
             ['pljosnati',       'Pljosnati',       'Ravni profili',      ['shape' => 'param', 'dome' => 0.14, 'cham' => 0.16],                  0.97],
 
-            ['nozasti',         'Nožasti',         'Šiljati profili',    ['shape' => 'param', 'point' => 1.0],                                 0.62],
-            ['siljati-oval',    'Šiljati oval',    'Šiljati profili',    ['shape' => 'param', 'point' => 0.55, 'belly' => 0.3],                0.70],
+            // "Šiljati profili" grupa (nozasti, siljati-oval) izbačena iz
+            // ponude (client, 2026-09-14). Postojeće opcije nisu obrisane iz
+            // baze — samo isključene (enabled=0) preko admin panela, zato ih
+            // ovaj seed i dalje ne dira (idempotentan po group_key:slug).
         ];
         foreach ($profiles as $i => [$slug, $label, $group, $params, $fill]) {
             $rows[] = [

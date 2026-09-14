@@ -1192,16 +1192,21 @@
     sec.dataset.section = label;
     var open = !!this.openSections[label];
     if (open) sec.classList.add('is-open');
-    var head = el('button', 'zs-acc-head');
-    head.type = 'button';
-    head.innerHTML = '<span class="zs-acc-title"><span class="zs-acc-n">' + num + '.</span> ' + esc(label.toUpperCase()) + '</span>' +
-      '<span class="zs-acc-chevron" aria-hidden="true">' + icon('chevronRight') + '</span>';
+    // Plain <div>, not <button> (client, 2026-09-14, screenshots). It used to
+    // be a button that toggled .is-open on click — but since only the active
+    // step's block exists at all (see .zs-acc in configurator.css), the only
+    // header ever clickable was the one already open, so clicking it closed
+    // the ONLY visible block and left the whole right panel blank with
+    // nothing left in it to reopen (only "Sledeće" / the top-nav, via
+    // gotoStep(), reach a section at all). Header is inert now — and isn't
+    // a <button> any more so it doesn't pick up the global `.zs-configurator
+    // button { cursor: pointer }` rule and look clickable when it isn't.
+    // No chevron either (client, 2026-09-14): it's an expand/collapse
+    // affordance and this header doesn't expand/collapse anything anymore —
+    // just the number + title.
+    var head = el('div', 'zs-acc-head');
+    head.innerHTML = '<span class="zs-acc-title"><span class="zs-acc-n">' + num + '.</span> ' + esc(label.toUpperCase()) + '</span>';
     var self = this;
-    head.addEventListener('click', function () {
-      self.openSections[label] = !self.openSections[label];
-      sec.classList.toggle('is-open', self.openSections[label]);
-      if (self.openSections[label]) { self._activeStep = label; self.updateStepsActive(); }
-    });
     var wrap = el('div', 'zs-acc-body');
     wrap.appendChild(body);
 
