@@ -109,13 +109,16 @@ Confmetrix engine-u).
   Ø1.0/1.5/2.0, `available=1`), **fasetiran brilijant** flush na SPOLJNU površinu, ograničen
   na debljinu trake (decisions #46/#47). Količina 1–5 oko obima + pozicioniranje Levo/Centar/
   Desno/Slobodno PREKO ŠIRINE trake (decisions #35/#39).
-  UI već nudi grupisan izbor "tipa postavke" (Obrub aktivan; Kanal delimično aktivan;
-  Napeta postavka/Oko/Šapice vizuelno zamućeni "Uskoro") i Brus (samo Brilijant aktivan) —
-  **ali samo Obrub/Kanal stvarno menjaju 3D** (flush u ravnu podlogu, bez krunica/šapica,
-  odluka #22). Pravi v2 posao je 3D geometrija za:
+  UI već nudi grupisan izbor "tipa postavke" (Obrub/Kanal/Napeta postavka/Oko — i dalje ne
+  menjaju 3D, iz odluke #22/#54 rebuild-a) i Brus (samo Brilijant aktivan) — **ali "Krunica"
+  grupa (2026-09-14, decisions #63) sada stvarno menja 3D**: 7 tipova = 1:1 konkurentov
+  "Chaton version" panel — `prong4-v1`/`prong6-v1` (široke skulptovane kandže bez kuglice),
+  `carree-v1`/`carree-v2` (kvadratni kamen, korner-kandže, v1 + zidovi galerije), `frame`
+  (pun obrub), `prong4-v2`/`prong6-v2` (klasične žičane kandže + kuglica, stari default).
+  Pravi v2 posao je 3D geometrija za ostatak:
   - **tip rešetke/kruništa**: kanal (+ poprečno / bočno l-r / oko celog prstena), bezel/zarge,
-    tension (spannring), kandže (chaton 4/6-prong), bočne rešetke — sve već imenovano u UI-ju
-    kao zamućene opcije, čeka geometriju
+    tension (spannring), bočne rešetke — i dalje samo imenovano u UI-ju kao zamućene opcije,
+    čeka geometriju
   - **red / pavé**: preset "trećina / pola / ceo prsten" (izračunat broj po veličini);
     `InstancedMesh` za veće količine; opcija "sa obe strane"
   - **free placement**: 2D razvijena mapa trake + drag tačke (X/Y mm) + ~17 gotovih šablona

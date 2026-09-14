@@ -285,7 +285,7 @@
       colorSubPattern: '',
       grooveTab: 0,
       grooves: [],
-      diamondSetting: 'bezel',
+      diamondSetting: 'prong4-v2',
       diamondCut: 'brilliant',
       diamondQty: 1,
       diamondPosMode: 'centar',
@@ -354,7 +354,11 @@
     var pbr = (mat && mat.params && mat.params.pbr) || {};
     var finPbr = (fin && fin.params && fin.params.pbr) || {};
     var stone = (dia && dia.params && dia.params.mm)
-      ? { mm: dia.params.mm, positions: diamondPositions(s), widthPos: diamondWidthPos(s) } : null;
+      ? {
+          mm: dia.params.mm, positions: diamondPositions(s), widthPos: diamondWidthPos(s),
+          setting: s.diamondSetting,
+          cut: CARREE_SETTINGS.indexOf(s.diamondSetting) > -1 ? 'carree' : 'round'
+        } : null;
     var grooves = (s.grooves || []).map(function (grv) {
       var gfin = bySlug(g.finish, grv.surface);
       var gpbr = (gfin && gfin.params && gfin.params.pbr) || {};
@@ -1052,12 +1056,26 @@
       { id: 'eye-cross', label: 'Poprečno', disabled: true },
       { id: 'eye-diag', label: 'Dijagonalno', disabled: true }
     ] },
-    { title: 'Šapice', items: [
-      { id: 'prong-4', label: '4 šapice', disabled: true },
-      { id: 'prong-6', label: '6 šapica', disabled: true },
-      { id: 'frame', label: 'Okvir', disabled: true }
+    // "Krunica" — 7 tipovi = 1:1 konkurentov "Chaton version" panel (Diamond
+    // group → Bezel → Select setting type na konfigurator.breuning.de;
+    // klijent, 2026-09-14, 2 screenshot-a po tipu). Var. 1 = široke skulptovane
+    // "trellis" kandže bez kuglice na vrhu; Var. 2 = klasične žičane kandže sa
+    // kuglicom (stari default). `carree-*` u sceneStateFor ide sa kvadratnim
+    // kamenom (scene.module.js cut:'carree') — vidi CARREE_SETTINGS ispod;
+    // "Brus" dropdown ostaje nezavisan, 3D oblik kamena se izvodi iz same
+    // krunice. Konkurent ima "Carree Var. 2" zasivljen/nedostupan; kod nas
+    // radi (geometrija postoji), ostavljeno uključeno.
+    { title: 'Krunica', items: [
+      { id: 'prong4-v1', label: '4 kandže — var. 1' },
+      { id: 'prong6-v1', label: '6 kandži — var. 1' },
+      { id: 'carree-v1', label: 'Kare — var. 1' },
+      { id: 'frame', label: 'Okvir' },
+      { id: 'prong4-v2', label: '4 kandže — var. 2' },
+      { id: 'prong6-v2', label: '6 kandži — var. 2' },
+      { id: 'carree-v2', label: 'Kare — var. 2' }
     ] }
   ];
+  var CARREE_SETTINGS = ['carree-v1', 'carree-v2'];
   var DIAMOND_CUTS = [
     { id: 'brilliant', label: 'Brilijant' },
     { id: 'princess', label: 'Princeza', disabled: true },

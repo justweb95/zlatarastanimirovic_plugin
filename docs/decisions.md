@@ -618,6 +618,62 @@ Sve odluke donete 2026-08-31 osim gde je drugačije navedeno. Format: odluka →
       budu na istoj stranici"), vraćeno na #43 ponašanje PRE nego što je
       pravi bag (gore) uopšte identifikovan preko screenshotova.
 
+63. **"Krunica" — 7 tipova postavke 1:1 sa konkurentovim "Chaton version"
+    (Round 10, 2026-09-14).** Klijent je poslao 16 screenshot-a
+    `konfigurator.breuning.de` → Diamond group → "Chaton version" panela (2
+    po tipu: direktno + sa strane) i tražio identičan render, "kreni sa
+    izradom jednog po jednog bez prekidanja".
+    - `scene.module.js`: `makeBrilliantGeometry()` generalizovan u
+      `makeFacetedGemGeometry(N, phase)` — round (N=16) ostaje isti,
+      `makeCarreeGeometry()` (N=4, `phase=π/4`) dodaje kvadratni (carree/
+      princess) girdle za dva od 7 tipa; ravne ivice gore/dole/levo/desno
+      (ne dijamant/kite). `makeSettingGroup(metal)` (hardkodovan jedan
+      4-kandže setting iz #54) postao `makeSettingGroup(metal, type)`
+      dispečer nad `SETTING_TYPES = [prong4-v1, prong6-v1, carree-v1, frame,
+      prong4-v2, prong6-v2, carree-v2]`:
+      - `*-v1` prongs = nova `makeBladeGeometry()` (tapered flat blade, ~10
+        tris) + `addBladeProng()` sa EKSPLICITNOM tangent/dir/radial bazom
+        (`Matrix4.makeBasis`, ne `setFromUnitVectors` — garantuje da široko
+        lice gleda tangencijalno, ne pod slučajnim rollom) — sculpted
+        "trellis" look bez kuglice na vrhu.
+      - `*-v2` prongs = stari #54 4-kandže kod generalizovan
+        (`buildWirePronged(count, phase)`) na 4 ili 6; `prong4-v2` je novi
+        `DEFAULT_SETTING` (identičan stari default look).
+      - `carree-*` = 4 korner-kandže (iste `addBladeProng()`, uglovi = ista
+        `CARREE_PHASE` kao gem geometrija) + v1 dodaje 2 solid ravna
+        "cathedral" zida (`BoxGeometry`) na naspramnim ivicama, v2 ih
+        izostavlja + mali kvadratni basket (`TorusGeometry` `tubularSegments
+        =4`).
+      - `frame` = pun obrub (`buildFrame()`): otvoreni cilindar + torus
+        "usna" + baza — kamen okvir-om drži, ne kandžama.
+    - **Pool rebuild po slotu.** `rig.stones[i]` sad pamti svoj `{type,
+      cut}`; `ensureStoneUnit()` rebuild-uje SAMO taj slot (dispose stari
+      setting-group mesh-evi, gem geometrija/materijal/sparkle ostaju
+      deljeni) kad se "Krunica" promeni — nema više jednog fiksnog
+      `makeStoneUnit()` poola. `dbg.rebuildStone()` (`?zscdebug=1`) sad
+      rebuild-uje i `carreeGeo` i force-rebuild-uje SVE slotove (geometrijski
+      knobovi kao `pavD`/`crownH` utiču i na kandže, ne samo na kamen).
+    - `configurator.js`: `DIAMOND_GROUPS`-ova "Šapice" grupa (bila: 3 stub
+      item-a, svi `disabled:true`) zamenjena "Krunica" grupom sa svih 7
+      pravih item-a. `diamondSetting` default `bezel` → `prong4-v2` (stari
+      default se sada zove tim id-om, umesto neupotrebljene vrednosti bez
+      3D efekta). `sceneStateFor`: `stone.setting = s.diamondSetting`,
+      `stone.cut` izveden iz `CARREE_SETTINGS.indexOf(...)` (carree-v1/v2 →
+      `'carree'`, ostalo → `'round'`) — "Brus" dropdown ostaje nezavisan
+      (samo Brilijant), 3D oblik kamena ide iz same krunice.
+    - Konkurent ima "Carree Var. 2" zasivljen/nedostupan na svom sajtu; kod
+      nas radi (geometrija postoji svejedno), ostavljeno uključeno u UI-ju —
+      client može tražiti da se zasivi za striktan parity.
+    - Obrub/Kanal/Napeta postavka/Oko grupe i dalje ne menjaju 3D (van
+      scope-a ovog zahteva — bile su već tako pre #54 rebuild-a, nezavisno
+      od "Krunice").
+    - **Verifikovano headless** (Playwright, `window.__zscApp` handle):
+      pojedinačni makro screenshot sva 7 tipa (`controls.minDistance`
+      privremeno spušten sa 10 na QA stranici radi kadra), regresija: 3
+      qty × 4 pozicije × oba rig-a × svih 7 tipova bez konzolne greške,
+      `dbg.rebuildStone()` hammer bez greške. Sjaj/vatra i dalje čeka pravi
+      GPU (van scope-a).
+
 ## Otvorena pitanja (blokiraju procenu obima)
 
 | # | Pitanje | Zašto je bitno |

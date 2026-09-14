@@ -788,15 +788,19 @@ function create(canvas, opts = {}) {
     return outerR;
   }
 
-  // Round-brilliant geometry — non-indexed so computeVertexNormals() bakes one
+  // Faceted gem geometry — non-indexed so computeVertexNormals() bakes one
   // flat normal per facet (see the big note above sharedStoneMat). Carries a
   // per-vertex `color` attribute: light crown → darker pavilion → near-black
-  // culet, the fake "depth through the stone" cue. Rebuilt (not just re-scaled)
-  // whenever a stoneParams geometry/colour knob changes — cheap, ~230 tris.
-  let brilliantGeo = makeBrilliantGeometry();
-  function makeBrilliantGeometry() {
+  // culet, the fake "depth through the stone" cue. `N`/`phase` pick the
+  // girdle's polygon: N=16/phase=0 reads as a round brilliant; N=4 with a 45°
+  // phase gives a square (carree/princess) girdle with corners at NE/NW/SE/SW
+  // — same corners `buildCarree()` below hangs its prongs off, so the setting
+  // always grips exactly where the stone actually has a corner. Rebuilt (not
+  // just re-scaled) whenever a stoneParams geometry/colour knob changes —
+  // cheap, ~230 tris for the round cut, ~60 for the square one.
+  function makeFacetedGemGeometry(N, phase) {
     const P = stoneParams;
-    const N = 16, rG = 0.5, rT = rG * P.tableRatio;
+    const rG = 0.5, rT = rG * P.tableRatio;
     const rStar = rG * (P.tableRatio + (1 - P.tableRatio) * 0.5); // star-facet ring
     const rPav = rG * 0.55;                                       // pavilion-main mid ring
     const yT = P.crownH, yStar = P.crownH * 0.5, yGt = 0.035, yGb = -0.035;
@@ -805,7 +809,7 @@ function create(canvas, opts = {}) {
       cG = new THREE.Color(P.colGirdle), cP = new THREE.Color(P.colPav),
       cU = new THREE.Color(P.colCulet);
     const pos = [], col = [];
-    const V = (r, y, i) => { const a = (i / N) * Math.PI * 2; return [Math.cos(a) * r, y, Math.sin(a) * r]; };
+    const V = (r, y, i) => { const a = phase + (i / N) * Math.PI * 2; return [Math.cos(a) * r, y, Math.sin(a) * r]; };
     const tri = (a, b, c, ca, cb, cc) => {
       pos.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
       col.push(ca.r, ca.g, ca.b, cb.r, cb.g, cb.b, cc.r, cc.g, cc.b);
@@ -830,22 +834,86 @@ function create(canvas, opts = {}) {
     g.computeVertexNormals();
     return g;
   }
+  // Square girdle corners sit at 45°/135°/225°/315° (flat edges facing
+  // straight up/down/left/right in unit space) — matches the "Carree"
+  // reference screenshots (client, 2026-09-14), where the stone reads as an
+  // axis-aligned square, not a diamond/kite.
+  const CARREE_PHASE = Math.PI / 4;
+  function makeBrilliantGeometry() { return makeFacetedGemGeometry(16, 0); }
+  function makeCarreeGeometry() { return makeFacetedGemGeometry(4, CARREE_PHASE); }
+  let brilliantGeo = makeBrilliantGeometry();
+  let carreeGeo = makeCarreeGeometry();
 
-  // The 4-claw setting, built in UNIT-STONE space (so it scales/rotates with
-  // the gem): claw bases sit at the band surface (local y = -pavD, which
-  // buildStoneFor's `raise` lines up with `outerR`), tips fold just over the
-  // girdle. Basket ring links them under the pavilion. Uses the rig's
-  // stoneMetal so it always matches the band colour/finish.
-  function makeSettingGroup(metal) {
+  // --------------------------------------------------------- krunica/setting
+  //
+  // Seven setting/prong types (client, 2026-09-14: screenshots of
+  // konfigurator.breuning.de's "Diamond group" → "Chaton version" panel, one
+  // front + one side shot per type — replicate all 7 in our render):
+  //   prong4-v1 / prong6-v1  — wide sculpted "trellis" blades, no ball tip,
+  //                            metal itself tapers to the grip point
+  //   carree-v1 / carree-v2  — square (princess) stone, corner V-prongs;
+  //                            v1 adds two solid cathedral gallery walls,
+  //                            v2 is the lighter open-basket version
+  //   frame                  — full bezel, stone wrapped all the way round
+  //   prong4-v2 / prong6-v2  — classic thin wire prongs + ball tips
+  //                            (this is the pre-existing 4-claw look)
+  // All built in UNIT-STONE space (girdle r=0.5 at y=0) so buildStoneFor's
+  // uniform scale/position/rotation of the whole stone Group carries
+  // whichever one is picked along with it. Uses the rig's stoneMetal so it
+  // always matches the band colour/finish (loop() copies the colour in every
+  // frame, same trick the grooves use).
+  const SETTING_TYPES = ['prong4-v1', 'prong6-v1', 'carree-v1', 'frame', 'prong4-v2', 'prong6-v2', 'carree-v2'];
+  const DEFAULT_SETTING = 'prong4-v2';
+
+  // A tapered, flattened prong — a 4-sided "blade" that narrows from a wide
+  // base to a point (no ball tip), the sculpted trellis look of the *-v1
+  // types. `wBase/wTip` = width across the visible (tangential) face,
+  // `thick` = radial depth. Built with an explicit basis (tangent/dir/
+  // radial) rather than `setFromUnitVectors`, so the wide face is guaranteed
+  // to face outward (tangentially) instead of an arbitrary roll.
+  function makeBladeGeometry(wBase, wTip, thick, len) {
+    const hbx = wBase / 2, htx = wTip / 2, hz = thick / 2;
+    const B0 = [-hbx, 0, hz], B1 = [hbx, 0, hz], B2 = [hbx, 0, -hz], B3 = [-hbx, 0, -hz];
+    const T0 = [-htx, len, hz], T1 = [htx, len, hz], T2 = [htx, len, -hz], T3 = [-htx, len, -hz];
+    const pos = [];
+    const quad = (a, b, c, d) => { pos.push(...a, ...b, ...c, ...a, ...c, ...d); };
+    quad(B0, B1, T1, T0); quad(B2, B3, T3, T2); // ±Z faces
+    quad(B1, B2, T2, T1); quad(B3, B0, T0, T3); // ±X faces
+    quad(T0, T1, T2, T3);                       // tip cap
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.computeVertexNormals();
+    return g;
+  }
+  function addBladeProng(g, metal, ang, o) {
+    const cx = Math.cos(ang), cz = Math.sin(ang);
+    const base = new THREE.Vector3(cx * o.rBase, o.yBase, cz * o.rBase);
+    const tip = new THREE.Vector3(cx * o.rTip, o.yTip, cz * o.rTip);
+    const dir = tip.clone().sub(base).normalize();
+    const tangent = new THREE.Vector3(-cz, 0, cx);   // wide face points this way
+    const radial = new THREE.Vector3(cx, 0, cz);     // thin face points this way
+    const geo = makeBladeGeometry(o.wBase, o.wTip, o.thick, base.distanceTo(tip));
+    const mesh = new THREE.Mesh(geo, metal);
+    mesh.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(tangent, dir, radial));
+    mesh.position.copy(base);
+    g.add(mesh);
+  }
+  function buildBladePronged(g, metal, count, phase, o) {
+    for (let k = 0; k < count; k++) addBladeProng(g, metal, phase + k * (Math.PI * 2 / count), o);
+    const basket = new THREE.Mesh(new THREE.TorusGeometry(0.44, o.basketTube, 8, 22), metal);
+    basket.rotation.x = Math.PI / 2;
+    basket.position.y = -stoneParams.pavD * 0.4;
+    g.add(basket);
+  }
+
+  // Classic thin wire prong + ball tip (the pre-existing 4-claw code,
+  // generalised to any count/phase so *-v2 6-prong reuses it too).
+  function buildWirePronged(g, metal, count, phase) {
     const P = stoneParams;
-    const g = new THREE.Group();
     const up = new THREE.Vector3(0, 1, 0), a = new THREE.Vector3(), b = new THREE.Vector3(), d = new THREE.Vector3();
-    // Claws grip the girdle and fold JUST over the crown edge (rTip < girdle
-    // radius, yTip a hair above the table). They only bridge girdle→band on
-    // the upper pavilion; the basket ring covers the rest.
     const yBase = -P.pavD * 0.35, yTip = P.crownH + 0.03, rBase = 0.48, rTip = 0.36;
-    for (let k = 0; k < 4; k++) {
-      const ang = Math.PI / 4 + k * Math.PI / 2, cx = Math.cos(ang), cz = Math.sin(ang);
+    for (let k = 0; k < count; k++) {
+      const ang = phase + k * (Math.PI * 2 / count), cx = Math.cos(ang), cz = Math.sin(ang);
       a.set(cx * rBase, yBase, cz * rBase);
       b.set(cx * rTip, yTip, cz * rTip);
       const len = a.distanceTo(b);
@@ -861,32 +929,139 @@ function create(canvas, opts = {}) {
     basket.rotation.x = Math.PI / 2;
     basket.position.y = -P.pavD * 0.42;
     g.add(basket);
-    return g;
   }
 
-  // One pooled stone "unit" = gem mesh + claw setting + sparkle sprite, under
-  // a Group that buildStoneFor positions/rotates/scales as a whole.
-  function makeStoneUnit(rig) {
+  // Square (carree) setting: 4 corner V-prongs, aligned with the gem's own
+  // corners (CARREE_PHASE). `withWalls` (v1) adds two solid flat cathedral
+  // gallery panels across the opposite flat edges (angle 0/π — the edges
+  // midway between corners, since corners sit at CARREE_PHASE + k·90°); v2
+  // skips them for the lighter open-basket look and gets a small square
+  // basket ring instead so the stone still has support underneath.
+  function buildCarree(g, metal, withWalls) {
+    const P = stoneParams, rG = 0.5;
+    const yBase = -P.pavD * (withWalls ? 0.42 : 0.34), yTip = P.crownH + 0.03;
+    const wBase = withWalls ? 0.30 : 0.20, wTip = withWalls ? 0.12 : 0.08;
+    const thick = withWalls ? 0.12 : 0.08;
+    const rBase = rG * 0.98, rTip = rG * 0.66;
+    for (let k = 0; k < 4; k++) {
+      addBladeProng(g, metal, CARREE_PHASE + k * Math.PI / 2, { rBase, rTip, yBase, yTip, wBase, wTip, thick });
+    }
+    if (withWalls) {
+      const edgeLen = rG * Math.SQRT2 * 0.94, wallH = P.crownH + P.pavD * 0.55, wallThick = 0.05;
+      const up = new THREE.Vector3(0, 1, 0);
+      [0, Math.PI].forEach((ang) => {
+        const cx = Math.cos(ang), cz = Math.sin(ang);
+        const wall = new THREE.Mesh(new THREE.BoxGeometry(edgeLen, wallH, wallThick), metal);
+        const tangent = new THREE.Vector3(-cz, 0, cx), radial = new THREE.Vector3(cx, 0, cz);
+        wall.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(tangent, up, radial));
+        wall.position.set(cx * rG * 0.92, -P.pavD * 0.28, cz * rG * 0.92);
+        g.add(wall);
+      });
+    } else {
+      const basket = new THREE.Mesh(new THREE.TorusGeometry(rG * 0.6, 0.032, 8, 4), metal);
+      basket.rotation.x = Math.PI / 2;
+      basket.rotation.y = CARREE_PHASE;
+      basket.position.y = -P.pavD * 0.36;
+      g.add(basket);
+    }
+  }
+
+  // Full bezel/"okvir": a solid collar wraps the girdle all the way round
+  // (open cylinder wall + a rim lip torus near the crown edge + a thin base
+  // ring), so the stone sits fully framed rather than prong-held.
+  function buildFrame(g, metal) {
+    const P = stoneParams, rG = 0.5;
+    const wallH = P.crownH + P.pavD * 0.3;
+    const wall = new THREE.Mesh(new THREE.CylinderGeometry(rG * 1.06, rG * 1.02, wallH, 24, 1, true), metal);
+    wall.position.y = P.crownH - wallH / 2 + 0.02;
+    g.add(wall);
+    const lip = new THREE.Mesh(new THREE.TorusGeometry(rG * 1.04, 0.045, 10, 28), metal);
+    lip.rotation.x = Math.PI / 2;
+    lip.position.y = P.crownH * 0.55;
+    g.add(lip);
+    const baseRing = new THREE.Mesh(new THREE.TorusGeometry(rG, 0.03, 8, 24), metal);
+    baseRing.rotation.x = Math.PI / 2;
+    baseRing.position.y = -P.pavD * 0.35;
+    g.add(baseRing);
+  }
+
+  // Dispatcher — picks one of the 7 types above. Falls back to the classic
+  // 4-prong (prong4-v2) for an unknown/missing `type` so old cached state
+  // (or a thumbnail scene that never sends `stone.setting`) still renders.
+  function makeSettingGroup(metal, type) {
+    const g = new THREE.Group();
+    const P = stoneParams;
+    switch (type) {
+      case 'prong4-v1':
+        buildBladePronged(g, metal, 4, Math.PI / 4, {
+          wBase: 0.34, wTip: 0.10, thick: 0.11, rBase: 0.50, rTip: 0.30,
+          yBase: -P.pavD * 0.30, yTip: P.crownH * 0.92, basketTube: 0.05,
+        });
+        break;
+      case 'prong6-v1':
+        buildBladePronged(g, metal, 6, Math.PI / 2, {
+          wBase: 0.22, wTip: 0.07, thick: 0.09, rBase: 0.49, rTip: 0.32,
+          yBase: -P.pavD * 0.28, yTip: P.crownH * 0.90, basketTube: 0.045,
+        });
+        break;
+      case 'carree-v1': buildCarree(g, metal, true); break;
+      case 'carree-v2': buildCarree(g, metal, false); break;
+      case 'frame': buildFrame(g, metal); break;
+      case 'prong6-v2': buildWirePronged(g, metal, 6, Math.PI / 2); break;
+      case 'prong4-v2':
+      default: buildWirePronged(g, metal, 4, Math.PI / 4); break;
+    }
+    return g;
+  }
+  function isCarreeSetting(type) { return type === 'carree-v1' || type === 'carree-v2'; }
+
+  // Disposes only the geometries owned by a setting-group Mesh tree — never
+  // called on the gem (shared brilliantGeo/carreeGeo) or the sparkle Sprite
+  // (shared plane geometry), both pooled across every stone unit.
+  function disposeSettingGroup(grp) {
+    if (!grp) return;
+    grp.traverse((o) => { if (o.isMesh && o.geometry) o.geometry.dispose(); });
+  }
+
+  // One pooled stone "unit" = gem mesh + setting group + sparkle sprite,
+  // under a Group that buildStoneFor positions/rotates/scales as a whole.
+  function makeStoneUnit(rig, type, cut) {
     const unit = new THREE.Group();
-    const gem = new THREE.Mesh(brilliantGeo, sharedStoneMat);
+    const gem = new THREE.Mesh(cut === 'carree' ? carreeGeo : brilliantGeo, sharedStoneMat);
     gem.renderOrder = 3;
     unit.add(gem);
-    unit.add(makeSettingGroup(rig.stoneMetal));
+    const settingGroup = makeSettingGroup(rig.stoneMetal, type);
+    unit.add(settingGroup);
     const spr = new THREE.Sprite(sparkleMat);
     spr.position.y = stoneParams.crownH * 0.85;
     spr.renderOrder = 4;
     spr.visible = stoneParams.sparkle;
     unit.add(spr);
-    unit.userData = { gem, sparkle: spr };
+    unit.userData = { gem, sparkle: spr, settingGroup, type, cut };
     return unit;
+  }
+  // Ensures rig.stones[i] exists and matches the wanted type/cut, rebuilding
+  // it in place (dispose old setting-group geometry, keep the pooled gem/
+  // sparkle materials) when the "Krunica" choice changes — swapping crowns
+  // is a rare click, not a per-frame cost, so a full unit rebuild is fine.
+  function ensureStoneUnit(rig, i, type, cut) {
+    let u = rig.stones[i];
+    if (u && u.userData.type === type && u.userData.cut === cut) return u;
+    if (u) { rig.root.remove(u); disposeSettingGroup(u.userData.settingGroup); }
+    u = makeStoneUnit(rig, type, cut);
+    rig.root.add(u);
+    rig.stones[i] = u;
+    return u;
   }
   const _stoneUp = new THREE.Vector3(0, 1, 0);
   const _stoneOut = new THREE.Vector3();
 
-  // state.stone = { mm, positions: [mm along band, ...], widthPos }. v1 = one
-  // raised prong-set round stone (client 2026-09-10, target =
-  // konfigurator.breuning.de 4-prong solitaire). "Količina"/"Pozicioniranje"
-  // UI choices in configurator.js resolve to the `positions` list before this
+  // state.stone = { mm, positions: [mm along band, ...], widthPos, setting,
+  // cut }. `setting` is one of SETTING_TYPES (client, 2026-09-14: replicate
+  // konfigurator.breuning.de's 7-way "Chaton version" panel); `cut` is
+  // 'round' | 'carree' and is really implied by `setting` (carree-v1/v2 need
+  // the square gem) — configurator.js keeps them in sync. "Količina"/
+  // "Pozicioniranje" UI choices resolve to the `positions` list before this
   // sees it; this just places whatever it's given. `position` (singular) is
   // still accepted as single-stone shorthand.
   function buildStoneFor(key, state) {
@@ -894,13 +1069,11 @@ function create(canvas, opts = {}) {
     const s = state.stone;
     const positions = s && s.mm ? (s.positions || [typeof s.position === 'number' ? s.position : 0]) : [];
     const n = positions.length;
+    const type = (s && s.setting) || DEFAULT_SETTING;
+    const cut = (s && s.cut) || (isCarreeSetting(type) ? 'carree' : 'round');
     if (!rig.stones) rig.stones = [];
-    while (rig.stones.length < n) {
-      const u = makeStoneUnit(rig);
-      rig.root.add(u);
-      rig.stones.push(u);
-    }
-    rig.stones.forEach((u, i) => { u.visible = i < n; });
+    for (let i = 0; i < n; i++) ensureStoneUnit(rig, i, type, cut);
+    rig.stones.forEach((u, i) => { if (u) u.visible = i < n; }); // nulled slots: dbg.rebuildStone() rebuild pass
     if (!n) return;
 
     const P = stoneParams;
@@ -1296,13 +1469,24 @@ function create(canvas, opts = {}) {
       invalidate(20);
     },
     rebuildStone() {
-      const old = brilliantGeo;
+      // Geometry knobs (tableRatio/crownH/pavD/…) affect the gem AND every
+      // setting type's prong placement, so both gem geometries are rebuilt
+      // and every pooled unit is force-rebuilt (not just re-scaled) — cheap,
+      // this only runs from the ?zscdebug=1 panel, never per-frame.
+      const oldB = brilliantGeo, oldC = carreeGeo;
       brilliantGeo = makeBrilliantGeometry();
+      carreeGeo = makeCarreeGeometry();
       ['her', 'his'].forEach((k) => {
-        (rigs[k].stones || []).forEach((u) => { if (u.userData.gem) u.userData.gem.geometry = brilliantGeo; });
-        if (rigs[k].last) buildStoneFor(k, rigs[k].last);
+        const rig = rigs[k];
+        (rig.stones || []).forEach((u, i) => {
+          rig.root.remove(u);
+          disposeSettingGroup(u.userData.settingGroup);
+          rig.stones[i] = null;
+        });
+        if (rig.last) buildStoneFor(k, rig.last);
       });
-      if (old) old.dispose();
+      if (oldB) oldB.dispose();
+      if (oldC) oldC.dispose();
       invalidate(30);
     },
     setSparkle() {
