@@ -115,8 +115,10 @@ Za v1 ostajemo na klijentovoj stvarnoj ponudi (3×3). **Finoća** je bitna jer m
 - "Diamant im Ringinnern" (skriveni kamen u traci) — checkbox u koraku GRAVURA (+~29 €)
 
 ### → Naš plan
-- **v1:** jedan flush okrugli kamen — biraš **veličinu** (Ø 1.0/1.5/2.0 mm, seedovano) +
-  **poziciju** (klizač, `posRange` −10…+10 mm od 12h). Stock-gated.
+- **v1:** jedan flush okrugli kamen — biraš **tip postavke / krunicu** prvo (uklj. "Bez
+  dijamanta", oba konkurenta počinju od "ništa"), tek onda **veličinu** (0,005/0,015/0,03
+  ct, seedovano — karati kao kod oba konkurenta, ne mm, #64) + **poziciju** (klizač,
+  `posRange` −10…+10 mm od 12h). Stock-gated.
 - **v2 (roadmap "Tehnički dug"):** tip rešetke (flush / kanal / bezel / bočno), red/pavé
   sa brojem kamenova (preset trećina/pola/ceo + tačan broj), "free placement" sa 2D mapom
   i drag tačkama + šabloni, cut (brilliant/princess/baguette), kvalitet/fancy boje,

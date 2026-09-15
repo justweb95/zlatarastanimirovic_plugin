@@ -208,18 +208,23 @@ final class Seeder
             'price_json'  => ['type' => 'flat', 'amount' => 0],
             'params_json' => ['shape' => null, 'mm' => 0, 'count' => 0],
         ];
+        // Labels are karat (client, 2026-09-15: "original kao kod konkurencije"
+        // — Breuning/Fischer both size stones in ct, never mm). `mm` stays in
+        // params_json for the 3D geometry (stone radius); `ct` is display-only
+        // for now (round-brilliant mm→ct reference table, standard melee
+        // sizing used industry-wide).
         $diamonds = [
-            ['round-1_0', 'Ø 1,0 mm', 'round', 1.0, 6000],
-            ['round-1_5', 'Ø 1,5 mm', 'round', 1.5, 12000],
-            ['round-2_0', 'Ø 2,0 mm', 'round', 2.0, 22000],
+            ['round-1_0', '0,005 ct', 'round', 1.0, 6000, 0.005],
+            ['round-1_5', '0,015 ct', 'round', 1.5, 12000, 0.015],
+            ['round-2_0', '0,03 ct',  'round', 2.0, 22000, 0.03],
         ];
-        foreach ($diamonds as $i => [$slug, $label, $shape, $mm, $amount]) {
+        foreach ($diamonds as $i => [$slug, $label, $shape, $mm, $amount, $ct]) {
             $rows[] = [
                 'group_key' => 'diamond', 'slug' => $slug, 'label_sr' => $label, 'sort' => ($i + 2) * 10,
                 'available'   => 1, // client 2026-09-08: stones must be selectable (was stock-gated off)
                 'price_json'  => ['type' => 'flat', 'amount' => $amount],
                 'params_json' => [
-                    'shape' => $shape, 'mm' => $mm, 'count' => 1, 'flush' => true,
+                    'shape' => $shape, 'mm' => $mm, 'ct' => $ct, 'count' => 1, 'flush' => true,
                     'positionable' => true, 'posRange' => $posRange,
                 ],
             ];

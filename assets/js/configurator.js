@@ -275,7 +275,10 @@
       material: firstAvail(g.material),
       profile: firstSlug(g.profile),
       finish: firstAvail(g.finish),
-      diamond: firstAvail(g.diamond),
+      diamond: 'bez', // client 2026-09-15: ring starts with NO stone — matches
+      // competitor default ("Keine"/no diamond group until the customer picks
+      // a setting type); was firstAvail(g.diamond), which pre-selected the
+      // first stock stone before the customer had chosen anything.
       width: snap(num(wCfg.default, 4) + delta * 1.0, wCfg.min, wCfg.max, wCfg.step || 0.5),
       thickness: snap(num(tCfg.default, 1.5) + delta * 0.5, tCfg.min, tCfg.max, tCfg.step || 0.5),
       size: snap(num(sCfg.default, 54) + delta * 6, sCfg.min, sCfg.max, sCfg.step || 0.5),
@@ -285,7 +288,7 @@
       colorSubPattern: '',
       grooveTab: 0,
       grooves: [],
-      diamondSetting: 'prong4-v2',
+      diamondSetting: 'none',
       diamondCut: 'brilliant',
       diamondQty: 1,
       diamondPosMode: 'centar',
@@ -1066,6 +1069,7 @@
     // krunice. Konkurent ima "Carree Var. 2" zasivljen/nedostupan; kod nas
     // radi (geometrija postoji), ostavljeno uključeno.
     { title: 'Krunica', items: [
+      { id: 'none', label: 'Bez dijamanta' },
       { id: 'prong4-v1', label: '4 kandže — var. 1' },
       { id: 'prong6-v1', label: '6 kandži — var. 1' },
       { id: 'carree-v1', label: 'Kare — var. 1' },
@@ -1088,20 +1092,55 @@
     { value: 'top', label: 'G / VS (top)', disabled: true }
   ];
 
-  // Rebuilt 2026-09-09 (client: "sredi grupu dijamanata, nije dobro"). Flat
-  // stacked layout matching Materijal/Žlebovi — the lone tab, the summary card
-  // and the popover toggle are gone. Stone size leads; the setting type / brus /
-  // count / position controls only appear once an actual stone is chosen, so
-  // the default "Bez dijamanta" state stays quiet.
+  // Reordered 2026-09-15 (client: "kao kod konkurencije" — Breuning/Fischer
+  // both lead with "select setting type" and only reveal the stone picker
+  // once a real type is chosen; Fischer's list literally opens on "Keine"
+  // /none). Tip postavke (Krunica, ex-"none") now leads and is never gated;
+  // Veličina kamena / Brus / Broj / Pozicioniranje stay hidden until the
+  // customer picks a setting type other than "Bez dijamanta".
   Configurator.prototype.uiDiamonds = function (g, s) {
     var box = el('div', 'zs-diamonds');
     var self = this;
 
+    box.appendChild(hx('p', 'zs-eyebrow', 'Tip postavke'));
+    DIAMOND_GROUPS.forEach(function (grp) {
+      var grpBox = el('div', 'zs-diamond-setting-group');
+      grpBox.appendChild(hx('p', 'zs-eyebrow-sub', grp.title));
+      var grid = el('div', 'zs-setting-grid');
+      grp.items.forEach(function (it) {
+        var b = el('button', 'zs-setting-box' + (it.disabled ? ' is-disabled' : ''));
+        b.type = 'button';
+        b.setAttribute('aria-pressed', String(s.diamondSetting === it.id));
+        if (it.disabled) b.disabled = true;
+        b.innerHTML = '<span class="zs-setting-label">' + esc(it.label) + '</span>' +
+          (it.disabled ? '<span class="zs-badge-soon">Uskoro</span>' : '');
+        b.addEventListener('click', function () {
+          s.diamondSetting = it.id;
+          // "Bez dijamanta" also clears any stone already chosen, so a stray
+          // 'setting' string never reaches sceneStateFor without a real stone.
+          if (it.id === 'none') s.diamond = 'bez';
+          self.renderPanel(); self.recalc(); self.pushScene();
+        });
+        grid.appendChild(b);
+      });
+      grpBox.appendChild(grid);
+      box.appendChild(grpBox);
+    });
+
+    var hasSetting = !!s.diamondSetting && s.diamondSetting !== 'none';
+    if (!hasSetting) {
+      box.appendChild(hx('p', 'zs-micro', 'Izaberite tip postavke da otključate izbor dijamanta.'));
+      return box;
+    }
+
     // Size chips are built inline (not via the shared uiChips) so a change can
     // trigger a full renderPanel() — the controls below are gated on hasStone.
+    // "Bez dijamanta" isn't offered here any more — that choice now lives one
+    // level up, as the "none" setting type.
     box.appendChild(hx('p', 'zs-eyebrow', 'Veličina kamena'));
     var sizes = el('div', 'zs-chips');
     (g.diamond || []).forEach(function (opt) {
+      if (opt.slug === 'bez') return;
       var b = el('button', 'zs-chip');
       b.type = 'button';
       b.textContent = opt.label;
@@ -1118,28 +1157,9 @@
     var sel = bySlug(g.diamond, s.diamond);
     var hasStone = !!(sel && sel.params && sel.params.mm > 0);
     if (!hasStone) {
-      box.appendChild(hx('p', 'zs-micro', 'Izaberite veličinu kamena da otključate tip postavke, brus i poziciju.'));
+      box.appendChild(hx('p', 'zs-micro', 'Izaberite veličinu kamena (u karatima) da otključate brus, broj i poziciju.'));
       return box;
     }
-
-    box.appendChild(hx('p', 'zs-eyebrow', 'Tip postavke'));
-    DIAMOND_GROUPS.forEach(function (grp) {
-      var grpBox = el('div', 'zs-diamond-setting-group');
-      grpBox.appendChild(hx('p', 'zs-eyebrow-sub', grp.title));
-      var grid = el('div', 'zs-setting-grid');
-      grp.items.forEach(function (it) {
-        var b = el('button', 'zs-setting-box' + (it.disabled ? ' is-disabled' : ''));
-        b.type = 'button';
-        b.setAttribute('aria-pressed', String(s.diamondSetting === it.id));
-        if (it.disabled) b.disabled = true;
-        b.innerHTML = '<span class="zs-setting-label">' + esc(it.label) + '</span>' +
-          (it.disabled ? '<span class="zs-badge-soon">Uskoro</span>' : '');
-        b.addEventListener('click', function () { s.diamondSetting = it.id; self.renderPanel(); });
-        grid.appendChild(b);
-      });
-      grpBox.appendChild(grid);
-      box.appendChild(grpBox);
-    });
 
     var row1 = el('div', 'zs-dim-row');
     row1.appendChild(field('Brus', selectEl(DIAMOND_CUTS.map(function (c) { return { value: c.id, label: c.label, disabled: c.disabled }; }), s.diamondCut, function (v) { s.diamondCut = v; })));

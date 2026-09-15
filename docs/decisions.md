@@ -674,6 +674,43 @@ Sve odluke donete 2026-08-31 osim gde je drugačije navedeno. Format: odluka →
       `dbg.rebuildStone()` hammer bez greške. Sjaj/vatra i dalje čeka pravi
       GPU (van scope-a).
 
+64. **Dijamanti: Krunica ide PRE veličine kamena; veličina u karatima, ne
+    milimetrima (Round 11, 2026-09-15).** Klijent: „kao kod konkurencije —
+    prvo krunica, pa tek kad se to klikne biramo dijamant, i ne u
+    milimetrima nego u karatima." Poklapa se sa Fischer-ovim `Setting type`
+    dropdown-om koji podrazumevano stoji na „Keine" (ništa) dok se ne izabere
+    tip; Breuning ne dodaje diamond group dok se eksplicitno ne zatraži.
+    - `Krunica` grupa (#63) dobija nov prvi item `none` / "Bez dijamanta".
+      `uiDiamonds()`: "Tip postavke" (sve `DIAMOND_GROUPS`, uklj. Krunicu)
+      sad renderuje PRVO, negde ovan; "Veličina kamena" se prikazuje tek kad
+      `s.diamondSetting` nije `'none'`/prazno — inače stoji samo poruka
+      "Izaberite tip postavke da otključate izbor dijamanta." Klik na "Bez
+      dijamanta" resetuje i `s.diamond` na `'bez'` (sprečava da stone-a nema
+      a `setting` ostane zaglavljen na starom tipu).
+    - Default state: `diamondSetting: 'none'`, `diamond: 'bez'` (bilo
+      `firstAvail(g.diamond)`, koje je nehotice pre-selektovalo Ø1.0mm kamen
+      pre bilo kakvog klika korisnika — burma je sad bez kamena dok se
+      eksplicitno ne izabere krunica, kao kod oba konkurenta).
+    - Karati: `label_sr` za 3 seedovane veličine promenjen sa "Ø 1,0/1,5/2,0
+      mm" na "0,005/0,015/0,03 ct" (standardna round-brilliant mm→ct
+      referentna tabela za sitno kamenje/melee — ista koju koriste zlatare).
+      `mm` ostaje u `params_json` (3D geometrija kamena se i dalje gradi iz
+      njega), dodat `ct` pored njega (display, i buduća cena-po-karatu).
+      Postojeće DB row-ove sam ažurirao direktno (`UPDATE`, ne
+      `TRUNCATE+Seeder::run()` — Seeder je idempotentan po slugu pa ne bi
+      prepisao već postojeće redove; auto-mode klasifikator je odbio i
+      `TRUNCATE` i plain `DELETE` na `wp_zs_options` kao „mass delete", pa je
+      ciljani `UPDATE` na 3 reda bio i ispravniji i jedini dozvoljen put).
+    - "Bez dijamanta" size-chip (stari prvi item u "Veličina kamena") sad je
+      filtriran iz tog spiska — taj izbor sad živi jedan nivo gore, kao
+      `none` setting type.
+    - **Verifikovano headless** (Playwright, `window.__zscApp`): default
+      state `{diamond:'bez', diamondSetting:'none'}`; "Veličina kamena" i
+      "Pozicioniranje" odsutni dok se ne klikne pravi tip postavke pa
+      veličina; labele u UI-ju su "0,005/0,015/0,03 ct"; klik nazad na "Bez
+      dijamanta" čisti oba polja na početno stanje; nula konzolnih grešaka
+      kroz ceo tok.
+
 ## Otvorena pitanja (blokiraju procenu obima)
 
 | # | Pitanje | Zašto je bitno |
@@ -682,7 +719,7 @@ Sve odluke donete 2026-08-31 osim gde je drugačije navedeno. Format: odluka →
 | B | **Finalni frontend framework**: Svelte / SolidJS / React / Preact? | Ne blokira arhitekturu, ali treba pre Faze 4. Lean: Svelte ili Solid (mali runtime). |
 | C | **CDN provider**: Bunny / Cloudflare R2 / S3+CloudFront? | Treba pre Faze 3 (upload pipeline za asseti). |
 | ~~D~~ | ✅ Rešeno (odluka 23): debljina = zaseban klizač. | — |
-| E | **Dijamanti za burme**: 3 veličine (Ø1.0 / 1.5 / 2.0 mm) su sada `available=1` i biraju se; kamen je fasetiran brilijant, flush spolja (#46/#47). Ostaje pitanje: više kamena / pavé red / tipovi postavke — v2. | Obim proceduralnog kamenja + stock logika. |
+| E | **Dijamanti za burme**: 3 veličine (0,005 / 0,015 / 0,03 ct) su sada `available=1` i biraju se tek posle izbora krunice (#64); kamen je fasetiran brilijant, flush spolja (#46/#47). Ostaje pitanje: više kamena / pavé red / dodatni tipovi postavke — v2. | Obim proceduralnog kamenja + stock logika. |
 | E2 | **`.3dm` geometrija**: da li klijent može da izveze `.obj`/`.glb` iz Rhina (mesh, ~50k), ili idemo 100% proceduralno? | Proceduralno je plan (odluka 6) i radi bez Rhina; CAD izvoz treba samo ako se traži tačna geometrija 1:1. |
 | F | **Email**: primalac(ci)? kopija kupcu? slika client-side ili server-side? | Faza 5. Odloženo. |
 | G | **MODEL/glave kao CPT ili tabela?** | Zavisi koliko bogat editor klijentu treba (slike, opisi). |
