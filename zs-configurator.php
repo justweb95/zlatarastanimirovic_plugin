@@ -3,7 +3,7 @@
  * Plugin Name:       ZS Configurator
  * Plugin URI:        https://github.com/justweb95/zs-configurator
  * Description:        Premium real-time 3D ring configurator for Zlatara Stanimirović. Standalone, theme-independent. Mount via [zs_configurator] shortcode.
- * Version:           0.6.3
+ * Version:           0.6.4
  * Requires at least: 6.0
  * Requires PHP:      8.1
  * Author:            justweb
@@ -16,7 +16,7 @@
 
 defined('ABSPATH') || exit;
 
-define('ZSC_VERSION', '0.6.3');
+define('ZSC_VERSION', '0.6.4');
 define('ZSC_FILE', __FILE__);
 define('ZSC_DIR', plugin_dir_path(__FILE__));
 define('ZSC_URL', plugin_dir_url(__FILE__));

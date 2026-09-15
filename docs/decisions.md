@@ -711,6 +711,19 @@ Sve odluke donete 2026-08-31 osim gde je drugačije navedeno. Format: odluka →
       dijamanta" čisti oba polja na početno stanje; nula konzolnih grešaka
       kroz ceo tok.
 
+65. **Obrub/Kanal/Napeta postavka/Oko sklonjeni iz "Tip postavke" — ostaje
+    samo Krunica (Round 12, 2026-09-15).** Klijent: „zakomentariši obrub...
+    ne znam šta je to, zakomentariši kanal, napeta postavka, oko, ostavi
+    samo krunicu i veličinu kamena." Te 4 grupe nikad nisu ni menjale 3D
+    (napomena u #63) — bile su UI bez efekta otkad je Krunica dobila pravu
+    geometriju. `DIAMOND_GROUPS` u `configurator.js`: te 4 stavke
+    zakomentarisane (ne obrisane — v2 backlog ako se ikad zatraže), ostaje
+    samo `{ title: 'Krunica', items: [...] }`. Panel "Tip postavke" sad
+    prikazuje samo jednu grupu.
+    - **Verifikovano headless**: `.zs-eyebrow-sub` lista sad ima tačno jedan
+      naslov ("Krunica"), tekst panela ne sadrži "Obrub"/"Kanal"/"Napeta
+      postavka"/"Oko", nula konzolnih grešaka.
+
 ## Otvorena pitanja (blokiraju procenu obima)
 
 | # | Pitanje | Zašto je bitno |

@@ -1040,25 +1040,30 @@
   /* ---------------------------------------------------------------- Dijamanti */
 
   var DIAMOND_GROUPS = [
-    { title: 'Obrub', items: [{ id: 'bezel', label: 'Obrub (Bezel)' }] },
-    { title: 'Kanal', items: [
-      { id: 'channel', label: 'Kanal' },
-      { id: 'channel-cross', label: 'Kanal (poprečno)' },
-      { id: 'channel-full', label: 'Kanal (cela burma)' },
-      { id: 'channel-right', label: 'Kanal (desna strana)', disabled: true },
-      { id: 'channel-left', label: 'Kanal (leva strana)', disabled: true },
-      { id: 'channel-oblique', label: 'Kanal (koso)', disabled: true }
-    ] },
-    { title: 'Napeta postavka', items: [
-      { id: 'tension-cross', label: 'Poprečno', disabled: true },
-      { id: 'tension-oblique', label: 'Koso', disabled: true },
-      { id: 'tension-convex', label: 'Konveksno-konkavno', disabled: true }
-    ] },
-    { title: 'Oko', items: [
-      { id: 'eye-length', label: 'Uzdužno', disabled: true },
-      { id: 'eye-cross', label: 'Poprečno', disabled: true },
-      { id: 'eye-diag', label: 'Dijagonalno', disabled: true }
-    ] },
+    // Obrub/Kanal/Napeta postavka/Oko sklonjeni iz UI-ja (klijent, 2026-09-15:
+    // "ostavi samo krunicu i veličinu kamena") — nisu ni menjali 3D geometriju
+    // (vidi napomenu u #63), pa su samo zauzimali prostor bez ikakvog efekta.
+    // Zakomentarisano, ne obrisano — vrati ih ako klijent kasnije zatraži te
+    // tipove postavke (v2 backlog, docs/roadmap.md "Tehnički dug").
+    // { title: 'Obrub', items: [{ id: 'bezel', label: 'Obrub (Bezel)' }] },
+    // { title: 'Kanal', items: [
+    //   { id: 'channel', label: 'Kanal' },
+    //   { id: 'channel-cross', label: 'Kanal (poprečno)' },
+    //   { id: 'channel-full', label: 'Kanal (cela burma)' },
+    //   { id: 'channel-right', label: 'Kanal (desna strana)', disabled: true },
+    //   { id: 'channel-left', label: 'Kanal (leva strana)', disabled: true },
+    //   { id: 'channel-oblique', label: 'Kanal (koso)', disabled: true }
+    // ] },
+    // { title: 'Napeta postavka', items: [
+    //   { id: 'tension-cross', label: 'Poprečno', disabled: true },
+    //   { id: 'tension-oblique', label: 'Koso', disabled: true },
+    //   { id: 'tension-convex', label: 'Konveksno-konkavno', disabled: true }
+    // ] },
+    // { title: 'Oko', items: [
+    //   { id: 'eye-length', label: 'Uzdužno', disabled: true },
+    //   { id: 'eye-cross', label: 'Poprečno', disabled: true },
+    //   { id: 'eye-diag', label: 'Dijagonalno', disabled: true }
+    // ] },
     // "Krunica" — 7 tipovi = 1:1 konkurentov "Chaton version" panel (Diamond
     // group → Bezel → Select setting type na konfigurator.breuning.de;
     // klijent, 2026-09-14, 2 screenshot-a po tipu). Var. 1 = široke skulptovane
