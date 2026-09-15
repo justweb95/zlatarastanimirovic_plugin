@@ -364,9 +364,23 @@ function create(canvas, opts = {}) {
   //       depth cue, the only one that survives without refraction;
   //   (c) an optional additive sparkle sprite (how real jewellery
   //       configurators fake "it twinkles" in a soft-box studio).
-  // transmission / dispersion are kept LOW here and only add a bonus on a
-  // real GPU — they are never the primary read. All of these are live-tunable
-  // via the ?zscdebug=1 panel → stoneParams below.
+  // All of these are live-tunable via the ?zscdebug=1 panel → stoneParams.
+  //
+  // Round 15 (2026-09-15, client: "da li će full-mirror facete, bez ijedne
+  // boje, biti bolje?"). Tested it directly (metalness 1, roughness ~0.02,
+  // no vertex colours at all): it renders WORSE, not better — our studio's
+  // lighting is a handful of deliberately SOFT/blurred panels (good for the
+  // smoothly-curved gold band, see buildStudio() below), so a pure mirror
+  // facet just reflects that same soft blur back and reads as a flat pale
+  // blob, not "sparkly" — real diamond fire needs many small SHARP point
+  // lights for facets to catch differently, which this studio doesn't have.
+  // Landed on a middle ground instead: moderate metalness/clearcoat for a
+  // shinier "cut crystal" read, transmission dropped to 0 (it never did
+  // anything on SwiftShader and only muddied things on a real GPU combined
+  // with the baked colours), and the baked facet colours lightened from
+  // muddy greys to near-white/silver (still darkening toward the culet for
+  // the depth cue, just brighter throughout) — visibly cleaner + brighter
+  // than either the old grey bake or the failed pure-mirror test.
   let stoneParams = {
     // geometry (unit stone: girdle circle r=0.5 at y=0, table at +crownH,
     // culet at -pavD; buildStoneFor scales by the mm Ø). Real round-brilliant
@@ -375,20 +389,21 @@ function create(canvas, opts = {}) {
     crownH: 0.16,            // crown height  (× girdle radius)
     pavD: 0.40,              // pavilion depth (× girdle radius)
     prominence: 1.9,         // stone mm → scene units (burma stones read big)
-    raise: 0.05,             // girdle plane height above band surface (× pavD × scale) — near-flush (Round 14): the pavilion sits inside the solid band, only the crown shows
-    // material — tuned for SOFTWARE GL first (see note above sharedStoneMat):
-    // low transmission + modest env so the baked facet colours actually read
-    // instead of washing to a white blob. A real GPU can push these up via
-    // the ?zscdebug=1 "Fotorealan" preset.
-    envMapIntensity: 1.15, transmission: 0.03, roughness: 0.16, ior: 2.4,
-    clearcoat: 0.25, clearcoatRoughness: 0.2,
+    // girdle plane height above band surface (× pavD × scale). Round 15:
+    // client sent the real production CAD (Ravna/Zaobljena "sa kamenom
+    // 1,5mm" .3dm) — opened in rhino3dm, the stone's table sits within
+    // ~0.08mm of the band's outer radius (i.e. essentially flush) with the
+    // girdle recessed well below it. -0.15 pushes noticeably deeper than
+    // Round 14's 0.05 without fully submerging the crown (no seat carved
+    // into the band mesh yet — see docs/decisions.md #69 for the tradeoff).
+    raise: -0.15,
+    envMapIntensity: 1.6, transmission: 0, roughness: 0.06, ior: 2.4,
+    metalness: 0.35, clearcoat: 0.4, clearcoatRoughness: 0.05,
     iridescence: 0.12, iridescenceIOR: 1.3, dispersion: 4.0,
-    // baked facet colours (the depth cue) — cool greys, deliberately NOT
-    // near-white: on software GL a smooth dielectric reflects the white studio
-    // broadly, so the colours have to be dark enough that facet-to-facet
-    // contrast still reads through that reflection
-    colTable: '#93a3af', colCrown: '#c0ccd4', colGirdle: '#a7b5bf',
-    colPav: '#70808d', colCulet: '#333f4a',
+    // baked facet colours (the depth cue) — near-white/silver, darkening
+    // toward the culet. Lightened from the original muddy greys (Round 15).
+    colTable: '#f7fafc', colCrown: '#eef2f6', colGirdle: '#dfe6ec',
+    colPav: '#aab6c2', colCulet: '#3a4652',
     // sparkle sprites — Round 14 (2026-09-15, client: "poseban efekat
     // svetlucavosti"): bumped from one faint centred glint to two brighter,
     // off-centre ones (see makeStoneUnit) — a single dead-centre highlight
@@ -398,14 +413,14 @@ function create(canvas, opts = {}) {
   };
 
   const sharedStoneMat = new THREE.MeshPhysicalMaterial({
-    vertexColors: true, color: 0xffffff, metalness: 0,
+    vertexColors: true, color: 0xffffff, metalness: stoneParams.metalness,
     roughness: stoneParams.roughness, ior: stoneParams.ior, thickness: 0.5,
     transmission: stoneParams.transmission, specularIntensity: 1,
     clearcoat: stoneParams.clearcoat, clearcoatRoughness: stoneParams.clearcoatRoughness,
     iridescence: stoneParams.iridescence, iridescenceIOR: stoneParams.iridescenceIOR,
     iridescenceThicknessRange: [120, 480], dispersion: stoneParams.dispersion,
     envMap: envRT.texture, envMapIntensity: stoneParams.envMapIntensity,
-    transparent: true, side: THREE.DoubleSide,
+    side: THREE.DoubleSide,
   });
 
   // Additive sparkle sprite — a white core + a faint 4-point star flare,
@@ -519,16 +534,8 @@ function create(canvas, opts = {}) {
       side: THREE.DoubleSide,
     });
     attachBottomShade(mat);
-    // Metal for the diamond's flush-set rim. Its own material (not `mat`) so
-    // it can be a touch rougher/duller than the polished band and skip the
-    // band's bottom-shade shader; loop() copies the band's (tweening) colour
-    // into it every frame, same trick the grooves use.
-    const stoneMetal = new THREE.MeshPhysicalMaterial({
-      color: new THREE.Color('#D9A945'), metalness: 1.0, roughness: 0.14,
-      envMap: envRT.texture, envMapIntensity: 1.3, side: THREE.DoubleSide,
-    });
     return {
-      key, root, mat, stoneMetal, band: null, stone: null, outer: 8,
+      key, root, mat, band: null, stone: null, outer: 8,
       blob: pairMode ? makeContactBlob() : null,
       target: { color: new THREE.Color('#D9A945'), roughness: 0.08 },
     };
@@ -866,32 +873,14 @@ function create(canvas, opts = {}) {
   //
   // Round 14 (2026-09-15): client dropped every prong/carree/bezel-frame
   // setting from Round 10 — "skidamo one kandže, ostavljamo samo ovako nešto
-  // ništa više od toga kao na wamagold-u", pointing at wamagold-configurator
-  // .com's "Diamonds" step with its flush/"Rubbed" look selected (no claws
-  // at all, just the stone with a thin rim of metal at the girdle). Down to
-  // ONE setting: FLUSH_SETTING below. `raise` in stoneParams also dropped
-  // from 0.6 (raised, prong-bridged) to ~0 (girdle sits AT the band surface)
-  // — the pavilion end simply sits inside the solid band mesh, which hides
-  // it from every camera angle exactly like a real flush-set stone; no
-  // carved seat needed. Built in UNIT-STONE space (girdle r=0.5 at y=0) so
-  // buildStoneFor's uniform scale/position/rotation of the whole stone Group
-  // carries it along. Uses the rig's stoneMetal so it always matches the
-  // band colour/finish (loop() copies the colour in every frame, same trick
-  // the grooves use).
+  // ništa više od toga kao na wamagold-u". Round 15 (2026-09-15, client sent
+  // the actual production CAD — "Ravna/Zaobljena 4mm sa kamenom 1,5mm.3dm"):
+  // opened both in rhino3dm — NO separate rim/collar/prong object exists
+  // anywhere in either file, just the band Brep + one small Gem instance.
+  // "Utisnut"/flush now has NO setting-group mesh at all — the stone sits
+  // directly in the band with nothing around it, matching the real part.
   const FLUSH_SETTING = 'flush';
-
-  // The real "flush set" technique: metal rubbed/burnished over the girdle
-  // edge, reading as a thin bright rim — nothing raised, nothing prong-held.
-  function buildFlushRim(g, metal) {
-    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.035, 8, 24), metal);
-    rim.rotation.x = Math.PI / 2;
-    g.add(rim);
-  }
-  function makeSettingGroup(metal) {
-    const g = new THREE.Group();
-    buildFlushRim(g, metal);
-    return g;
-  }
+  function makeSettingGroup() { return new THREE.Group(); }
 
   // Disposes only the geometries owned by a setting-group Mesh tree — never
   // called on the gem (shared brilliantGeo) or the sparkle Sprite (shared
@@ -910,7 +899,7 @@ function create(canvas, opts = {}) {
     const gem = new THREE.Mesh(brilliantGeo, sharedStoneMat);
     gem.renderOrder = 3;
     unit.add(gem);
-    const settingGroup = makeSettingGroup(rig.stoneMetal);
+    const settingGroup = makeSettingGroup();
     unit.add(settingGroup);
     // Two glints, not one: a single dead-centre sprite reads as a static
     // white dot; two smaller ones offset toward different facets read as
@@ -1141,9 +1130,7 @@ function create(canvas, opts = {}) {
       const rig = rigs[k];
       rig.mat.color.lerp(rig.target.color, 0.09);
       rig.mat.roughness += (rig.target.roughness - rig.mat.roughness) * 0.09;
-      // Diamond flush-rim tracks the band's (tweening) colour each frame
-      // (grooves are part of the band geometry now, so they follow for free).
-      rig.stoneMetal.color.copy(rig.mat.color);
+      // Grooves are part of the band geometry now, so they follow for free.
     });
     const moving = controls.update();       // true while damping / auto-rotating
     renderer.render(scene, camera);
@@ -1268,7 +1255,7 @@ function create(canvas, opts = {}) {
     const old = envRT;
     envRT = pmrem.fromScene(buildStudio(), studioParams.blur);
     scene.environment = envRT.texture;
-    [rigs.her.mat, rigs.his.mat, rigs.her.stoneMetal, rigs.his.stoneMetal, sharedStoneMat].forEach((m) => {
+    [rigs.her.mat, rigs.his.mat, sharedStoneMat].forEach((m) => {
       m.envMap = envRT.texture;
       m.needsUpdate = true;
     });
@@ -1338,6 +1325,7 @@ function create(canvas, opts = {}) {
       const m = sharedStoneMat, P = stoneParams;
       m.transmission = P.transmission;
       m.roughness = P.roughness;
+      m.metalness = P.metalness;
       m.ior = P.ior;
       m.envMapIntensity = P.envMapIntensity;
       m.clearcoat = P.clearcoat;
@@ -1349,10 +1337,10 @@ function create(canvas, opts = {}) {
       invalidate(20);
     },
     rebuildStone() {
-      // Geometry knobs (tableRatio/crownH/pavD/…) affect the gem AND the
-      // flush rim's placement, so the gem geometry is rebuilt and every
-      // pooled unit is force-rebuilt (not just re-scaled) — cheap, this only
-      // runs from the ?zscdebug=1 panel, never per-frame.
+      // Geometry knobs (tableRatio/crownH/pavD/…) affect the gem shape, so
+      // it's rebuilt and every pooled unit is force-rebuilt (not just
+      // re-scaled) — cheap, this only runs from the ?zscdebug=1 panel,
+      // never per-frame.
       const oldB = brilliantGeo;
       brilliantGeo = makeBrilliantGeometry();
       ['her', 'his'].forEach((k) => {
@@ -1393,7 +1381,6 @@ function create(canvas, opts = {}) {
       const rg = rigs[k];
       if (rg.engrave) { rg.engrave.geometry.dispose(); rg.engrave.material.dispose(); }
       if (rg.engraveTex) rg.engraveTex.dispose();
-      rg.stoneMetal.dispose();
       (rg.stones || []).forEach((u) => u.traverse((o) => { if (o.isMesh) o.geometry.dispose(); }));
     });
     contactTex.dispose();

@@ -816,6 +816,60 @@ Sve odluke donete 2026-08-31 osim gde je drugačije navedeno. Format: odluka →
       dijamanta on/off + 3 kamena + slobodna pozicija + žleb na drugoj burmi,
       nula konzolnih grešaka. Krunica panel sad ima tačno 2 stavke.
 
+69. **Dijamant još utisnutiji, obod skinut, materijal posvetljen — po pravom
+    CAD-u klijenta (Round 15, 2026-09-15).** Klijent: "još utisnutiju da bude
+    ravno sa burmom i ring oko njega skini ovako nešto" + poslao STVARNE
+    produkcione `.3dm` fajlove (`Ravna 4mm sa kamenom 1,5mm.3dm`, `Zaobljena
+    4mm sa kamenom 1,5mm.3dm`).
+    - **Otvoreno u `rhino3dm` (Node, privremeno instaliran samo za ovu
+      analizu, ne u plugin-u)**: ni u jednom fajlu ne postoji poseban rim/
+      obod/prong objekat — samo Brep trake ("Metal 01") + jedna mala Gem
+      instanca. Sto kamena (gornja ravna strana) sedi u okviru ~0.08mm od
+      spoljnog radijusa trake (praktično u ravni), girdle znatno utonuo
+      ispod toga. Ovo je direktna potvrda i za "skini ring" i za "još
+      utisnutije".
+    - **`buildFlushRim()` obrisan u potpunosti** (ne zakomentarisan — CAD
+      dokazuje da rim nikad nije trebalo da postoji). `makeSettingGroup()`
+      sad vraća prazan `THREE.Group()` — kamen sedi direktno u traci, ništa
+      oko njega. Uklonjeno i celo `stoneMetal` — bio je materijal SAMO za taj
+      rim, sad je mrtav kod (5 mesta: kreiranje, rig objekat, per-frame
+      color-copy u `loop()`, `rebuildEnvironment()`, `dispose()`).
+    - **`stoneParams.raise` 0.05 → -0.15**: znatno dublje utonuo nego Round
+      14, bez potpunog gubljenja vidljivosti kamena. Napomena: prava
+      matematika za TAČNO "sto u ravni sa trakom" (izvedena iz CAD-a) bi bila
+      `raise = -crownH/pavD = -0.4`, ali na toj vrednosti bi ceo kruna bio
+      ISPOD `outerR` — bez urezanog ležišta u traci (kao pravi "gypsy
+      setting" rez) kamen bi bio POTPUNO nevidljiv (sakriven u čvrstom
+      metalu). Rezanje ležišta u `buildBandFor` je v2 posao (zahteva
+      lokalizovano tanjenje LatheGeometry-jeve spoljne površine po uglu I
+      širini — trenutno `carveGroovesIntoGeometry` radi samo po širini, cela
+      obimna traka). -0.15 je empirijski najdublja vrednost testirana
+      headless-om (screenshot poređenje 0.05 / -0.1 / -0.2 / -0.3 / -0.4) pre
+      nego što bi dalje utonuće zahtevalo to rezanje.
+    - **"Da li će full-mirror facete (bez ijedne boje) biti bolje?"** —
+      klijentovo pitanje, testirano direktno (`metalness:1, roughness:0.02`,
+      bez vertex boja, bez transmission/clearcoat/iridescence, čak i sa
+      oštrijim/manje zamućenim PMREM environment-om samo za kamen): **NE** —
+      renderuje se KAO BLEĐA, RAVNIJA bela lopta, ne sjajnije. Uzrok: naš
+      studio ima svega par NAMERNO mekih/zamućenih light panela (dobro za
+      glatku zaobljenu traku, loše za faset koji treba OŠTRE tačkaste izvore
+      da bi facet-i međusobno kontrastirali). Pravi "fire" efekat traži ili
+      mnogo oštrih tačkastih svetala ili pravu refrakciju (real GPU).
+      Umesto toga, srednje rešenje: `metalness` 0→0.35, `clearcoat` 0.25→0.4/
+      `clearcoatRoughness` 0.2→0.05, `roughness` 0.16→0.06, `transmission`
+      0.03→0 (nikad nije ništa radio na SwiftShader-u, samo mutio boju na
+      pravom GPU-u), `envMapIntensity` 1.15→1.6, i baked facet boje
+      posvetljene sa muljavog sivog (`#93a3af`...) na skoro-belo/srebrno
+      (`#f7fafc`...`#3a4652` culet) — vidljivo čistiji i svetliji rezultat
+      od oba (starog sivog ILI probanog full-mirror-a), verifikovano
+      headless screenshot poređenjem.
+    - **Verifikovano headless**: default state posle promena tačno odgovara
+      testiranim vrednostima (`metalness:0.35, roughness:0.06,
+      transmission:0, raise:-0.15`, setting-group 0 dece), pun tok kroz svih
+      12 profila + multi-kamen + toggle bez dijamanta, nula grešaka.
+    - I dalje važi napomena iz #68: prava sjajnost/vatra kamena treba
+      potvrdu na pravom GPU-u, ne headless.
+
 ## Otvorena pitanja (blokiraju procenu obima)
 
 | # | Pitanje | Zašto je bitno |
