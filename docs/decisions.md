@@ -934,6 +934,12 @@ Sve odluke donete 2026-08-31 osim gde je drugačije navedeno. Format: odluka →
       sad jedan pored drugog) i oštrije refleksije; pun tok kroz svih 12
       profila + dijamant + žleb na drugom prstenu, nula grešaka.
 
+72. **Drugi ?zscdebug=1 export — samo `POSE.her` dalje doteran (Round 18,
+    2026-09-16).** Klijent poslao novi JSON; upoređen polje-po-polje sa
+    stanjem posle #71 — jedina razlika je `pose.her` (rot.x/y/z i off.x/z
+    sitno pomereni, `his` nepromenjen, sve ostalo identično #71). Primenjeno
+    samo to. Verifikovano headless: nula grešaka, pun profil-sweep.
+
 ## Otvorena pitanja (blokiraju procenu obima)
 
 | # | Pitanje | Zašto je bitno |

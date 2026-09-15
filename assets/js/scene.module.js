@@ -50,14 +50,13 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 // (accounts for lean/roll, not just a bounding-box guess) before that lift
 // is added, so it can never float or clip regardless of size/pose.
 const POSE = {
-  // Round 17 (2026-09-16): client re-tuned the pair pose live via
-  // ?zscdebug=1 on their own machine and sent the exported JSON — new
-  // values below (was rot.x≈-90° carrying the tilt; now rot.z=90° does,
-  // rot.x=0 — a different but equivalent-looking axis convention the
-  // client's own live session settled on, not a typo).
+  // Round 17-18 (2026-09-16): client re-tuned the pair pose live via
+  // ?zscdebug=1 on their own machine and sent the exported JSON, twice —
+  // "her" refined further the second time (rot.x/y/z and off.x/z all
+  // nudged); "his" unchanged since Round 17.
   her: {
-    rot: new THREE.Euler(0, 0.10471975511965978, 1.5707963267948966),
-    off: new THREE.Vector3(0.91, 0, -0.4),
+    rot: new THREE.Euler(-0.6632251157578453, 0.05235987755982989, 1.6231562043547265),
+    off: new THREE.Vector3(0.9, 0, -0.41),
   },
   his: {
     rot: new THREE.Euler(0, -0.10471975511965978, 1.5707963267948966),
