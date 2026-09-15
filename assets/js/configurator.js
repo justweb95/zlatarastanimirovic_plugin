@@ -357,11 +357,8 @@
     var pbr = (mat && mat.params && mat.params.pbr) || {};
     var finPbr = (fin && fin.params && fin.params.pbr) || {};
     var stone = (dia && dia.params && dia.params.mm)
-      ? {
-          mm: dia.params.mm, positions: diamondPositions(s), widthPos: diamondWidthPos(s),
-          setting: s.diamondSetting,
-          cut: CARREE_SETTINGS.indexOf(s.diamondSetting) > -1 ? 'carree' : 'round'
-        } : null;
+      ? { mm: dia.params.mm, positions: diamondPositions(s), widthPos: diamondWidthPos(s) }
+      : null;
     var grooves = (s.grooves || []).map(function (grv) {
       var gfin = bySlug(g.finish, grv.surface);
       var gpbr = (gfin && gfin.params && gfin.params.pbr) || {};
@@ -1064,27 +1061,19 @@
     //   { id: 'eye-cross', label: 'Poprečno', disabled: true },
     //   { id: 'eye-diag', label: 'Dijagonalno', disabled: true }
     // ] },
-    // "Krunica" — 7 tipovi = 1:1 konkurentov "Chaton version" panel (Diamond
-    // group → Bezel → Select setting type na konfigurator.breuning.de;
-    // klijent, 2026-09-14, 2 screenshot-a po tipu). Var. 1 = široke skulptovane
-    // "trellis" kandže bez kuglice na vrhu; Var. 2 = klasične žičane kandže sa
-    // kuglicom (stari default). `carree-*` u sceneStateFor ide sa kvadratnim
-    // kamenom (scene.module.js cut:'carree') — vidi CARREE_SETTINGS ispod;
-    // "Brus" dropdown ostaje nezavisan, 3D oblik kamena se izvodi iz same
-    // krunice. Konkurent ima "Carree Var. 2" zasivljen/nedostupan; kod nas
-    // radi (geometrija postoji), ostavljeno uključeno.
+    // "Krunica" — bio je 7 tipova = 1:1 konkurentov "Chaton version" panel
+    // (Round 10). Klijent, Round 14 (2026-09-15): "skidamo one kandže,
+    // ostavljamo samo ovako nešto ništa više od toga kao na wamagold-u" —
+    // pokazao wamagold-configurator.com "Diamonds" korak sa "Rubbed"
+    // (flush-set, bez ijedne kandže) izabranim. Dole na jedan realan izbor:
+    // ima kamen (`flush`, utisnut — scene.module.js FLUSH_SETTING, tanak
+    // obod umesto kandži) ili nema (`none`). Prong/carree/frame geometrija
+    // je uklonjena iz scene.module.js (v2 backlog ako se ikad zatraži).
     { title: 'Krunica', items: [
       { id: 'none', label: 'Bez dijamanta' },
-      { id: 'prong4-v1', label: '4 kandže — var. 1' },
-      { id: 'prong6-v1', label: '6 kandži — var. 1' },
-      { id: 'carree-v1', label: 'Kare — var. 1' },
-      { id: 'frame', label: 'Okvir' },
-      { id: 'prong4-v2', label: '4 kandže — var. 2' },
-      { id: 'prong6-v2', label: '6 kandži — var. 2' },
-      { id: 'carree-v2', label: 'Kare — var. 2' }
+      { id: 'flush', label: 'Utisnut' }
     ] }
   ];
-  var CARREE_SETTINGS = ['carree-v1', 'carree-v2'];
   var DIAMOND_CUTS = [
     { id: 'brilliant', label: 'Brilijant' },
     { id: 'princess', label: 'Princeza', disabled: true },

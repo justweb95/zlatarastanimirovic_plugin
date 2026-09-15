@@ -754,6 +754,68 @@ Sve odluke donete 2026-08-31 osim gde je drugačije navedeno. Format: odluka →
       ~1.00 (najviše 1.02, tj. 2% — pre fix-a je za "ravni" bio 8.6×). Nula
       konzolnih grešaka.
 
+67. **Nastavak Round 13: "duple ivice" su bile chamfer na "ravni" profilu, ne
+    šav (Round 14, 2026-09-15).** Klijent i dalje video "duple ivice" posle
+    #66 — poslao isti par screenshot-a. Headless orbit tačno na uglu iz
+    screenshot-a 1 (gledano skoro pravo u spoljni gornji rub) je reprodukovao
+    problem: `profilePoints()`-ov "ravni" (flat) profil ima mali chamfer na
+    spoljnoj ivici (`c = min(0.16, thickness*0.18, h*0.4)`) — pod studijskim
+    svetlom sa svega par oštrih pravougaonih panela, chamfer-ova DVA facet-
+    granice (top-face→chamfer, chamfer→spoljni-zid) hvataju DVA odvojena
+    sjajna refleksiona traga umesto jednog — čita se kao duplirana linija.
+    **Fix**: `profilePoints()` "ravni" grana sad je čist pravougaonik, oštri
+    uglovi (bez chamfer-a) — jedna ivica, jedan refleksioni trag. Poklapa se
+    i sa WamaGold referencom (plosnate burme bez chamfer-a). Verifikovano
+    headless orbit-om na istom uglu — jedna oštra linija.
+    - Napomena: #66 (lathe-šav normal fix) ostaje ispravan i potreban —
+      to je bio DRUGI, stvaran bag (potvrđen numerički), samo nije bio
+      uzrok OVOG konkretnog vizuelnog nalaza sa klijentovih screenshot-ova.
+
+68. **Dijamanti: skinute SVE kandže/carree/okvir postavke — ostaje samo
+    "Utisnut" (flush), realniji facet oblik, jači sparkle (Round 14,
+    2026-09-15).** Klijent je pogledao wamagold-configurator.com "Diamonds"
+    korak (sa "Rubbed"/flush selektovanim, bez ijedne kandže) i rekao
+    "skidamo one kandže, ostavljamo samo ovako nešto ništa više od toga".
+    - **Krunica**: `DIAMOND_GROUPS` u `configurator.js` — svih 7 prong/
+      carree/frame item-a (#63) obrisano (ne zakomentarisano — geometrija im
+      je uklonjena iz scene.module.js, pa bi ostavljanje bilo mrtav kod).
+      Ostaju samo `none` ("Bez dijamanta") i `flush` ("Utisnut").
+    - **scene.module.js**: cela prong/carree/frame biblioteka obrisana —
+      `makeBladeGeometry`, `addBladeProng`, `buildBladePronged`,
+      `buildWirePronged`, `buildCarree`, `buildFrame`, `SETTING_TYPES`,
+      `CARREE_PHASE`, `carreeGeo`/`makeCarreeGeometry`, `isCarreeSetting`.
+      Zamenjeno sa `buildFlushRim()` — tanak obod metala na girdle liniji
+      (prava "flush set"/"rubbed" tehnika: metal narubljen preko ivice
+      kamena), `FLUSH_SETTING = 'flush'`. `stoneParams.raise` 0.6 → 0.05:
+      girdle sad sedi TAČNO na površini trake umesto podignut na kandžama —
+      pavilion kamena jednostavno sedi UNUTAR čvrstog metala trake (sakriven
+      iz svakog ugla, nema potrebe za urezanim ležištem). `cut`/carree gem
+      opcija uklonjena iz cele putanje (configurator.js više ne šalje
+      `setting`/`cut` u `sceneStateFor`'s stone objekat — samo `mm`,
+      `positions`, `widthPos`).
+    - **Realniji facet oblik**: kruna je bila savršeno uniforman 16-ugao
+      (svi "star" facet-i identični) — pravi round brilliant naizmenično
+      ima 8 VEĆIH bezel facet-a i 8 MANJIH star facet-a (klasična
+      8-kraka zvezda gledano odozgo). `makeBrilliantGeometry()`: star-ring
+      radijus sad cik-cak-uje (`rStarOut`/`rStarIn` naizmenično po indeksu)
+      umesto fiksnog radijusa — ista N=16 topologija, ali sad se vidi
+      zvezda. Verifikovano headless top-down snimkom (kamera ručno
+      pozicionirana pravo iznad kamena preko `scene.debug`) — zvezdasti
+      facet uzorak se jasno vidi.
+    - **Jači "svetlucavost"**: `sparkleScale` 1.25→1.6, `sparkleOpacity`
+      0.4→0.6, i DVA sparkle sprite-a po kamenu umesto jednog (jedan
+      centriran + jedan manji pomeren ka ivici) — jedan fiksni centralni
+      sjaj čita se kao statična bela tačka, dva razmaknuta čitaju se kao
+      da hvataju svetlo na dva različita facet-a odjednom ("fire"). NAPOMENA
+      za klijenta: pravi transmission/dispersion/refrakcija i dalje rade
+      SAMO na pravom GPU-u (SwiftShader ovde ih ne renderuje — vidi
+      napomenu u #54) — sparkle sprite je namerna zamena za to, ali finalna
+      procena "da li sad dovoljno svetluca" treba proveru na klijentovoj
+      mašini, ne ovde.
+    - **Verifikovano headless**: pun tok kroz svih 12 profila + toggle
+      dijamanta on/off + 3 kamena + slobodna pozicija + žleb na drugoj burmi,
+      nula konzolnih grešaka. Krunica panel sad ima tačno 2 stavke.
+
 ## Otvorena pitanja (blokiraju procenu obima)
 
 | # | Pitanje | Zašto je bitno |
@@ -762,7 +824,7 @@ Sve odluke donete 2026-08-31 osim gde je drugačije navedeno. Format: odluka →
 | B | **Finalni frontend framework**: Svelte / SolidJS / React / Preact? | Ne blokira arhitekturu, ali treba pre Faze 4. Lean: Svelte ili Solid (mali runtime). |
 | C | **CDN provider**: Bunny / Cloudflare R2 / S3+CloudFront? | Treba pre Faze 3 (upload pipeline za asseti). |
 | ~~D~~ | ✅ Rešeno (odluka 23): debljina = zaseban klizač. | — |
-| E | **Dijamanti za burme**: 3 veličine (0,005 / 0,015 / 0,03 ct) su sada `available=1` i biraju se tek posle izbora krunice (#64); kamen je fasetiran brilijant, flush spolja (#46/#47). Ostaje pitanje: više kamena / pavé red / dodatni tipovi postavke — v2. | Obim proceduralnog kamenja + stock logika. |
+| E | **Dijamanti za burme**: 3 veličine (0,005 / 0,015 / 0,03 ct) su sada `available=1` i biraju se tek posle izbora krunice (#64); kamen je fasetiran brilijant, UTISNUT/flush (bez kandži, #68). Ostaje pitanje: više kamena / pavé red — v2. Sparkle sprite (#68) je privremena zamena za pravu transmisiju/disperziju koja radi samo na pravom GPU-u — treba potvrda klijenta na svojoj mašini. | Obim proceduralnog kamenja + stock logika + real-GPU vizuelna potvrda. |
 | E2 | **`.3dm` geometrija**: da li klijent može da izveze `.obj`/`.glb` iz Rhina (mesh, ~50k), ili idemo 100% proceduralno? | Proceduralno je plan (odluka 6) i radi bez Rhina; CAD izvoz treba samo ako se traži tačna geometrija 1:1. |
 | F | **Email**: primalac(ci)? kopija kupcu? slika client-side ili server-side? | Faza 5. Odloženo. |
 | G | **MODEL/glave kao CPT ili tabela?** | Zavisi koliko bogat editor klijentu treba (slike, opisi). |

@@ -375,7 +375,7 @@ function create(canvas, opts = {}) {
     crownH: 0.16,            // crown height  (× girdle radius)
     pavD: 0.40,              // pavilion depth (× girdle radius)
     prominence: 1.9,         // stone mm → scene units (burma stones read big)
-    raise: 0.6,              // girdle plane height above band surface (× pavD × scale) — low so it nestles, not on stilts
+    raise: 0.05,             // girdle plane height above band surface (× pavD × scale) — near-flush (Round 14): the pavilion sits inside the solid band, only the crown shows
     // material — tuned for SOFTWARE GL first (see note above sharedStoneMat):
     // low transmission + modest env so the baked facet colours actually read
     // instead of washing to a white blob. A real GPU can push these up via
@@ -389,8 +389,12 @@ function create(canvas, opts = {}) {
     // contrast still reads through that reflection
     colTable: '#93a3af', colCrown: '#c0ccd4', colGirdle: '#a7b5bf',
     colPav: '#70808d', colCulet: '#333f4a',
-    // sparkle sprite
-    sparkle: true, sparkleScale: 1.25, sparkleOpacity: 0.4,
+    // sparkle sprites — Round 14 (2026-09-15, client: "poseban efekat
+    // svetlucavosti"): bumped from one faint centred glint to two brighter,
+    // off-centre ones (see makeStoneUnit) — a single dead-centre highlight
+    // reads as a static white dot, real "fire" is 2+ point-glints catching
+    // DIFFERENT facets at once.
+    sparkle: true, sparkleScale: 1.6, sparkleOpacity: 0.6,
   };
 
   const sharedStoneMat = new THREE.MeshPhysicalMaterial({
@@ -515,7 +519,7 @@ function create(canvas, opts = {}) {
       side: THREE.DoubleSide,
     });
     attachBottomShade(mat);
-    // Metal for the diamond's prongs + basket. Its own material (not `mat`) so
+    // Metal for the diamond's flush-set rim. Its own material (not `mat`) so
     // it can be a touch rougher/duller than the polished band and skip the
     // band's bottom-shade shader; loop() copies the band's (tweening) colour
     // into it every frame, same trick the grooves use.
@@ -600,14 +604,18 @@ function create(canvas, opts = {}) {
         pts.push(new THREE.Vector2((outerR - outR) + Math.cos(a) * outR, Math.sin(a) * h));
       }
     } else {
-      // 'flat' (ravni) — rectangle with a small chamfer on each outer edge
-      const c = Math.min(0.16, thickness * 0.18, h * 0.4);
+      // 'flat' (ravni) — plain rectangle, sharp outer corners. Used to have a
+      // small chamfer on each outer edge; client (Round 14, 2026-09-15,
+      // screenshot): "duple ivice" — the chamfer's two facet boundaries
+      // (top-face→chamfer, chamfer→outer-wall) sit close enough together
+      // that the studio's few hard-edged lights put a separate bright
+      // specular streak on each, reading as a doubled/duplicated rim line
+      // rather than one clean bevel. A single sharp corner has only one
+      // edge to catch a highlight — matches WamaGold's plain flat-band look.
       pts.push(new THREE.Vector2(innerR, -h));
       pts.push(new THREE.Vector2(innerR, h));
-      pts.push(new THREE.Vector2(outerR - c, h));
-      pts.push(new THREE.Vector2(outerR, h - c));
-      pts.push(new THREE.Vector2(outerR, -h + c));
-      pts.push(new THREE.Vector2(outerR - c, -h));
+      pts.push(new THREE.Vector2(outerR, h));
+      pts.push(new THREE.Vector2(outerR, -h));
     }
     // close the loop
     if (pts.length && !pts[0].equals(pts[pts.length - 1])) pts.push(pts[0].clone());
@@ -798,20 +806,27 @@ function create(canvas, opts = {}) {
     return outerR;
   }
 
-  // Faceted gem geometry — non-indexed so computeVertexNormals() bakes one
-  // flat normal per facet (see the big note above sharedStoneMat). Carries a
-  // per-vertex `color` attribute: light crown → darker pavilion → near-black
-  // culet, the fake "depth through the stone" cue. `N`/`phase` pick the
-  // girdle's polygon: N=16/phase=0 reads as a round brilliant; N=4 with a 45°
-  // phase gives a square (carree/princess) girdle with corners at NE/NW/SE/SW
-  // — same corners `buildCarree()` below hangs its prongs off, so the setting
-  // always grips exactly where the stone actually has a corner. Rebuilt (not
-  // just re-scaled) whenever a stoneParams geometry/colour knob changes —
-  // cheap, ~230 tris for the round cut, ~60 for the square one.
-  function makeFacetedGemGeometry(N, phase) {
+  // Faceted round-brilliant gem geometry — non-indexed so
+  // computeVertexNormals() bakes one flat normal per facet (see the big note
+  // above sharedStoneMat). Carries a per-vertex `color` attribute: light
+  // crown → darker pavilion → near-black culet, the fake "depth through the
+  // stone" cue. Rebuilt (not just re-scaled) whenever a stoneParams
+  // geometry/colour knob changes — cheap, ~230 tris.
+  //
+  // Round 14 (2026-09-15, client: "model dijamanta nije baš kao pravi"): the
+  // crown used to be a perfectly uniform 16-gon — every one of the 16 star
+  // facets identical, reading as a plain even pinwheel from above. A real
+  // round brilliant alternates 8 LARGER bezel/main facets with 8 SMALLER
+  // star facets (the classic 8-point star you see looking down into a
+  // diamond) — so the star ring's radius now zigzags out/in every other
+  // vertex (rStarOut/rStarIn) instead of sitting at one fixed radius,
+  // producing that alternation with the same N=16 wedge count.
+  function makeBrilliantGeometry() {
+    const N = 16, phase = 0;
     const P = stoneParams;
     const rG = 0.5, rT = rG * P.tableRatio;
-    const rStar = rG * (P.tableRatio + (1 - P.tableRatio) * 0.5); // star-facet ring
+    const rStarOut = rG * (P.tableRatio + (1 - P.tableRatio) * 0.62); // bezel-facet corner
+    const rStarIn = rG * (P.tableRatio + (1 - P.tableRatio) * 0.36);  // star-facet point
     const rPav = rG * 0.55;                                       // pavilion-main mid ring
     const yT = P.crownH, yStar = P.crownH * 0.5, yGt = 0.035, yGb = -0.035;
     const yPav = -P.pavD * 0.52, yC = -P.pavD;
@@ -820,6 +835,7 @@ function create(canvas, opts = {}) {
       cU = new THREE.Color(P.colCulet);
     const pos = [], col = [];
     const V = (r, y, i) => { const a = phase + (i / N) * Math.PI * 2; return [Math.cos(a) * r, y, Math.sin(a) * r]; };
+    const starV = (i, y) => V(i % 2 === 0 ? rStarOut : rStarIn, y, i);
     const tri = (a, b, c, ca, cb, cc) => {
       pos.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
       col.push(ca.r, ca.g, ca.b, cb.r, cb.g, cb.b, cc.r, cc.g, cc.b);
@@ -827,7 +843,7 @@ function create(canvas, opts = {}) {
     const TC = [0, yT, 0], CU = [0, yC, 0];
     for (let i = 0; i < N; i++) {
       const t0 = V(rT, yT, i), t1 = V(rT, yT, i + 1);
-      const s0 = V(rStar, yStar, i), s1 = V(rStar, yStar, i + 1);
+      const s0 = starV(i, yStar), s1 = starV(i + 1, yStar);
       const gt0 = V(rG, yGt, i), gt1 = V(rG, yGt, i + 1);
       const gb0 = V(rG, yGb, i), gb1 = V(rG, yGb, i + 1);
       const p0 = V(rPav, yPav, i), p1 = V(rPav, yPav, i + 1);
@@ -844,190 +860,42 @@ function create(canvas, opts = {}) {
     g.computeVertexNormals();
     return g;
   }
-  // Square girdle corners sit at 45°/135°/225°/315° (flat edges facing
-  // straight up/down/left/right in unit space) — matches the "Carree"
-  // reference screenshots (client, 2026-09-14), where the stone reads as an
-  // axis-aligned square, not a diamond/kite.
-  const CARREE_PHASE = Math.PI / 4;
-  function makeBrilliantGeometry() { return makeFacetedGemGeometry(16, 0); }
-  function makeCarreeGeometry() { return makeFacetedGemGeometry(4, CARREE_PHASE); }
   let brilliantGeo = makeBrilliantGeometry();
-  let carreeGeo = makeCarreeGeometry();
 
   // --------------------------------------------------------- krunica/setting
   //
-  // Seven setting/prong types (client, 2026-09-14: screenshots of
-  // konfigurator.breuning.de's "Diamond group" → "Chaton version" panel, one
-  // front + one side shot per type — replicate all 7 in our render):
-  //   prong4-v1 / prong6-v1  — wide sculpted "trellis" blades, no ball tip,
-  //                            metal itself tapers to the grip point
-  //   carree-v1 / carree-v2  — square (princess) stone, corner V-prongs;
-  //                            v1 adds two solid cathedral gallery walls,
-  //                            v2 is the lighter open-basket version
-  //   frame                  — full bezel, stone wrapped all the way round
-  //   prong4-v2 / prong6-v2  — classic thin wire prongs + ball tips
-  //                            (this is the pre-existing 4-claw look)
-  // All built in UNIT-STONE space (girdle r=0.5 at y=0) so buildStoneFor's
-  // uniform scale/position/rotation of the whole stone Group carries
-  // whichever one is picked along with it. Uses the rig's stoneMetal so it
-  // always matches the band colour/finish (loop() copies the colour in every
-  // frame, same trick the grooves use).
-  const SETTING_TYPES = ['prong4-v1', 'prong6-v1', 'carree-v1', 'frame', 'prong4-v2', 'prong6-v2', 'carree-v2'];
-  const DEFAULT_SETTING = 'prong4-v2';
+  // Round 14 (2026-09-15): client dropped every prong/carree/bezel-frame
+  // setting from Round 10 — "skidamo one kandže, ostavljamo samo ovako nešto
+  // ništa više od toga kao na wamagold-u", pointing at wamagold-configurator
+  // .com's "Diamonds" step with its flush/"Rubbed" look selected (no claws
+  // at all, just the stone with a thin rim of metal at the girdle). Down to
+  // ONE setting: FLUSH_SETTING below. `raise` in stoneParams also dropped
+  // from 0.6 (raised, prong-bridged) to ~0 (girdle sits AT the band surface)
+  // — the pavilion end simply sits inside the solid band mesh, which hides
+  // it from every camera angle exactly like a real flush-set stone; no
+  // carved seat needed. Built in UNIT-STONE space (girdle r=0.5 at y=0) so
+  // buildStoneFor's uniform scale/position/rotation of the whole stone Group
+  // carries it along. Uses the rig's stoneMetal so it always matches the
+  // band colour/finish (loop() copies the colour in every frame, same trick
+  // the grooves use).
+  const FLUSH_SETTING = 'flush';
 
-  // A tapered, flattened prong — a 4-sided "blade" that narrows from a wide
-  // base to a point (no ball tip), the sculpted trellis look of the *-v1
-  // types. `wBase/wTip` = width across the visible (tangential) face,
-  // `thick` = radial depth. Built with an explicit basis (tangent/dir/
-  // radial) rather than `setFromUnitVectors`, so the wide face is guaranteed
-  // to face outward (tangentially) instead of an arbitrary roll.
-  function makeBladeGeometry(wBase, wTip, thick, len) {
-    const hbx = wBase / 2, htx = wTip / 2, hz = thick / 2;
-    const B0 = [-hbx, 0, hz], B1 = [hbx, 0, hz], B2 = [hbx, 0, -hz], B3 = [-hbx, 0, -hz];
-    const T0 = [-htx, len, hz], T1 = [htx, len, hz], T2 = [htx, len, -hz], T3 = [-htx, len, -hz];
-    const pos = [];
-    const quad = (a, b, c, d) => { pos.push(...a, ...b, ...c, ...a, ...c, ...d); };
-    quad(B0, B1, T1, T0); quad(B2, B3, T3, T2); // ±Z faces
-    quad(B1, B2, T2, T1); quad(B3, B0, T0, T3); // ±X faces
-    quad(T0, T1, T2, T3);                       // tip cap
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    g.computeVertexNormals();
-    return g;
+  // The real "flush set" technique: metal rubbed/burnished over the girdle
+  // edge, reading as a thin bright rim — nothing raised, nothing prong-held.
+  function buildFlushRim(g, metal) {
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.035, 8, 24), metal);
+    rim.rotation.x = Math.PI / 2;
+    g.add(rim);
   }
-  function addBladeProng(g, metal, ang, o) {
-    const cx = Math.cos(ang), cz = Math.sin(ang);
-    const base = new THREE.Vector3(cx * o.rBase, o.yBase, cz * o.rBase);
-    const tip = new THREE.Vector3(cx * o.rTip, o.yTip, cz * o.rTip);
-    const dir = tip.clone().sub(base).normalize();
-    const tangent = new THREE.Vector3(-cz, 0, cx);   // wide face points this way
-    const radial = new THREE.Vector3(cx, 0, cz);     // thin face points this way
-    const geo = makeBladeGeometry(o.wBase, o.wTip, o.thick, base.distanceTo(tip));
-    const mesh = new THREE.Mesh(geo, metal);
-    mesh.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(tangent, dir, radial));
-    mesh.position.copy(base);
-    g.add(mesh);
-  }
-  function buildBladePronged(g, metal, count, phase, o) {
-    for (let k = 0; k < count; k++) addBladeProng(g, metal, phase + k * (Math.PI * 2 / count), o);
-    const basket = new THREE.Mesh(new THREE.TorusGeometry(0.44, o.basketTube, 8, 22), metal);
-    basket.rotation.x = Math.PI / 2;
-    basket.position.y = -stoneParams.pavD * 0.4;
-    g.add(basket);
-  }
-
-  // Classic thin wire prong + ball tip (the pre-existing 4-claw code,
-  // generalised to any count/phase so *-v2 6-prong reuses it too).
-  function buildWirePronged(g, metal, count, phase) {
-    const P = stoneParams;
-    const up = new THREE.Vector3(0, 1, 0), a = new THREE.Vector3(), b = new THREE.Vector3(), d = new THREE.Vector3();
-    const yBase = -P.pavD * 0.35, yTip = P.crownH + 0.03, rBase = 0.48, rTip = 0.36;
-    for (let k = 0; k < count; k++) {
-      const ang = phase + k * (Math.PI * 2 / count), cx = Math.cos(ang), cz = Math.sin(ang);
-      a.set(cx * rBase, yBase, cz * rBase);
-      b.set(cx * rTip, yTip, cz * rTip);
-      const len = a.distanceTo(b);
-      const claw = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.05, len, 6), metal);
-      claw.position.copy(a).add(b).multiplyScalar(0.5);
-      claw.quaternion.setFromUnitVectors(up, d.subVectors(b, a).normalize());
-      g.add(claw);
-      const tip = new THREE.Mesh(new THREE.SphereGeometry(0.042, 8, 6), metal);
-      tip.position.copy(b);
-      g.add(tip);
-    }
-    const basket = new THREE.Mesh(new THREE.TorusGeometry(0.44, 0.024, 8, 22), metal);
-    basket.rotation.x = Math.PI / 2;
-    basket.position.y = -P.pavD * 0.42;
-    g.add(basket);
-  }
-
-  // Square (carree) setting: 4 corner V-prongs, aligned with the gem's own
-  // corners (CARREE_PHASE). `withWalls` (v1) adds two solid flat cathedral
-  // gallery panels across the opposite flat edges (angle 0/π — the edges
-  // midway between corners, since corners sit at CARREE_PHASE + k·90°); v2
-  // skips them for the lighter open-basket look and gets a small square
-  // basket ring instead so the stone still has support underneath.
-  function buildCarree(g, metal, withWalls) {
-    const P = stoneParams, rG = 0.5;
-    const yBase = -P.pavD * (withWalls ? 0.42 : 0.34), yTip = P.crownH + 0.03;
-    const wBase = withWalls ? 0.30 : 0.20, wTip = withWalls ? 0.12 : 0.08;
-    const thick = withWalls ? 0.12 : 0.08;
-    const rBase = rG * 0.98, rTip = rG * 0.66;
-    for (let k = 0; k < 4; k++) {
-      addBladeProng(g, metal, CARREE_PHASE + k * Math.PI / 2, { rBase, rTip, yBase, yTip, wBase, wTip, thick });
-    }
-    if (withWalls) {
-      const edgeLen = rG * Math.SQRT2 * 0.94, wallH = P.crownH + P.pavD * 0.55, wallThick = 0.05;
-      const up = new THREE.Vector3(0, 1, 0);
-      [0, Math.PI].forEach((ang) => {
-        const cx = Math.cos(ang), cz = Math.sin(ang);
-        const wall = new THREE.Mesh(new THREE.BoxGeometry(edgeLen, wallH, wallThick), metal);
-        const tangent = new THREE.Vector3(-cz, 0, cx), radial = new THREE.Vector3(cx, 0, cz);
-        wall.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(tangent, up, radial));
-        wall.position.set(cx * rG * 0.92, -P.pavD * 0.28, cz * rG * 0.92);
-        g.add(wall);
-      });
-    } else {
-      const basket = new THREE.Mesh(new THREE.TorusGeometry(rG * 0.6, 0.032, 8, 4), metal);
-      basket.rotation.x = Math.PI / 2;
-      basket.rotation.y = CARREE_PHASE;
-      basket.position.y = -P.pavD * 0.36;
-      g.add(basket);
-    }
-  }
-
-  // Full bezel/"okvir": a solid collar wraps the girdle all the way round
-  // (open cylinder wall + a rim lip torus near the crown edge + a thin base
-  // ring), so the stone sits fully framed rather than prong-held.
-  function buildFrame(g, metal) {
-    const P = stoneParams, rG = 0.5;
-    const wallH = P.crownH + P.pavD * 0.3;
-    const wall = new THREE.Mesh(new THREE.CylinderGeometry(rG * 1.06, rG * 1.02, wallH, 24, 1, true), metal);
-    wall.position.y = P.crownH - wallH / 2 + 0.02;
-    g.add(wall);
-    const lip = new THREE.Mesh(new THREE.TorusGeometry(rG * 1.04, 0.045, 10, 28), metal);
-    lip.rotation.x = Math.PI / 2;
-    lip.position.y = P.crownH * 0.55;
-    g.add(lip);
-    const baseRing = new THREE.Mesh(new THREE.TorusGeometry(rG, 0.03, 8, 24), metal);
-    baseRing.rotation.x = Math.PI / 2;
-    baseRing.position.y = -P.pavD * 0.35;
-    g.add(baseRing);
-  }
-
-  // Dispatcher — picks one of the 7 types above. Falls back to the classic
-  // 4-prong (prong4-v2) for an unknown/missing `type` so old cached state
-  // (or a thumbnail scene that never sends `stone.setting`) still renders.
-  function makeSettingGroup(metal, type) {
+  function makeSettingGroup(metal) {
     const g = new THREE.Group();
-    const P = stoneParams;
-    switch (type) {
-      case 'prong4-v1':
-        buildBladePronged(g, metal, 4, Math.PI / 4, {
-          wBase: 0.34, wTip: 0.10, thick: 0.11, rBase: 0.50, rTip: 0.30,
-          yBase: -P.pavD * 0.30, yTip: P.crownH * 0.92, basketTube: 0.05,
-        });
-        break;
-      case 'prong6-v1':
-        buildBladePronged(g, metal, 6, Math.PI / 2, {
-          wBase: 0.22, wTip: 0.07, thick: 0.09, rBase: 0.49, rTip: 0.32,
-          yBase: -P.pavD * 0.28, yTip: P.crownH * 0.90, basketTube: 0.045,
-        });
-        break;
-      case 'carree-v1': buildCarree(g, metal, true); break;
-      case 'carree-v2': buildCarree(g, metal, false); break;
-      case 'frame': buildFrame(g, metal); break;
-      case 'prong6-v2': buildWirePronged(g, metal, 6, Math.PI / 2); break;
-      case 'prong4-v2':
-      default: buildWirePronged(g, metal, 4, Math.PI / 4); break;
-    }
+    buildFlushRim(g, metal);
     return g;
   }
-  function isCarreeSetting(type) { return type === 'carree-v1' || type === 'carree-v2'; }
 
   // Disposes only the geometries owned by a setting-group Mesh tree — never
-  // called on the gem (shared brilliantGeo/carreeGeo) or the sparkle Sprite
-  // (shared plane geometry), both pooled across every stone unit.
+  // called on the gem (shared brilliantGeo) or the sparkle Sprite (shared
+  // plane geometry), both pooled across every stone unit.
   function disposeSettingGroup(grp) {
     if (!grp) return;
     grp.traverse((o) => { if (o.isMesh && o.geometry) o.geometry.dispose(); });
@@ -1035,30 +903,36 @@ function create(canvas, opts = {}) {
 
   // One pooled stone "unit" = gem mesh + setting group + sparkle sprite,
   // under a Group that buildStoneFor positions/rotates/scales as a whole.
-  function makeStoneUnit(rig, type, cut) {
+  // Only one setting exists now (FLUSH_SETTING) so a unit never needs
+  // rebuilding once made — ensureStoneUnit just lazily creates it.
+  function makeStoneUnit(rig) {
     const unit = new THREE.Group();
-    const gem = new THREE.Mesh(cut === 'carree' ? carreeGeo : brilliantGeo, sharedStoneMat);
+    const gem = new THREE.Mesh(brilliantGeo, sharedStoneMat);
     gem.renderOrder = 3;
     unit.add(gem);
-    const settingGroup = makeSettingGroup(rig.stoneMetal, type);
+    const settingGroup = makeSettingGroup(rig.stoneMetal);
     unit.add(settingGroup);
-    const spr = new THREE.Sprite(sparkleMat);
-    spr.position.y = stoneParams.crownH * 0.85;
-    spr.renderOrder = 4;
-    spr.visible = stoneParams.sparkle;
-    unit.add(spr);
-    unit.userData = { gem, sparkle: spr, settingGroup, type, cut };
+    // Two glints, not one: a single dead-centre sprite reads as a static
+    // white dot; two smaller ones offset toward different facets read as
+    // catching the light at once — closer to real diamond "fire".
+    const sparkles = [
+      { x: 0, z: 0, s: 1 }, { x: 0.22, z: 0.16, s: 0.6 },
+    ].map(({ x, z, s }) => {
+      const spr = new THREE.Sprite(sparkleMat);
+      spr.position.set(x, stoneParams.crownH * 0.85, z);
+      spr.userData.baseScale = s;
+      spr.renderOrder = 4;
+      spr.visible = stoneParams.sparkle;
+      unit.add(spr);
+      return spr;
+    });
+    unit.userData = { gem, sparkle: sparkles, settingGroup };
     return unit;
   }
-  // Ensures rig.stones[i] exists and matches the wanted type/cut, rebuilding
-  // it in place (dispose old setting-group geometry, keep the pooled gem/
-  // sparkle materials) when the "Krunica" choice changes — swapping crowns
-  // is a rare click, not a per-frame cost, so a full unit rebuild is fine.
-  function ensureStoneUnit(rig, i, type, cut) {
+  function ensureStoneUnit(rig, i) {
     let u = rig.stones[i];
-    if (u && u.userData.type === type && u.userData.cut === cut) return u;
-    if (u) { rig.root.remove(u); disposeSettingGroup(u.userData.settingGroup); }
-    u = makeStoneUnit(rig, type, cut);
+    if (u) return u;
+    u = makeStoneUnit(rig);
     rig.root.add(u);
     rig.stones[i] = u;
     return u;
@@ -1066,23 +940,17 @@ function create(canvas, opts = {}) {
   const _stoneUp = new THREE.Vector3(0, 1, 0);
   const _stoneOut = new THREE.Vector3();
 
-  // state.stone = { mm, positions: [mm along band, ...], widthPos, setting,
-  // cut }. `setting` is one of SETTING_TYPES (client, 2026-09-14: replicate
-  // konfigurator.breuning.de's 7-way "Chaton version" panel); `cut` is
-  // 'round' | 'carree' and is really implied by `setting` (carree-v1/v2 need
-  // the square gem) — configurator.js keeps them in sync. "Količina"/
-  // "Pozicioniranje" UI choices resolve to the `positions` list before this
-  // sees it; this just places whatever it's given. `position` (singular) is
-  // still accepted as single-stone shorthand.
+  // state.stone = { mm, positions: [mm along band, ...], widthPos }.
+  // "Količina"/"Pozicioniranje" UI choices resolve to the `positions` list
+  // before this sees it; this just places whatever it's given. `position`
+  // (singular) is still accepted as single-stone shorthand.
   function buildStoneFor(key, state) {
     const rig = rigs[key];
     const s = state.stone;
     const positions = s && s.mm ? (s.positions || [typeof s.position === 'number' ? s.position : 0]) : [];
     const n = positions.length;
-    const type = (s && s.setting) || DEFAULT_SETTING;
-    const cut = (s && s.cut) || (isCarreeSetting(type) ? 'carree' : 'round');
     if (!rig.stones) rig.stones = [];
-    for (let i = 0; i < n; i++) ensureStoneUnit(rig, i, type, cut);
+    for (let i = 0; i < n; i++) ensureStoneUnit(rig, i);
     rig.stones.forEach((u, i) => { if (u) u.visible = i < n; }); // nulled slots: dbg.rebuildStone() rebuild pass
     if (!n) return;
 
@@ -1092,10 +960,12 @@ function create(canvas, opts = {}) {
     const thickness = state.thickness || 1.4;
     const outerR = innerR + thickness;
     const meanCirc = Math.PI * (innerR + outerR);
-    // Raised prong setting (NOT flush): the girdle plane sits `raise·pavD·scale`
-    // above the band's outer surface, claws bridge the gap. With raise ≥ 1 the
-    // culet (local y = -pavD) clears the band surface. Clamp so a big stone on
-    // a thin band still reads sensibly rather than dwarfing it.
+    // Flush setting (Round 14): the girdle plane sits `raise·pavD·scale` above
+    // the band's outer surface — raise is near-zero now, so the girdle sits
+    // right AT the surface and the pavilion (culet-ward) simply sits inside
+    // the solid band mesh, hidden from every angle like a real flush stone.
+    // Clamp scale so a big stone on a thin band still reads sensibly rather
+    // than dwarfing it.
     const maxScale = Math.max(0.6, thickness * 2.2);
     const scale = Math.min(s.mm * P.prominence, maxScale);
     const girdleR = outerR + P.raise * P.pavD * scale;
@@ -1103,7 +973,7 @@ function create(canvas, opts = {}) {
     positions.forEach((posMm, i) => {
       const u = rig.stones[i];
       u.scale.setScalar(scale);
-      if (u.userData.sparkle) u.userData.sparkle.scale.setScalar(P.sparkleScale);
+      (u.userData.sparkle || []).forEach((spr) => spr.scale.setScalar(P.sparkleScale * spr.userData.baseScale));
       const theta = ((posMm || 0) / meanCirc) * Math.PI * 2;   // 0 = +Z
       _stoneOut.set(Math.sin(theta), 0, Math.cos(theta));      // radial outward
       u.position.set(_stoneOut.x * girdleR, widthPos, _stoneOut.z * girdleR);
@@ -1271,7 +1141,7 @@ function create(canvas, opts = {}) {
       const rig = rigs[k];
       rig.mat.color.lerp(rig.target.color, 0.09);
       rig.mat.roughness += (rig.target.roughness - rig.mat.roughness) * 0.09;
-      // Diamond prongs/basket track the band's (tweening) colour each frame
+      // Diamond flush-rim tracks the band's (tweening) colour each frame
       // (grooves are part of the band geometry now, so they follow for free).
       rig.stoneMetal.color.copy(rig.mat.color);
     });
@@ -1479,13 +1349,12 @@ function create(canvas, opts = {}) {
       invalidate(20);
     },
     rebuildStone() {
-      // Geometry knobs (tableRatio/crownH/pavD/…) affect the gem AND every
-      // setting type's prong placement, so both gem geometries are rebuilt
-      // and every pooled unit is force-rebuilt (not just re-scaled) — cheap,
-      // this only runs from the ?zscdebug=1 panel, never per-frame.
-      const oldB = brilliantGeo, oldC = carreeGeo;
+      // Geometry knobs (tableRatio/crownH/pavD/…) affect the gem AND the
+      // flush rim's placement, so the gem geometry is rebuilt and every
+      // pooled unit is force-rebuilt (not just re-scaled) — cheap, this only
+      // runs from the ?zscdebug=1 panel, never per-frame.
+      const oldB = brilliantGeo;
       brilliantGeo = makeBrilliantGeometry();
-      carreeGeo = makeCarreeGeometry();
       ['her', 'his'].forEach((k) => {
         const rig = rigs[k];
         (rig.stones || []).forEach((u, i) => {
@@ -1496,17 +1365,16 @@ function create(canvas, opts = {}) {
         if (rig.last) buildStoneFor(k, rig.last);
       });
       if (oldB) oldB.dispose();
-      if (oldC) oldC.dispose();
       invalidate(30);
     },
     setSparkle() {
       const P = stoneParams;
       sparkleMat.opacity = P.sparkleOpacity;
       ['her', 'his'].forEach((k) => (rigs[k].stones || []).forEach((u) => {
-        if (u.userData.sparkle) {
-          u.userData.sparkle.visible = P.sparkle;
-          u.userData.sparkle.scale.setScalar(P.sparkleScale);
-        }
+        (u.userData.sparkle || []).forEach((spr) => {
+          spr.visible = P.sparkle;
+          spr.scale.setScalar(P.sparkleScale * spr.userData.baseScale);
+        });
       }));
       invalidate(20);
     },
