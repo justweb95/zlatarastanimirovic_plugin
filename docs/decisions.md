@@ -905,6 +905,35 @@ Sve odluke donete 2026-08-31 osim gde je drugačije navedeno. Format: odluka →
       disperzija) ili posvećen "diamond studio" environment sa mnogo oštrih
       tačkastih izvora — nijedno nije urađeno ovom rundom.
 
+71. **Klijentov ?zscdebug=1 export primenjen u kod (Round 17, 2026-09-16).**
+    Klijent poslao pun JSON export live-tuning panela (verovatno sa svoje
+    mašine, pravi GPU). Uporedio sam ga sa trenutnim konstantama pre nego
+    što sam bilo šta menjao — klijent je pitao zašto se ništa nije promenilo
+    posle prve provere: **jer je najveći deo JSON-a već bio identičan
+    postojećem kodu** (key/rim svetla, ground opacity, blob params, ceo
+    "stone" blok iz #69/#70 — svih 17 polja se poklapaju broj-za-broj), pa
+    prosto nije bilo šta da se promeni dok se ne izdvoje STVARNE razlike.
+    Stvarne razlike, primenjene:
+    - `POSE.her`/`POSE.his` — kompletno nova poza (klijent je drugačije
+      naklonio par preko debug panela: `rot.x` je bio nosilac ~90° naginjanja,
+      sada je `rot.z=90°` sa `rot.x=0`; `off` vrednosti takođe promenjene).
+      Vizuelno: par sad stoji jedan pored drugog, ne isprepletano.
+    - `studioParams.blur` 0.12 → **0.02** — mnogo oštriji PMREM bake (bilo
+      "blurrier → creamier" po starom komentaru; ovo direktno adresira
+      posmatranje iz #69 da je meki studio glavni razlog zašto je dijamant
+      izgledao "ravno" na mirror testu — sad je i traka i dijamant
+      oštriji).
+    - `studioParams.envOffsetY` 7 → 8.5.
+    - Band `envMapIntensity` 1.5 → 1.2 (JSON "env".her/his, ista vrednost za
+      oba prstena, pa je dovoljna jedna izmena u `makeRig()`).
+    - NIJE menjano (već je odgovaralo): `key`/`rim` DirectionalLight
+      pozicije/intenziteti/shadow, `groundOpacity`, `blobParams`, `camera`
+      polar ograničenja, `material.color/clearcoat/clearcoatRoughness`,
+      `bottomShadeStrength`, ceo `stone` blok.
+    - **Verifikovano headless**: default screenshot pokazuje novu pozu (par
+      sad jedan pored drugog) i oštrije refleksije; pun tok kroz svih 12
+      profila + dijamant + žleb na drugom prstenu, nula grešaka.
+
 ## Otvorena pitanja (blokiraju procenu obima)
 
 | # | Pitanje | Zašto je bitno |

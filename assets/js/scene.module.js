@@ -50,13 +50,18 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 // (accounts for lean/roll, not just a bounding-box guess) before that lift
 // is added, so it can never float or clip regardless of size/pose.
 const POSE = {
+  // Round 17 (2026-09-16): client re-tuned the pair pose live via
+  // ?zscdebug=1 on their own machine and sent the exported JSON — new
+  // values below (was rot.x≈-90° carrying the tilt; now rot.z=90° does,
+  // rot.x=0 — a different but equivalent-looking axis convention the
+  // client's own live session settled on, not a typo).
   her: {
-    rot: new THREE.Euler(-1.6057029118347832, 0.13962634015954636, 0.3141592653589793), // roll 18°, tuned via ?zscdebug=1 — final
-    off: new THREE.Vector3(0, 0, -0.25),
+    rot: new THREE.Euler(0, 0.10471975511965978, 1.5707963267948966),
+    off: new THREE.Vector3(0.91, 0, -0.4),
   },
   his: {
-    rot: new THREE.Euler(-1.5707963267948966, 0.13962634015954636, 0),
-    off: new THREE.Vector3(0.5, 0, 0.5),
+    rot: new THREE.Euler(0, -0.10471975511965978, 1.5707963267948966),
+    off: new THREE.Vector3(0, 0, 0),
   },
 };
 const ZERO = new THREE.Vector3(0, 0, 0);
@@ -147,12 +152,16 @@ function create(canvas, opts = {}) {
   // repositioning just our own reflectors barely moved anything).
   const studioParams = {
     envTiltX: 0, // client tried tilting the rig, then found envOffsetY (below) alone gave the look wanted — tilt back to 0, v1 (2026-09-05)
-    envOffsetY: 7, // "height of the ring within the studio" (see note above) — v1 client-tuned value
+    envOffsetY: 8.5, // "height of the ring within the studio" (see note above) — Round 17, client re-tuned via ?zscdebug=1 (was 7)
     floor: 1.6,
     key: { x: 7, y: 8, z: 8, w: 16, h: 10, power: 4.2 },
     fill: { x: -9, y: 5, z: 3, w: 14, h: 11, power: 2.1 },
     back: { x: -4, y: 6, z: -10, w: 20, h: 16, power: 1.3 },
-    blur: 0.12, // blurrier → creamier, less "busy" reflections
+    // Round 17: sharpened from 0.12 (creamy/soft) to 0.02 — a sharper PMREM
+    // bake gives the gold band crisper, more defined reflections (this also
+    // matters for the diamond's own reflections, see decisions.md #69's
+    // "pure mirror" experiment — softness there was the whole problem).
+    blur: 0.02,
   };
   const pmrem = new THREE.PMREMGenerator(renderer);
   let envRT = pmrem.fromScene(buildStudio(), studioParams.blur);
@@ -530,7 +539,7 @@ function create(canvas, opts = {}) {
     scene.add(root);
     const mat = new THREE.MeshPhysicalMaterial({
       color: new THREE.Color('#D9A945'),
-      metalness: 1.0, roughness: 0.08, envMap: envRT.texture, envMapIntensity: 1.5,
+      metalness: 1.0, roughness: 0.08, envMap: envRT.texture, envMapIntensity: 1.2, // Round 17: client re-tuned via ?zscdebug=1 (was 1.5)
       side: THREE.DoubleSide,
     });
     attachBottomShade(mat);
