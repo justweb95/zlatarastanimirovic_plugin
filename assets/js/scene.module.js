@@ -847,19 +847,31 @@ function create(canvas, opts = {}) {
       pos.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
       col.push(ca.r, ca.g, ca.b, cb.r, cb.g, cb.b, cc.r, cc.g, cc.b);
     };
+    // Round 16 (2026-09-16, client's Envato reference — a ray-traced studio
+    // render of a real diamond): facet-to-facet contrast there is SHARP
+    // (near-white right next to near-black), not a smooth radial gradient —
+    // each facet catches a different point of the environment. `facetTint`
+    // shuffles a per-wedge brightness multiplier (i·7 mod N, coprime with
+    // N=16) rather than plain even/odd alternation, so it reads as
+    // irregular sparkle instead of an obvious regular stripe.
+    const facetTint = (i) => 0.55 + 0.55 * (((i * 7) % N) / N); // ~0.55..1.10
     const TC = [0, yT, 0], CU = [0, yC, 0];
     for (let i = 0; i < N; i++) {
+      const tint = facetTint(i);
+      const cCw = cC.clone().multiplyScalar(tint);
+      const cGw = cG.clone().multiplyScalar(tint);
+      const cPw = cP.clone().multiplyScalar(tint);
       const t0 = V(rT, yT, i), t1 = V(rT, yT, i + 1);
       const s0 = starV(i, yStar), s1 = starV(i + 1, yStar);
       const gt0 = V(rG, yGt, i), gt1 = V(rG, yGt, i + 1);
       const gb0 = V(rG, yGb, i), gb1 = V(rG, yGb, i + 1);
       const p0 = V(rPav, yPav, i), p1 = V(rPav, yPav, i + 1);
-      tri(TC, t0, t1, cT, cC, cC);                                  // table (fan)
-      tri(t0, s0, s1, cC, cC, cC); tri(t0, s1, t1, cC, cC, cC);     // star facets
-      tri(s0, gt0, gt1, cC, cG, cG); tri(s0, gt1, s1, cC, cG, cC);  // bezel/upper-girdle
-      tri(gt0, gb0, gb1, cG, cG, cG); tri(gt0, gb1, gt1, cG, cG, cG); // girdle band
-      tri(gb0, p0, p1, cG, cP, cP); tri(gb0, p1, gb1, cG, cP, cG);  // pavilion upper
-      tri(p0, CU, p1, cP, cU, cP);                                  // pavilion → culet
+      tri(TC, t0, t1, cT, cCw, cCw);                                    // table (fan)
+      tri(t0, s0, s1, cCw, cCw, cCw); tri(t0, s1, t1, cCw, cCw, cCw);   // star facets
+      tri(s0, gt0, gt1, cCw, cGw, cGw); tri(s0, gt1, s1, cCw, cGw, cCw); // bezel/upper-girdle
+      tri(gt0, gb0, gb1, cGw, cGw, cGw); tri(gt0, gb1, gt1, cGw, cGw, cGw); // girdle band
+      tri(gb0, p0, p1, cGw, cPw, cPw); tri(gb0, p1, gb1, cGw, cPw, cGw); // pavilion upper
+      tri(p0, CU, p1, cPw, cU, cPw);                                    // pavilion → culet
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));

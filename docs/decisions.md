@@ -870,6 +870,41 @@ Sve odluke donete 2026-08-31 osim gde je drugačije navedeno. Format: odluka →
     - I dalje važi napomena iz #68: prava sjajnost/vatra kamena treba
       potvrdu na pravom GPU-u, ne headless.
 
+70. **Facet-to-facet kontrast pojačan po pravom foto-realnom referentnom
+    renderu (Round 16, 2026-09-16).** Klijent poslao PSD sa Envato-a
+    (`TS_Backlog_-_KogiVisual_-_1829951_-_Diamond.G03.psd`, 2048×2048,
+    ray-traced studio render pravog dijamanta) i pitao može li se iskoristiti
+    direktno u render-u.
+    - **PSD/PNG se NE mogu uvesti kao 3D asset** — to je ravna slika, naš
+      konfigurator je real-time WebGL (golden rule #3, nikad pre-renderovane
+      slike); slika bi izgledala tačno samo iz jednog ugla. Poslužila je
+      samo kao VIZUELNA referenca.
+    - Otvoreno preko `ag-psd` + `canvas` (Node, privremeno instalirano samo
+      za ovu analizu). PSD ima slojeve `Base` + `Lighting`/`Reflection`/
+      `Shine` (linear dodge, adaptivni highlight-i preko baze) — potvrđuje da
+      je "Base" render sam po sebi već nosio svu bitnu facet-kontrast
+      informaciju.
+    - **Ključni uvid**: pravi dijamant ima OŠTAR facet-to-facet kontrast
+      (skoro-belo odmah pored skoro-crnog), NE glatki radijalni gradijent
+      kakav smo imali (svetla kruna → tamni kulet, jednako za sva 16
+      "wedge"-ova na istom prstenu). `makeBrilliantGeometry()`: dodat
+      `facetTint(i)` — per-wedge multiplikator brightnes-a, promešan
+      (`i·7 mod 16`, uzajamno prost sa N=16) umesto prostog naizmeničnog
+      even/odd (izgleda kao nepravilan sjaj, ne kao pravilna pruga).
+      Primenjen na krunu/girdle/pavilion boje po wedge-u (`cCw/cGw/cPw`);
+      sto (`cT`) i kulet (`cU`) ostaju netaknuti (to su pojedinačne tačke,
+      ne wedge-ovi).
+    - **Verifikovano headless**: makro top-down snimak (kamera ručno
+      pozicionirana preko `scene.debug`, `controls.minDistance` privremeno
+      spušteno sa 10 na 1 radi kadra — isti trik kao ranije QA napomene)
+      pokazuje jasno različite senčene facete umesto ravnomernog izgleda.
+      Pun tok kroz svih 12 profila + multi-kamen + `rebuildStone()`, nula
+      grešaka.
+    - I dalje važi napomena iz #68/#69: puna foto-realnost (unutrašnje
+      refleksije, pravo "fire") zahteva ili pravi GPU (transmisija/
+      disperzija) ili posvećen "diamond studio" environment sa mnogo oštrih
+      tačkastih izvora — nijedno nije urađeno ovom rundom.
+
 ## Otvorena pitanja (blokiraju procenu obima)
 
 | # | Pitanje | Zašto je bitno |
