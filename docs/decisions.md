@@ -724,6 +724,36 @@ Sve odluke donete 2026-08-31 osim gde je drugačije navedeno. Format: odluka →
       naslov ("Krunica"), tekst panela ne sadrži "Obrub"/"Kanal"/"Napeta
       postavka"/"Oko", nula konzolnih grešaka.
 
+66. **Pravi bag nađen i ispravljen: kink na unutrašnjoj gornjoj ivici trake,
+    tačno na lathe šavu (Round 13, 2026-09-15).** Klijent poslao 2 screenshot-a
+    sa crvenim krugom oko vidljivog "izloma" na ivici burme, pitao da li su
+    širina/debljina zaista tačne u mm ili je "proizvoljno".
+    - **Prvo provereno numerički da geometrija NIJE kriva**: spoljni radijus
+      `profilePoints()`-a je izmeren za svih 261 ugaonih prstenova lathe-a —
+      odstupanje ≤ 1e-6 mm duž celog obima, uključujući tačno na šavu. Širina/
+      debljina/veličina se **tačno** pretaču u mm — nema nikakve
+      "proizvoljnosti" u geometriji.
+    - **Pravi uzrok je bio u NORMALAMA (senčenju), ne u pozicijama.** Stari
+      `weldLatheSeam()` (odluka pre #63) je AVERAGE-ovao normalu prstena 0 i
+      prstena 260 (šav) POSLE `computeVertexNormals()` — radilo je za glatke
+      redove profila, ali je na oštrom uglu "ravni" profila (unutrašnja-gornja
+      ivica, tačno tamo gde je klijent zaokružio) merenje pokazalo skok od
+      **~11,9°** između šava i susednog reda, naspram glatkih ~1,4°/segment
+      svuda drugde (9× veće) — averaging dva nezavisno "jednostrana" ugaona
+      blenda nije isto što i stvarno blendovanje sa obe strane odjednom.
+    - **Fix**: `weldLatheSeam()` zamenjen sa `mergeLatheSeamIndices()` —
+      umesto post-hoc averaging-a normala, index buffer se prepravlja PRE
+      `computeVertexNormals()` tako da šav-vertex-i (prsten `segments`)
+      referenciraju iste index-e kao prsten 0 (ista pozicija, topološki pravo
+      spajanje) — `computeVertexNormals()` onda prirodno blenduje obe strane
+      za svaki šav-vertex, tačno kao za svaki drugi unutrašnji prsten. Nijedna
+      nova zavisnost (nije dodat `BufferGeometryUtils` — golden rule #1,
+      lagan plugin) — ~10 linija, čist index rewrite.
+    - **Verifikovano numerički za svih 12 profila** (uklj. sve `param` oblike)
+      **i sa aktivnim žlebom**: odnos šav-delta / unutrašnji-prosek je posvuda
+      ~1.00 (najviše 1.02, tj. 2% — pre fix-a je za "ravni" bio 8.6×). Nula
+      konzolnih grešaka.
+
 ## Otvorena pitanja (blokiraju procenu obima)
 
 | # | Pitanje | Zašto je bitno |

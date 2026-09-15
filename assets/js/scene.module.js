@@ -63,21 +63,31 @@ const ZERO = new THREE.Vector3(0, 0, 0);
 
 // LatheGeometry doesn't share vertices between its first and last angular
 // ring (phi=0 vs phi=2π close back onto the same position) — so
-// computeVertexNormals() treats them as unrelated and the lit result shows a
-// faint hard-edged "notch" running down the band where the revolve closes.
-// Average the two normals at each seam pair and write both back, in place.
-function weldLatheSeam(geo, rows, segments) {
-  const n = geo.attributes.normal;
-  const a0 = 0, a1 = segments * rows;
-  for (let j = 0; j < rows; j++) {
-    const i0 = a0 + j, i1 = a1 + j;
-    const x = (n.getX(i0) + n.getX(i1)) / 2;
-    const y = (n.getY(i0) + n.getY(i1)) / 2;
-    const z = (n.getZ(i0) + n.getZ(i1)) / 2;
-    n.setXYZ(i0, x, y, z);
-    n.setXYZ(i1, x, y, z);
+// computeVertexNormals() treats them as unrelated and the lit result can show
+// a visible crease running down the band where the revolve closes.
+//
+// Round 13 (2026-09-15, client screenshot: a hard "kink" on the inner-top rim
+// edge, right where the two red-circled screenshots showed it): this used to
+// be "fixed" by averaging the seam pair's two independently-computed normals
+// after the fact (see git history for the old weldLatheSeam). That worked for
+// the smoothly-curved rows, but broke down exactly on a sharp cross-section
+// corner (flat profile's inner-top edge, where the inner wall meets the top
+// face) — averaging two one-sided corner blends isn't the same as actually
+// blending both sides at once, and measured ~12° off from the ring's normal
+// ~1.4°/segment elsewhere (9×). Real fix: merge the seam TOPOLOGICALLY, in
+// the index buffer, BEFORE computeVertexNormals() ever runs, so seam vertices
+// pick up faces from both sides like every other ring does — no separate
+// post-hoc averaging step needed, and it stays correct even after
+// carveGroovesIntoGeometry's own computeVertexNormals() re-run.
+function mergeLatheSeamIndices(geo, rows, segments) {
+  const idx = geo.index;
+  if (!idx) return;
+  const arr = idx.array;
+  const seamStart = segments * rows; // ring `segments`, row 0's vertex index
+  for (let k = 0; k < arr.length; k++) {
+    if (arr[k] >= seamStart) arr[k] -= seamStart; // ring `segments` → ring 0 (same row)
   }
-  n.needsUpdate = true;
+  idx.needsUpdate = true;
 }
 
 function create(canvas, opts = {}) {
@@ -734,9 +744,9 @@ function create(canvas, opts = {}) {
       geo.setAttribute('aBandY', new THREE.BufferAttribute(bandY, 1));
     }
     geo.rotateY(-Math.PI / 2);     // move the lathe seam to the left silhouette edge
+    mergeLatheSeamIndices(geo, pts.length, LATHE_SEGMENTS);
     geo.computeVertexNormals();
     carveGroovesIntoGeometry(geo, grooves, innerR, outerR);
-    weldLatheSeam(geo, pts.length, LATHE_SEGMENTS);
     if (rig.band) { rig.band.geometry.dispose(); rig.band.geometry = geo; }
     else {
       rig.band = new THREE.Mesh(geo, rig.mat);
