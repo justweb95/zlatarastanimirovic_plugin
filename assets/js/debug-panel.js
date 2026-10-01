@@ -197,7 +197,7 @@
       {
         title: 'Studio — pod i mekoća',
         fields: [
-          field({ label: 'Nagib celog svetla (°) — pomera gde sjaj pada na prstenu', min: -45, max: 45, step: 1, env: true,
+          field({ label: 'Nagib celog svetla (°) — pomera gde sjaj pada na kamenu', min: -45, max: 45, step: 1, env: true,
             get: function () { return dbg.studioParams.envTiltX * RAD2DEG; },
             set: function (v) { dbg.studioParams.envTiltX = v * DEG2RAD; } }),
           field({ label: 'Visina prstena u studiju', min: -20, max: 20, step: 0.5, env: true,
@@ -209,62 +209,6 @@
           field({ label: 'Mekoća odsjaja (blur)', min: 0.02, max: 0.4, step: 0.01, env: true,
             get: function () { return dbg.studioParams.blur; },
             set: function (v) { dbg.studioParams.blur = v; } }),
-        ],
-      },
-      {
-        title: 'Materijal / okruženje',
-        fields: [
-          field({ label: 'Env intensity — Njena', min: 0, max: 4, step: 0.05,
-            get: function () { return dbg.rigs.her.mat.envMapIntensity; },
-            set: function (v) { dbg.rigs.her.mat.envMapIntensity = v; } }),
-          field({ label: 'Env intensity — Njegova', min: 0, max: 4, step: 0.05,
-            get: function () { return dbg.rigs.his.mat.envMapIntensity; },
-            set: function (v) { dbg.rigs.his.mat.envMapIntensity = v; } }),
-        ],
-      },
-      {
-        title: 'Boja zlata — 6 opcija (klik = primeni na oba)',
-        // Current = client's real 14K measurement (Seeder.php). "Čisto zlato
-        // (PBR F0)" = the physically-measured gold reflectance colour
-        // (linear 1.000/0.766/0.336 → sRGB), from physicallybased.info — a
-        // legitimate physical anchor point, not a guess. The rest are common
-        // reference "polished gold" hexes at different richness/depth for
-        // side-by-side comparison.
-        swatches: [
-          { label: 'Trenutna (klijent 14K, sharpened 2026-09-06)', hex: '#D9A945' },
-          { label: 'Prethodna (pre-sharpen)', hex: '#E6C181' },
-          { label: 'Čisto zlato (PBR F0)', hex: '#FFE39D' },
-          { label: 'Bogato metalik', hex: '#D4AF37' },
-          { label: 'Toplo 18K', hex: '#D9A857' },
-          { label: 'Antikno/22K', hex: '#C9A227' },
-          { label: 'Svetli šampanjac', hex: '#F0D9A8' },
-        ],
-      },
-      {
-        title: 'Boja — proba svoje (hex)',
-        custom: {
-          label: 'Hex boja (primeni na oba prstena)',
-          value: function () { return '#' + dbg.rigs.her.mat.color.getHexString(); },
-          set: function (hex) { dbg.setColor('both', hex); },
-        },
-      },
-      {
-        title: 'Glow (clearcoat sloj)',
-        fields: [
-          field({ label: 'Clearcoat', min: 0, max: 1, step: 0.01,
-            get: function () { return dbg.rigs.her.mat.clearcoat; },
-            set: function (v) { dbg.setClearcoat('both', { clearcoat: v }); } }),
-          field({ label: 'Clearcoat roughness', min: 0, max: 1, step: 0.01,
-            get: function () { return dbg.rigs.her.mat.clearcoatRoughness; },
-            set: function (v) { dbg.setClearcoat('both', { clearcoatRoughness: v }); } }),
-        ],
-      },
-      {
-        title: 'Senčenje pri dnu (lažni AO, 3D efekat)',
-        fields: [
-          field({ label: 'Jačina zatamnjenja', min: 0, max: 1, step: 0.02,
-            get: function () { return dbg.getShadeStrength('her'); },
-            set: function (v) { dbg.setShadeStrength('both', v); } }),
         ],
       },
     ].concat(SHOW_POSITION_CONTROLS ? POSITION_SECTIONS() : []);
@@ -383,10 +327,6 @@
       '#zsc-debug input[type=range]{width:100%;display:block;margin-top:2px;accent-color:#e6c181}',
       '#zsc-debug.zsc-collapsed fieldset,#zsc-debug.zsc-collapsed .zsc-actions{display:none}',
       '#zsc-debug .zsc-note{font-size:10px;color:#a89;margin:0 0 8px;line-height:1.5}',
-      '#zsc-debug .zsc-swatches{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}',
-      '#zsc-debug .zsc-swatch-cell{display:flex;flex-direction:column;align-items:center;gap:3px}',
-      '#zsc-debug .zsc-swatch{width:100%;aspect-ratio:1;border-radius:5px;border:1px solid rgba(255,255,255,.25);cursor:pointer;padding:0}',
-      '#zsc-debug .zsc-swatch-cell span{font-size:9px;color:#c7bfa9;text-align:center;line-height:1.2}',
     ].join('');
     document.head.appendChild(style);
 
@@ -433,31 +373,6 @@
       legend.textContent = section.title;
       fs.appendChild(legend);
 
-      if (section.swatches) {
-        var grid = document.createElement('div');
-        grid.className = 'zsc-swatches';
-        section.swatches.forEach(function (sw) {
-          var btn = document.createElement('button');
-          btn.type = 'button';
-          btn.className = 'zsc-swatch';
-          btn.style.background = sw.hex;
-          btn.title = sw.label + ' (' + sw.hex + ')';
-          btn.addEventListener('click', function () {
-            dbg.setColor('both', sw.hex);
-          });
-          var cap = document.createElement('span');
-          cap.textContent = sw.label;
-          var cell = document.createElement('div');
-          cell.className = 'zsc-swatch-cell';
-          cell.appendChild(btn);
-          cell.appendChild(cap);
-          grid.appendChild(cell);
-        });
-        fs.appendChild(grid);
-        root.appendChild(fs);
-        return;
-      }
-
       if (section.stoneColors) {
         section.stoneColors.forEach(function (sc) {
           var r = document.createElement('label');
@@ -495,25 +410,6 @@
           });
           fs.appendChild(b);
         });
-        root.appendChild(fs);
-        return;
-      }
-
-      if (section.custom) {
-        var row = document.createElement('label');
-        var rowText = document.createElement('span');
-        rowText.textContent = section.custom.label;
-        row.appendChild(rowText);
-        var colorInput = document.createElement('input');
-        colorInput.type = 'color';
-        colorInput.value = section.custom.value();
-        colorInput.style.cssText = 'width:100%;height:28px;margin-top:4px;border:1px solid #3a352b;background:none;cursor:pointer;';
-        colorInput.addEventListener('input', function () {
-          section.custom.set(colorInput.value);
-          dbg.invalidate(20);
-        });
-        fs.appendChild(row);
-        fs.appendChild(colorInput);
         root.appendChild(fs);
         return;
       }
@@ -603,17 +499,7 @@
           minPolarAngle: dbg.controls.minPolarAngle,
           maxPolarAngle: dbg.controls.maxPolarAngle,
         },
-        env: {
-          her: dbg.rigs.her.mat.envMapIntensity,
-          his: dbg.rigs.his.mat.envMapIntensity,
-        },
         studio: JSON.parse(JSON.stringify(dbg.studioParams)),
-        material: {
-          color: '#' + dbg.rigs.her.mat.color.getHexString(),
-          clearcoat: dbg.rigs.her.mat.clearcoat,
-          clearcoatRoughness: dbg.rigs.her.mat.clearcoatRoughness,
-          bottomShadeStrength: dbg.getShadeStrength('her'),
-        },
         stone: JSON.parse(JSON.stringify(dbg.stoneParams)),
       };
     }

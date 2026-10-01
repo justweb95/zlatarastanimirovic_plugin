@@ -3,11 +3,12 @@
  *
  * Procedural wedding band: a cross-section profile revolved around the finger
  * axis (LatheGeometry). Driven live by width / thickness / size / profile.
- * MeshPhysicalMaterial from the client's V-Ray-derived PBR values. Studio
- * reflections via RoomEnvironment (its 6 decorative "furniture" boxes
- * stripped out in buildStudio() below — they reflected as sharp diamond/
- * kite-shaped highlights on the metal; the room walls + its 6 real area
- * lights stay, client liked those) + PMREM. frameloop = "demand".
+ * Metal = LUT look (Faza 2 look update, see "LUT metal look" below): our
+ * grayscale studio-v3 cube indexes a per-metal gradient LUT, unlit and
+ * untouched by tone mapping. Stones still use PBR with studio reflections
+ * via RoomEnvironment (its 6 decorative "furniture" boxes stripped out in
+ * buildStudio() below; the room walls + its 6 real area lights stay) +
+ * PMREM as scene.environment. frameloop = "demand".
  *
  * Two rendering modes, chosen at create():
  *  - opts.pair = true  → the main viewport. Renders BOTH rings ("her"/"his")
@@ -65,6 +66,177 @@ const POSE = {
 };
 const ZERO = new THREE.Vector3(0, 0, 0);
 
+// ------------------------------------------------------------ LUT metal look
+//
+// Faza 2 (2026-10-01, faza2/PROMPT-CLAUDE-CODE.md): polished metal is no
+// longer PBR. Per pixel: the camera reflection (per VERTEX — MeshBasic's
+// vReflect, no normal map) reads our grayscale studio cube (assets/env/
+// studio-v3, 6 × 512² JPG, raw 0..1 values), and that gray value indexes a 1D
+// gradient LUT per metal (black → metal hues → white). Output goes to the
+// screen with no lights, no tone mapping, no sRGB conversion — the metal is
+// fully isolated from the renderer's ACES/sRGB settings (which the stones
+// still use). Mat/Grebano finishes cross-fade to the blurred cube
+// (studio-v3-blur) instead of raising roughness.
+//
+// LUT stops = measured gradients (faza2/reference/wama-lut-stops.json), 65
+// stops per metal at rows 0,8,…,504,511 of a 512 ramp (t = row/511), packed
+// here as concatenated RRGGBB. Do not tweak these to "fix" brightness — the
+// environment is what's calibrated (see ?calib=1 below).
+const LUT_STOPS = {
+  yellow: '0000000601010903020e05031306031908051e0a05220d07280e092f120a34140d3a180e411a10471e124c2313522815582e175e3419633a1b6a421f7048207750237f5725865d288e642a956b2d9d722fa47932ab8035b18639b78d3bbc923fc09841c49d45c9a14acca64dd0ab53d4b058d7b45edbb964dfbd6be1c172e3c578e6ca81e9ce88ead08eedd497efd89df1dba5f2deabf3e1b3f5e4b9f6e6bff8e8c7f9ebcffaeed3faf1dbfbf3e0fbf5e6fcf7eafdf9effdfaf4fefcf8fefdfcffffff',
+  red: '0401010603030a0404100706140a09180d0c1e100d25140f2a16112f1913341d16391f173f221846261a4b281c512c1e562e205d31206533206e36217639237c3b24833e268a412790432995482c9a4c2f9e5032a15435a2583aa65c3eaa6140ae6344b56746b96a49bd704dc1744fc37955c57d5ac8825fcb8662cf8a65d28e6ad59570d89976da9d7bdca381dfa885e2ad8ae5b190e6b798e8bc9feac0a4ecc6abefcab0f2d1b8f3d5bdf6d9c5f7dfccfae4d5fae9dcfbeee4fcf4edfef8f5fffcf9',
+  white: '0201010404040808070d0b0a120f0e1513121a18171e1d1c2421202726252b2a2a302f303533343a3839403e3d4543434b47474f4c4c55504f5956525d5a57625d5a66625e6a65626d6a65716d6976706d7975707e7874817b77867f7b8a837f8e8782928b86968f899a938e9d9792a19b97a79f9aa9a49fada7a3b2aba8b4b0adb8b4b1bdb9b6c1bdbac5c1bec8c5c3ccc9c8d1cdcbd4d0cfd7d5d3dbd9d7dfdddbe2e0dfe5e4e3e9e7e6ebebeaeeeeecf1f0eff4f3f2f7f6f6fafaf9fdfbfcfefefd',
+  manganese: '0101010404050708090b0b0d100f1113131717171b1b1b1e2020242626292b2c3031323736363c3c3e4243454a494b4f4f505657585c5c5e6062636668696b6c6c727272757777797c797e7f7d7f8382848887898b8a8f90909294949899989b9e9c9fa1a0a2a5a4a7aaa9aaaeadafb3b1b3b7b4b6bababbbebcbec2c1c1c7c3c6cac9c9cdccccd0d0d1d3d3d5d7d5d7d9d8d9dadadcdddddfe0e0e2e2e2e4e5e5e6e7e7e9eaeaebececedefeff0f2f2f2f4f4f4f6f6f6f9f9f9fbfbfbfdfdfdfefefe',
+  'white-pd': '0201020202020606060a090a0d0c0c1010101413131817171a1a1a1e1e1e2221222525252929292d2c2c3030303434333837373b3a3a3f3d3d4342414745454a48474e4c4b52504f5554525a57565e5b5a625f5d6663626865646c6967706d6c7471707875757c7979817f7e8583828987868d8b8a918f8e9593929a97969f9c9ca3a1a0a7a5a5aba9a9afadadb5b3b2b9b7b7bdbbbbc1c0bfc7c4c4cbc9c9cfcecdd3d1d0d8d5d5dddbdbe1dfdfe5e3e3e8e8e7edececf2f2f1f7f6f5fafaf9fcfcfb',
+};
+// Material option slug (wp_zs_options, group "material") → LUT. A slug with
+// no entry falls back to yellow with a console warning.
+const METAL_LUT = { zuto: 'yellow', crveno: 'red', roze: 'red', belo: 'white', paladijum: 'white-pd' };
+const LUT_SIZE = 512;
+// Finishes rougher than this read the blurred studio (Mat 0.42, Grebano 0.34;
+// Polirano 0.06).
+const BLUR_ROUGHNESS = 0.2;
+
+function lutStops(packed) {
+  const stops = [];
+  for (let i = 0; i < packed.length / 6; i++) {
+    const n = parseInt(packed.substr(i * 6, 6), 16);
+    stops.push([Math.min(i * 8, 511) / 511, [(n >> 16) & 255, (n >> 8) & 255, n & 255]]);
+  }
+  return stops;
+}
+
+// 1 × 512 ramp, raw display values (NoColorSpace), linear filtered, no mips.
+function createLutTexture(stops) {
+  const data = new Uint8Array(LUT_SIZE * 4);
+  let k = 0;
+  for (let i = 0; i < LUT_SIZE; i++) {
+    const t = i / (LUT_SIZE - 1);
+    while (k < stops.length - 2 && stops[k + 1][0] < t) k++;
+    const [t0, a] = stops[k];
+    const [t1, b] = stops[k + 1];
+    const f = Math.min(1, Math.max(0, (t - t0) / ((t1 - t0) || 1)));
+    for (let c = 0; c < 3; c++) data[i * 4 + c] = Math.round(a[c] + (b[c] - a[c]) * f);
+    data[i * 4 + 3] = 255;
+  }
+  const tex = new THREE.DataTexture(data, 1, LUT_SIZE, THREE.RGBAFormat);
+  tex.colorSpace = THREE.NoColorSpace;
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.generateMipmaps = false;
+  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+// Built once per page, shared by every scene instance (three.js keeps GPU
+// copies per renderer, the CPU-side objects can be shared).
+let lutCache = null;
+function getLuts() {
+  if (!lutCache) {
+    lutCache = {};
+    Object.keys(LUT_STOPS).forEach((k) => { lutCache[k] = createLutTexture(lutStops(LUT_STOPS[k])); });
+    // Identity ramp (black → white) for the ?calib=1 brightness distribution.
+    lutCache.identity = createLutTexture([[0, [0, 0, 0]], [1, [255, 255, 255]]]);
+  }
+  return lutCache;
+}
+function lutFor(slug) {
+  const luts = getLuts();
+  const key = METAL_LUT[slug];
+  if (!key && slug) console.warn('[zsc] no LUT for metal "' + slug + '", using yellow');
+  return luts[key || 'yellow'];
+}
+
+// Grayscale studio cubes, read as a luminance INDEX (never as light). URL is
+// resolved relative to this module (assets/js/ → assets/env/), so it follows
+// ZSC_URL like every other plugin asset. Shipped byte-exact — never re-encode
+// these JPGs (any level change shifts the whole metal look).
+const ENV_BASE = new URL('../env/', import.meta.url);
+let envCache = null;
+function getEnvs() {
+  if (envCache) return envCache;
+  const waiters = [];
+  let pending = 2;
+  const done = () => { if (--pending === 0) { envCache.ready = true; waiters.splice(0).forEach((fn) => fn()); } };
+  const load = (dir) => {
+    const tex = new THREE.CubeTextureLoader()
+      .setPath(new URL(dir + '/', ENV_BASE).href)
+      .load(['px.jpg', 'nx.jpg', 'py.jpg', 'ny.jpg', 'pz.jpg', 'nz.jpg'], done, undefined,
+        () => { console.error('[zsc] failed to load env ' + dir); done(); });
+    tex.colorSpace = THREE.NoColorSpace;
+    tex.generateMipmaps = true;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    return tex;
+  };
+  envCache = {
+    sharp: load('studio-v3'), blur: load('studio-v3-blur'), ready: false,
+    onReady(fn) { if (envCache.ready) fn(); else waiters.push(fn); },
+  };
+  return envCache;
+}
+
+// The metal material. One per ring (her/his can be different metals), all
+// sharing one compiled program (customProgramCacheKey); switching metal or
+// finish only changes uniforms — never a recompile.
+//   uLut / uLutPrev / uLutMix — current + previous LUT, cross-faded on switch
+//   uLutB / uLutC + uZoneCount / uStop1 / uStop2 — "Dve boje"/"Tri boje"
+//     zones (per-vertex aBandY = local width-axis position, see buildBandFor)
+//   uEnvBlur / uBlurMix — blurred studio for Mat/Grebano, cross-faded
+function createLutMetalMaterial(env) {
+  const luts = getLuts();
+  const u = {
+    uLut: { value: luts.yellow },
+    uLutPrev: { value: luts.yellow },
+    uLutMix: { value: 1 },
+    uLutB: { value: luts.yellow },
+    uLutC: { value: luts.yellow },
+    uZoneCount: { value: 0 },
+    uStop1: { value: 0 },
+    uStop2: { value: 0 },
+    uEnvBlur: { value: env.blur },
+    uBlurMix: { value: 0 },
+  };
+  const m = new THREE.MeshBasicMaterial({
+    color: 0xffffff, envMap: env.sharp, combine: THREE.MultiplyOperation, reflectivity: 1,
+    side: THREE.DoubleSide,
+  });
+  m.toneMapped = false;
+  m.userData.lut = u;
+  m.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, u);
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float aBandY;\nvarying float vBandY;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvBandY = aBandY;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vBandY;\n'
+        + 'uniform sampler2D uLut;\nuniform sampler2D uLutPrev;\nuniform float uLutMix;\n'
+        + 'uniform sampler2D uLutB;\nuniform sampler2D uLutC;\n'
+        + 'uniform float uZoneCount;\nuniform float uStop1;\nuniform float uStop2;\n'
+        + 'uniform samplerCube uEnvBlur;\nuniform float uBlurMix;')
+      .replace('#include <opaque_fragment>', `#include <opaque_fragment>
+        float envV = gl_FragColor.r;
+        if ( uBlurMix > 0.001 ) {
+          float envB = textureCube( uEnvBlur, envMapRotation * vec3( flipEnvMap * vReflect.x, vReflect.yz ) ).r;
+          envV = mix( envV, envB, uBlurMix );
+        }
+        vec2 lutUv = vec2( 0.5, ( clamp( envV, 0.0, 1.0 ) * 511.0 + 0.5 ) / 512.0 );
+        vec3 lutC;
+        if ( uZoneCount > 1.5 ) {
+          lutC = ( vBandY > uStop1 ) ? texture2D( uLutB, lutUv ).rgb : texture2D( uLut, lutUv ).rgb;
+          if ( uZoneCount > 2.5 && vBandY > uStop2 ) lutC = texture2D( uLutC, lutUv ).rgb;
+        } else {
+          lutC = texture2D( uLut, lutUv ).rgb;
+          if ( uLutMix < 0.999 ) lutC = mix( texture2D( uLutPrev, lutUv ).rgb, lutC, uLutMix );
+        }
+        gl_FragColor.rgb = lutC;`)
+      .replace('#include <colorspace_fragment>', ''); // LUT values are already display values
+  };
+  m.customProgramCacheKey = () => 'zsc-lut-metal-v1';
+  return m;
+}
+
 // LatheGeometry doesn't share vertices between its first and last angular
 // ring (phi=0 vs phi=2π close back onto the same position) — so
 // computeVertexNormals() treats them as unrelated and the lit result can show
@@ -94,13 +266,19 @@ function mergeLatheSeamIndices(geo, rows, segments) {
   idx.needsUpdate = true;
 }
 
+// Faza 2: min 2 even at DPR 1 (the LUT look lives in thin chamfer lines),
+// max 3.
+function viewPixelRatio() {
+  return Math.min(3, Math.max(2, window.devicePixelRatio || 1));
+}
+
 function create(canvas, opts = {}) {
   const pairMode = !!opts.pair;
   const host = canvas.parentElement;
   const renderer = new THREE.WebGLRenderer({
     canvas, antialias: true, alpha: true, powerPreference: 'high-performance',
   });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setPixelRatio(viewPixelRatio());
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.08;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -461,91 +639,38 @@ function create(canvas, opts = {}) {
     depthWrite: false, transparent: true, opacity: stoneParams.sparkleOpacity,
   });
 
-  // Client (2026-09-05): the flat base gold colour reads as plain/generic
-  // "yellow paint" wherever the environment isn't contributing a highlight,
-  // and asked for a fake ground-shadow-style darkening toward the ring's
-  // bottom for a more grounded 3D read (real product-photography cheat, not
-  // physically real AO). Three.js has no built-in "darken by world height"
-  // input, so this hooks the compiled shader directly: a varying carries
-  // each fragment's world-space Y, and a small multiply against a per-rig
-  // uShadeMinY/uShadeMaxY range (set from that ring's own real vertical
-  // extent in buildBandFor below, so it's always exactly bottom→top of THAT
-  // ring regardless of size) darkens toward the bottom by uShadeStrength.
-  // Also wires up the Materijal "Dve boje"/"Tri boje" multi-colour band
-  // (client, 2026-09-07, decisions.md #34→real): a custom per-vertex
-  // `aBandY` attribute (set in buildBandFor, one float = that vertex's
-  // LOCAL width-axis position, i.e. the same coordinate profilePoints()
-  // already uses) lets the fragment shader pick a zone colour BEFORE the
-  // metal/specular math runs (right after <color_fragment>, so reflections
-  // pick up the right tint per zone too — swapping the colour only in the
-  // final gl_FragColor, like the bottom-shade trick below does, would leave
-  // gold-tinted specular highlights sitting on a silver base). Only straight
-  // width-ratio splits (1:1, 1:2, 2:1…) are done this way — patterns needing
-  // a per-angle coordinate (wave/diagonal/segment/axial) aren't implemented
-  // yet (configurator.js's colorZonesFor() returns null for those, which
-  // keeps uZoneCount at 0 here = ordinary single-colour material).
-  function attachBottomShade(mat) {
-    mat.userData.bottomShade = { minY: -10, maxY: 10, strength: 0 };
-    mat.userData.colorZones = { count: 0, colors: [new THREE.Color(), new THREE.Color(), new THREE.Color()], stop1: 0, stop2: 0 };
-    mat.onBeforeCompile = (shader) => {
-      shader.uniforms.uShadeMinY = { value: mat.userData.bottomShade.minY };
-      shader.uniforms.uShadeMaxY = { value: mat.userData.bottomShade.maxY };
-      shader.uniforms.uShadeStrength = { value: mat.userData.bottomShade.strength };
-      shader.uniforms.uZoneCount = { value: mat.userData.colorZones.count };
-      shader.uniforms.uColorA = { value: mat.userData.colorZones.colors[0] };
-      shader.uniforms.uColorB = { value: mat.userData.colorZones.colors[1] };
-      shader.uniforms.uColorC = { value: mat.userData.colorZones.colors[2] };
-      shader.uniforms.uStop1 = { value: mat.userData.colorZones.stop1 };
-      shader.uniforms.uStop2 = { value: mat.userData.colorZones.stop2 };
-      shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nattribute float aBandY;\nvarying float vShadeWorldY;\nvarying float vBandY;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvShadeWorldY = (modelMatrix * vec4(transformed, 1.0)).y;\nvBandY = aBandY;');
-      shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>',
-          '#include <common>\nvarying float vShadeWorldY;\nvarying float vBandY;\nuniform float uShadeMinY;\nuniform float uShadeMaxY;\nuniform float uShadeStrength;'
-          + '\nuniform float uZoneCount;\nuniform vec3 uColorA;\nuniform vec3 uColorB;\nuniform vec3 uColorC;\nuniform float uStop1;\nuniform float uStop2;')
-        .replace('#include <color_fragment>',
-          '#include <color_fragment>\nif (uZoneCount > 1.5) {\n  vec3 zsColor = (vBandY > uStop1) ? uColorB : uColorA;\n'
-          + '  if (uZoneCount > 2.5 && vBandY > uStop2) zsColor = uColorC;\n  diffuseColor.rgb = zsColor;\n}')
-        .replace('#include <dithering_fragment>',
-          'float shadeT = clamp((vShadeWorldY - uShadeMinY) / max(uShadeMaxY - uShadeMinY, 0.0001), 0.0, 1.0);\n'
-          + 'gl_FragColor.rgb *= mix(1.0 - uShadeStrength, 1.0, shadeT);\n#include <dithering_fragment>');
-      mat.userData.shader = shader;
-    };
-  }
-  // Pushes configurator.js's `colorZones` (or null) onto a rig's material.
-  // `zones` = { colors: [hex,...], stops: [mm,...] } | null.
+  // Materijal "Dve boje"/"Tri boje" multi-colour band (client, 2026-09-07,
+  // decisions.md #34→real): a custom per-vertex `aBandY` attribute (set in
+  // buildBandFor = that vertex's LOCAL width-axis position) lets the metal
+  // shader pick a zone LUT per fragment (createLutMetalMaterial). Only
+  // straight width-ratio splits (1:1, 1:2, 2:1…) are done this way —
+  // wave/diagonal/segment/axial need a per-angle coordinate and aren't
+  // implemented yet (configurator.js's colorZonesFor() returns null for those
+  // = ordinary single-metal ring). The old fake bottom-darkening ("Senčenje
+  // pri dnu") is gone with Faza 2 — it would bend the LUT colours.
+  // `zones` = { metals: [slug,...], stops: [mm,...] } | null.
   function applyColorZones(mat, zones) {
-    const cz = mat.userData.colorZones;
-    const count = zones ? zones.colors.length : 0;
-    cz.count = count;
-    if (zones) {
-      zones.colors.forEach((hex, i) => cz.colors[i].set(hex));
-      cz.stop1 = zones.stops[0] || 0;
-      cz.stop2 = zones.stops[1] || 0;
-    }
-    if (mat.userData.shader) {
-      mat.userData.shader.uniforms.uZoneCount.value = count;
-      mat.userData.shader.uniforms.uStop1.value = cz.stop1;
-      mat.userData.shader.uniforms.uStop2.value = cz.stop2;
-      // uColorA/B/C uniforms already point at cz.colors[i] (same Color
-      // instances, mutated above) — no reassignment needed.
+    const u = mat.userData.lut;
+    const metals = zones ? (zones.metals || []) : [];
+    u.uZoneCount.value = metals.length;
+    if (metals.length) {
+      u.uLut.value = lutFor(metals[0]);
+      u.uLutB.value = lutFor(metals[1]);
+      u.uLutC.value = lutFor(metals[2] || metals[1]);
+      u.uStop1.value = zones.stops[0] || 0;
+      u.uStop2.value = zones.stops[1] || 0;
     }
   }
 
+  const envs = getEnvs();
   function makeRig(key) {
     const root = new THREE.Group();
     scene.add(root);
-    const mat = new THREE.MeshPhysicalMaterial({
-      color: new THREE.Color('#D9A945'),
-      metalness: 1.0, roughness: 0.08, envMap: envRT.texture, envMapIntensity: 1.2, // Round 17: client re-tuned via ?zscdebug=1 (was 1.5)
-      side: THREE.DoubleSide,
-    });
-    attachBottomShade(mat);
+    const mat = createLutMetalMaterial(envs);
     return {
       key, root, mat, band: null, stone: null, outer: 8,
       blob: pairMode ? makeContactBlob() : null,
-      target: { color: new THREE.Color('#D9A945'), roughness: 0.08 },
+      target: { blur: 0 },
     };
   }
   const rigs = { her: makeRig('her'), his: makeRig('his') };
@@ -753,7 +878,7 @@ function create(canvas, opts = {}) {
     const geo = new THREE.LatheGeometry(pts, LATHE_SEGMENTS);
     // Custom per-vertex attribute carrying each vertex's LOCAL width-axis
     // position (same y profilePoints() already works in) — feeds the
-    // Materijal multi-colour shader hook (attachBottomShade/applyColorZones)
+    // Materijal multi-colour shader hook (createLutMetalMaterial/applyColorZones)
     // so it can pick a zone colour by width position. LatheGeometry's own
     // vertex order is angular-slice-major, point-index-minor (index =
     // i*pts.length + j) — rotateY() below only rotates X/Z, Y is untouched,
@@ -793,15 +918,6 @@ function create(canvas, opts = {}) {
     // its own; off.y only ever adds on top of that.
     const lift = GROUND_Y - contact.minY + pose.off.y * outerR;
     rig.root.position.y += lift;
-    // Feed this ring's own real, final vertical extent to its bottom-shade
-    // shader hook (attachBottomShade above) — always exactly this ring's
-    // bottom→top, self-correcting on every rebuild regardless of size.
-    if (rig.mat.userData.shader) {
-      rig.mat.userData.shader.uniforms.uShadeMinY.value = contact.minY + lift;
-      rig.mat.userData.shader.uniforms.uShadeMaxY.value = contact.maxY + lift;
-    }
-    rig.mat.userData.bottomShade.minY = contact.minY + lift;
-    rig.mat.userData.bottomShade.maxY = contact.maxY + lift;
     if (rig.blob) {
       // Anchored at the ring's real lowest point (x/z), not its pivot — so
       // the blob follows THIS ring's own tilt/roll instead of sitting as a
@@ -1072,9 +1188,16 @@ function create(canvas, opts = {}) {
 
   function applyMaterialFor(key, state) {
     const rig = rigs[key];
-    if (state.materialColor) rig.target.color.set(state.materialColor);
-    if (typeof state.roughness === 'number') rig.target.roughness = state.roughness;
-    if (typeof state.envIntensity === 'number') rig.mat.envMapIntensity = state.envIntensity;
+    const u = rig.mat.userData.lut;
+    // Metal switch: cross-fade from what's on screen now to the new LUT
+    // (uniform swap only, same program).
+    const lut = lutFor(state.metal);
+    if (lut !== u.uLut.value) {
+      u.uLutPrev.value = u.uLut.value;
+      u.uLut.value = lut;
+      u.uLutMix.value = 0;
+    }
+    if (typeof state.roughness === 'number') rig.target.blur = state.roughness >= BLUR_ROUGHNESS ? 1 : 0;
     applyColorZones(rig.mat, state.colorZones || null);
     invalidate(30); // tween runs inside the render loop
   }
@@ -1138,6 +1261,7 @@ function create(canvas, opts = {}) {
 
   let running = false;
   let dirty = 0;
+  envs.onReady(() => invalidate(30));
 
   function invalidate(frames = 45) {
     dirty = Math.max(dirty, frames);
@@ -1148,12 +1272,15 @@ function create(canvas, opts = {}) {
     // material easing, both rigs
     ['her', 'his'].forEach((k) => {
       const rig = rigs[k];
-      rig.mat.color.lerp(rig.target.color, 0.09);
-      rig.mat.roughness += (rig.target.roughness - rig.mat.roughness) * 0.09;
+      const u = rig.mat.userData.lut;
+      if (u.uLutMix.value < 1) u.uLutMix.value = Math.min(1, u.uLutMix.value + 0.08);
+      u.uBlurMix.value += (rig.target.blur - u.uBlurMix.value) * 0.12;
       // Grooves are part of the band geometry now, so they follow for free.
     });
     const moving = controls.update();       // true while damping / auto-rotating
-    renderer.render(scene, camera);
+    // Hold the (transparent) canvas until the studio cubes are in — an
+    // unloaded cube samples black and would flash a black ring.
+    if (envs.ready) renderer.render(scene, camera);
     if (dirty > 0 || moving || controls.autoRotate) requestAnimationFrame(loop);
     else running = false;
   }
@@ -1220,7 +1347,7 @@ function create(canvas, opts = {}) {
     renderer.setSize(w, h, false);
     renderer.render(scene, camera);
     const url = renderer.domElement.toDataURL('image/png');
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setPixelRatio(viewPixelRatio());
     resize();
     return url;
   }
@@ -1267,20 +1394,94 @@ function create(canvas, opts = {}) {
   }
 
   // Re-bakes the PMREM environment from the current studioParams (softbox
-  // positions/power/floor/blur) and re-points every material's envMap at the
-  // fresh texture — a real render-target rebuild, heavier than the other
+  // positions/power/floor/blur) and re-points the stone material's envMap at
+  // the fresh texture (the LUT metal has its own fixed studio-v3 cube) — a real render-target rebuild, heavier than the other
   // debug knobs, but still cheap for a handful of flat planes; fine to call
   // on every slider drag. Disposes the old render target.
   function rebuildEnvironment() {
     const old = envRT;
     envRT = pmrem.fromScene(buildStudio(), studioParams.blur);
     scene.environment = envRT.texture;
-    [rigs.her.mat, rigs.his.mat, sharedStoneMat].forEach((m) => {
-      m.envMap = envRT.texture;
-      m.needsUpdate = true;
-    });
+    sharedStoneMat.envMap = envRT.texture;
+    sharedStoneMat.needsUpdate = true;
     old.dispose();
     invalidate(20);
+  }
+
+  // ------------------------------------------------------- ?calib=1 LUT test
+  //
+  // Dev-only check that NOTHING but the LUT colours the metal (Faza 2 step
+  // 4). Renders only the ring bands (stones, engraving, shadows, blobs
+  // hidden), draws the WebGL canvas into a 2D canvas in the same task, and
+  // takes every 5th pixel with alpha > 250:
+  //   lut        — nearest RGB distance (0–255) to the 512 colours of the
+  //                metal's LUT; passes at median ≤ 3 and p75 ≤ 6
+  //   brightness — same frame through an identity LUT = env index 0..1
+  //                (p5/p25/p50/p75/p95; yellow target ≈ p5 ≥ .45,
+  //                p50 .66–.78, p95 ≤ .95)
+  // `metal` = LUT key (yellow/red/white/manganese/white-pd); default = the
+  // her ring's current LUT. Forced onto both rings for the test, restored after.
+  function calib(metal) {
+    const luts = getLuts();
+    const lutKey = metal || Object.keys(LUT_STOPS).find((k) => luts[k] === rigs.her.mat.userData.lut.uLut.value) || 'yellow';
+    const bands = new Set([rigs.her.band, rigs.his.band].filter(Boolean));
+    const vis = [];
+    scene.traverse((o) => {
+      vis.push([o, o.visible]);
+      if ((o.isMesh || o.isSprite || o.isLine || o.isPoints) && !bands.has(o)) o.visible = false;
+    });
+    const saved = ['her', 'his'].map((k) => {
+      const u = rigs[k].mat.userData.lut;
+      return [u, u.uLut.value, u.uLutMix.value, u.uZoneCount.value, u.uBlurMix.value];
+    });
+    const grab = (lut) => {
+      saved.forEach(([u]) => { u.uLut.value = lut; u.uLutMix.value = 1; u.uZoneCount.value = 0; u.uBlurMix.value = 0; });
+      renderer.render(scene, camera);
+      const src = renderer.domElement;
+      const c2 = document.createElement('canvas');
+      c2.width = src.width; c2.height = src.height;
+      const cx = c2.getContext('2d', { willReadFrequently: true });
+      cx.drawImage(src, 0, 0);   // same task as render → drawing buffer still valid
+      const d = cx.getImageData(0, 0, c2.width, c2.height).data;
+      const px = [];
+      for (let i = 0; i < d.length; i += 20) if (d[i + 3] > 250) px.push(i);
+      return { d, px };
+    };
+    const pct = (arr, p) => arr[Math.min(arr.length - 1, Math.floor(p * (arr.length - 1)))];
+    const r3 = (v) => Math.round(v * 1000) / 1000;
+
+    const lutTex = luts[lutKey];
+    const L = lutTex.image.data;
+    const a = grab(lutTex);
+    const dist = a.px.map((i) => {
+      let best = 1e9;
+      for (let j = 0; j < LUT_SIZE; j++) {
+        const dr = a.d[i] - L[j * 4], dg = a.d[i + 1] - L[j * 4 + 1], db = a.d[i + 2] - L[j * 4 + 2];
+        const q = dr * dr + dg * dg + db * db;
+        if (q < best) best = q;
+      }
+      return Math.sqrt(best);
+    }).sort((x, y) => x - y);
+    const b = grab(luts.identity);
+    const idx = b.px.map((i) => b.d[i] / 255).sort((x, y) => x - y);
+
+    vis.forEach(([o, v]) => { o.visible = v; });
+    saved.forEach(([u, lut, mix, zc, blur]) => { u.uLut.value = lut; u.uLutMix.value = mix; u.uZoneCount.value = zc; u.uBlurMix.value = blur; });
+    invalidate(5);
+
+    const med = pct(dist, 0.5), p75 = pct(dist, 0.75);
+    return {
+      metal: lutKey,
+      pixels: a.px.length,
+      lut: { median: r3(med), p75: r3(p75), max: r3(dist[dist.length - 1] || 0), pass: a.px.length > 0 && med <= 3 && p75 <= 6 },
+      brightness: { p5: r3(pct(idx, 0.05)), p25: r3(pct(idx, 0.25)), p50: r3(pct(idx, 0.5)), p75: r3(pct(idx, 0.75)), p95: r3(pct(idx, 0.95)) },
+    };
+  }
+  if (/[?&]calib=1/.test(location.search)) {
+    window.zscCalib = calib;
+    envs.onReady(() => setTimeout(() => {
+      ['yellow', 'red', 'white', 'manganese', 'white-pd'].forEach((k) => console.log('[zsc calib]', JSON.stringify(calib(k))));
+    }, 1500));
   }
 
   const debugApi = {
@@ -1306,34 +1507,7 @@ function create(canvas, opts = {}) {
     invalidate,
     studioParams,
     rebuildEnvironment,
-    // ringKey is 'her', 'his', or 'both'. Both mat.color AND target.color
-    // must be set together — the render loop lerps mat.color toward
-    // target.color every frame (see loop()'s material-tween), so setting
-    // only mat.color would get silently animated back within a few frames.
-    setColor(ringKey, hex) {
-      (ringKey === 'both' ? ['her', 'his'] : [ringKey]).forEach((k) => {
-        rigs[k].mat.color.set(hex);
-        rigs[k].target.color.set(hex);
-      });
-      invalidate(30);
-    },
-    setClearcoat(ringKey, { clearcoat, clearcoatRoughness } = {}) {
-      (ringKey === 'both' ? ['her', 'his'] : [ringKey]).forEach((k) => {
-        const m = rigs[k].mat;
-        if (typeof clearcoat === 'number') m.clearcoat = clearcoat;
-        if (typeof clearcoatRoughness === 'number') m.clearcoatRoughness = clearcoatRoughness;
-      });
-      invalidate(20);
-    },
-    setShadeStrength(ringKey, v) {
-      (ringKey === 'both' ? ['her', 'his'] : [ringKey]).forEach((k) => {
-        const m = rigs[k].mat;
-        m.userData.bottomShade.strength = v;
-        if (m.userData.shader) m.userData.shader.uniforms.uShadeStrength.value = v;
-      });
-      invalidate(20);
-    },
-    getShadeStrength: (ringKey) => rigs[ringKey].mat.userData.bottomShade.strength,
+    calib,
 
     // ---- diamond (?zscdebug=1 "Dijamant" sections) --------------------
     // The panel mutates stoneParams in place, then calls one of these to push

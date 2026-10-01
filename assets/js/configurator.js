@@ -379,6 +379,7 @@
       profileKey: s.profile,
       profileOutline: profParams.shape === 'param' ? paramProfileOutline(profParams) : null,
       materialColor: matColor,
+      metal: s.material, // scene picks the metal's LUT by slug (Faza 2 look)
       roughness: typeof finPbr.roughness === 'number' ? finPbr.roughness : (pbr.roughness || 0.08),
       envIntensity: finPbr.anisotropy ? 1.0 : 1.2,
       stone: stone,
@@ -1604,16 +1605,18 @@
     if (parts.length !== zoneCount) return null;
     var zones = s.materialZones || [];
     var colors = [];
+    var metals = [];
     for (var i = 0; i < zoneCount; i++) {
       var m = bySlug(g.material, zones[i] || s.material);
       colors.push((m && m.params && m.params.pbr && m.params.pbr.color) || '#D9A945');
+      metals.push(zones[i] || s.material);
     }
     var total = parts.reduce(function (a, b) { return a + b; }, 0);
     var half = (s.width || 4) / 2;
     var stops = [];
     var acc = 0;
     for (var j = 0; j < parts.length - 1; j++) { acc += parts[j]; stops.push(-half + (acc / total) * (s.width || 4)); }
-    return { colors: colors, stops: stops };
+    return { colors: colors, metals: metals, stops: stops };
   }
   // Refined metal-sample look (client 2026-09-09: the old glossy "plastic
   // marble" radial gradient looked cheap next to the competitor). A conic
