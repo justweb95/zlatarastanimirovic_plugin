@@ -940,6 +940,91 @@ Sve odluke donete 2026-08-31 osim gde je drugačije navedeno. Format: odluka →
     sitno pomereni, `his` nepromenjen, sve ostalo identično #71). Primenjeno
     samo to. Verifikovano headless: nula grešaka, pun profil-sweep.
 
+## Odluke — 2026-09-24 (Pavle, dijamant v2)
+
+73. **Dijamant v2: pravi brilijant sa lomom svetla u shaderu (2026-09-24).**
+    Zamenjuje ceo pristup iz #51–#72 (16-strani kamen, upečene boje temena,
+    sparkle sprite-ovi — na svakom prikazu „bela/mlečna tačka“). Napravljeno
+    i isprobano prvo u zasebnoj laboratoriji (`diamant-lab.html`, uporedo stari/
+    novi), pa uživo upoređeno sa wamagold-configurator.com: odobreno
+    („odličan, maltene isti“).
+    - **Novi modul `assets/js/diamond-kit.js`** (import map ključ
+      `zsc/diamond-kit`, `?ver=filemtime` u `Configurator.php`):
+      * `buildBrilliant()` — tačan round brilliant, **57 faseta** (tabla 57 %,
+        kruna 34,5°, pavilion 40,75°, rondiš 32 ravni, ukupna dubina 59,6 %),
+        dobijen kao presek poluprostora; vraća i geometriju i ravni faseta.
+      * `createDiamondMaterial()` — `ShaderMaterial` koji prati zrak UNUTAR
+        kamena kroz te iste ravni: Fresnel na svakoj faseti, totalna
+        unutrašnja refleksija, lom napolje, **3 IOR-a (R/G/B) = disperzija**.
+        Brilijant je konveksan → svako odbijanje je „najbliža ravan ispred
+        zraka“, bez BVH-a i bez biblioteka. **Čista GLSL matematika — isto
+        izgleda na SwiftShader-u i na pravom GPU-u**, pa ograničenje iz #54
+        (nema transmisije na software GL-u) više ne važi.
+      * `buildDiamondEnv()` — **zaseban oštar cube map samo za kamen** (trake
+        svetla, sitni jaki izvori, crne zastavice, tamni disk „glave
+        posmatrača“ u zenitu → klasične strelice odozgo). Meki studio je bio
+        glavni uzrok ravnog izgleda kamena (#69/#70). (Metal od #74 ima svoj
+        LUT izgled i ne koristi ni meki ni kameni studio.)
+        Preseti `kontrast` (default) / `svetlo` / `tamno`; pravi se lenjo, tek
+        kad se pojavi prvi kamen.
+    - **Pravo „utisnuto“ ležište**: shader trake (`attachBottomShade`) buši
+      okruglu rupu po kamenu (`uHoles`, do 8 po prstenu), `buildSeatGeometry()`
+      dodaje konusni zid (gornji obod prati stvarnu površinu profila preko
+      `outerRadiusAt()`, pa leži i na zaobljenim profilima). Sto kamena je u
+      ravni sa trakom (`flushDepth` 0,012 mm) — kao na CAD-u „Zaobljena 4mm sa
+      kamenom 1,5mm“ (#69). Metal ležišta se ogleda kroz pavilion (`seatMix`).
+    - **Prava veličina**: `prominence` 1.9 → **1.0** (kamen od 2 mm se crta kao
+      2 mm). Kamen se automatski smanjuje ako ne staje u debljinu trake.
+    - `stoneParams` sada: `prominence, envPreset, envIntensity, dispersion,
+      bounces (5 na touch uređajima), seatMix, flushDepth, holeTop,
+      holeBottom`. `?zscdebug=1` panel ima nove sekcije („veličina i
+      ležište“, „svetlo i vatra“, „studio za kamen“); `setSparkle()` ostaje kao
+      no-op radi kompatibilnosti.
+    - Obrisano: `makeBrilliantGeometry`, `sharedStoneMat`, sparkle tekstura/
+      sprite-ovi, setting-group pool, boje faseta.
+    - **Verifikovano headless** (SwiftShader): 4 osnovna profila × 3 veličine ×
+      1/3/5 kamenova × levo/centar/desno, oba prstena, debljina 1,0 mm, žleb
+      na istom prstenu, promena metala (žuto/belo/crveno), debug preseti i
+      klizači, uklanjanje kamena, `dispose()` — nula grešaka u konzoli.
+    - **Ostaje**: merenje brzine na srednjem Android telefonu; `param` profili
+      nisu posebno testirani (ista `outerRadiusAt` putanja); pavé preko 8
+      kamenova traži `InstancedMesh` + veći `MAX_HOLES`.
+
+## Odluke — 2026-10-01 (Faza 2 — izgled metala)
+
+74. **Metal = LUT izgled (studio-v3 + gradijent po metalu), bez PBR-a.**
+    Paket `faza2/` (PROMPT-CLAUDE-CODE.md): menja se SAMO izgled metala,
+    arhitektura ostaje.
+    - Refleksija kamere po verteksu (MeshBasic `vReflect`, bez normal mape)
+      čita **sivu cube mapu** `assets/env/studio-v3/` (6 × 512² JPG, kopirano
+      bajt-po-bajt — nikad re-enkodovati); ta siva vrednost 0–1 bira boju iz
+      **LUT-a metala** (izmerene tablice, 65 tačaka, inline u
+      `scene.module.js` → `LUT_STOPS`). Bez svetala, bez tone mappinga, bez
+      sRGB konverzije (`toneMapped=false`, uklonjen `colorspace_fragment`).
+      Renderer (ACES/sRGB) ostaje zbog kamena.
+    - Mapiranje slug → LUT: `zuto`→yellow, `crveno`/`roze`→red, `belo`→white,
+      `paladijum`→white-pd. `configurator.js` šalje `metal` (slug) i
+      `colorZones.metals`.
+    - **LUT po prstenu** (njen i njegov mogu biti različit metal), jedan
+      kompajlirani program; promena metala = zamena uniform-a + pretapanje.
+    - **Mat/Grebano** → pretapanje na zamućenu mapu `studio-v3-blur`
+      (roughness ≥ 0,2), umesto roughness-a.
+    - **Dve/Tri boje** → LUT po zoni (`aBandY`).
+    - Ležište kamena (#73): rupe (`uHoles`) su u LUT shaderu, zid ležišta je
+      isti LUT materijal (deli uniform-e trake, malo zamućeniji);
+      `uSeatColor` dijamanta = LUT boja na t≈0,55 × 0,55.
+    - Uklonjeno: lažno zatamnjenje dna („Senčenje pri dnu“), metalni
+      slajderi u `?zscdebug=1` (boja, clearcoat, env intensity).
+    - pixelRatio `min(3, max(2, DPR))` (tanke linije na kosinama).
+    - **`?calib=1`**: dev test — render samo traka, drawImage u 2D, svaki 5.
+      piksel sa alfa > 250 → najbliža boja LUT-a (prolaz: medijana ≤ 3,
+      p75 ≤ 6) + raspodela svetline kroz identitet-LUT. Rezultat 2026-10-01
+      (podrazumevani kadar): medijana 0 / p75 0 za svih 5 LUT-ova;
+      svetlina p5 0,518 / p50 0,780 / p95 0,918 (p50 na gornjoj granici
+      očekivanog 0,66–0,78 — ne podešavati LUT, okruženje je kalibrisano).
+    - Ostaje: 18K „deepen“ se ignoriše (traži sopstveni LUT — V2 boje);
+      oštrije normale na kosinama (Korak 3 paketa) nisu rađene.
+
 ## Otvorena pitanja (blokiraju procenu obima)
 
 | # | Pitanje | Zašto je bitno |
@@ -948,7 +1033,7 @@ Sve odluke donete 2026-08-31 osim gde je drugačije navedeno. Format: odluka →
 | B | **Finalni frontend framework**: Svelte / SolidJS / React / Preact? | Ne blokira arhitekturu, ali treba pre Faze 4. Lean: Svelte ili Solid (mali runtime). |
 | C | **CDN provider**: Bunny / Cloudflare R2 / S3+CloudFront? | Treba pre Faze 3 (upload pipeline za asseti). |
 | ~~D~~ | ✅ Rešeno (odluka 23): debljina = zaseban klizač. | — |
-| E | **Dijamanti za burme**: 3 veličine (0,005 / 0,015 / 0,03 ct) su sada `available=1` i biraju se tek posle izbora krunice (#64); kamen je fasetiran brilijant, UTISNUT/flush (bez kandži, #68). Ostaje pitanje: više kamena / pavé red — v2. Sparkle sprite (#68) je privremena zamena za pravu transmisiju/disperziju koja radi samo na pravom GPU-u — treba potvrda klijenta na svojoj mašini. | Obim proceduralnog kamenja + stock logika + real-GPU vizuelna potvrda. |
+| E | **Dijamanti za burme**: 3 veličine (0,005 / 0,015 / 0,03 ct) su sada `available=1` i biraju se tek posle izbora krunice (#64); kamen je fasetiran brilijant, UTISNUT/flush (bez kandži, #68). Ostaje pitanje: više kamena / pavé red — v2. ✅ Izgled rešen u #73 (ray-traced brilijant, radi i bez GPU-a); ostaje merenje brzine na telefonu. | Obim proceduralnog kamenja + stock logika + real-GPU vizuelna potvrda. |
 | E2 | **`.3dm` geometrija**: da li klijent može da izveze `.obj`/`.glb` iz Rhina (mesh, ~50k), ili idemo 100% proceduralno? | Proceduralno je plan (odluka 6) i radi bez Rhina; CAD izvoz treba samo ako se traži tačna geometrija 1:1. |
 | F | **Email**: primalac(ci)? kopija kupcu? slika client-side ili server-side? | Faza 5. Odloženo. |
 | G | **MODEL/glave kao CPT ili tabela?** | Zavisi koliko bogat editor klijentu treba (slike, opisi). |
