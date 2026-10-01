@@ -45,6 +45,7 @@ Faze su inkrementalne; svaka se može demonstrirati. Acceptance = merljiv kriter
 - [x] **Žlebovi**: „Pozicija" stvarno pomera greben po širini; korak-UI preuređen po Breuning „Fugen/Stufen" (decisions #46/#47)
 - [x] **Žlebovi se USECAJU u traku** (bio aplicirani greben naviše) — `carveGroovesIntoGeometry()` gura temena spoljne površine unutra po `grooveCut(shape,t,depth)`, shape-agnostičko (2026-09-11, decisions #55). v2: `horizontal`/`wave` (delimičan obim → per-ugao rez).
 - [x] **Dijamant v1 REBUILD**: 4-kandže podignuti solitaire (ne flush), `stoneParams` + `?zscdebug=1` „Dijamant" panel (2026-09-10, decisions #54). Sjaj/vatra čeka GPU tuning klijenta.
+- [x] **Dijamant v2** (2026-09-24, decisions #73): 57-faseta brilijant, lom svetla + disperzija u shaderu (radi i na SwiftShader-u), zaseban oštar studio za kamen, pravo utisnuto ležište, prava veličina. Odobreno naspram WamaGold-a.
 - [x] **Admin bez reloada** (Opcije tab inline AJAX) + **ceo admin rebrendiran** (Belleza/Lato, zlatna/mastilo, logo header) (2026-09-11, decisions #56/#57)
 - [x] **Wheel-zoom isključen** na sceni; klik u navigaciji ne skroluje stranicu (2026-09-11, decisions #58)
 - [ ] Normal mape za "Grebano" (anizotropno) i "Čekićano"; brušeni pravac
@@ -59,7 +60,8 @@ Faze su inkrementalne; svaka se može demonstrirati. Acceptance = merljiv kriter
 
 ## Faza 3 — 3D sadržaj
 - [ ] Odluka A (tip prstenja) → pipeline za glave: proceduralni setovi i/ili GLB komponente + socket
-- [ ] Diamond materijal (transmission + ior + matcap fire); InstancedMesh za pavé
+- [x] Diamond materijal — urađeno drugačije: ray-trace shader (decisions #73)
+- [ ] InstancedMesh za pavé (> 8 kamenova)
 - [ ] Gravura: canvas → height → normal (+ displacement), inside/outside, font/dubina
 - [ ] Draco/KTX2 pipeline, asseti na CDN
 

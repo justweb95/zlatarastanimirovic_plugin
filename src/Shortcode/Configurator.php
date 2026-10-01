@@ -136,10 +136,15 @@ final class Configurator
         $done = true;
 
         $three = ZSC_URL . 'assets/lib/three/';
+        // Diamond v2 (decisions #73): scene.module.js imports 'zsc/diamond-kit';
+        // mapped here with its own filemtime so an update busts the cache.
+        $kitFile = ZSC_DIR . 'assets/js/diamond-kit.js';
+        $kitVer  = file_exists($kitFile) ? (string) filemtime($kitFile) : ZSC_VERSION;
         $map = wp_json_encode([
             'imports' => [
-                'three'         => $three . 'three.module.min.js',
-                'three/addons/' => $three . 'addons/',
+                'three'           => $three . 'three.module.min.js',
+                'three/addons/'   => $three . 'addons/',
+                'zsc/diamond-kit' => ZSC_URL . 'assets/js/diamond-kit.js?ver=' . $kitVer,
             ],
         ], JSON_UNESCAPED_SLASHES);
 

@@ -54,7 +54,8 @@ Plugin verzija u `zs-configurator.php` header-u = cache-bust za enqueue.
   provera u browseru.
 - **Headless browser radi u ovom okruženju** (decisions.md #48): Playwright
   Chromium je preinstaliran (`~/.cache/ms-playwright/`), renderuje WebGL
-  (SwiftShader — transmisija/refrakcija se NE vide, samo na pravom GPU-u) i ima
+  (SwiftShader — three.js transmisija/refrakcija se NE vide, ali dijamant v2
+  ima sopstveni ray-trace shader i izgleda isto kao na GPU-u, decisions #73) i ima
   pristup internetu → koristi ga za poređenje sa `konfigurator.breuning.de` i za
   proveru našeg UI-ja. `playwright-core` vozi već prisutni binarni fajl.
 - `window.__zscApp` je izložen u `mount()` — `__zscApp.cur()`,

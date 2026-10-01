@@ -38,6 +38,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { buildBrilliant, createDiamondMaterial, buildDiamondEnv, iorTriplet } from 'zsc/diamond-kit';
 
 // Pose of each ring in "pair" mode, tuned live via the ?zscdebug=1 panel
 // (Round 8, 2026-09-05) — resolves the earlier "her 30° relative to his"
@@ -358,108 +359,66 @@ function create(canvas, opts = {}) {
   // opts it back into per-material control.
   // -------------------------------------------------------------- diamond
   //
-  // Rebuilt 2026-09-10 (client: the old stone was "samo bela tačkica"; target
-  // = the competitor's 4-prong raised solitaire on konfigurator.breuning.de).
-  // Every choice here is driven by ONE hard constraint: it must read as a
-  // faceted gem on SOFTWARE GL too. The WSL dev box runs SwiftShader, which
-  // renders NO transmission / dispersion / thickness refraction — so the
-  // "diamond look" can NOT lean on those. It comes from:
-  //   (a) non-indexed geometry → computeVertexNormals() gives every facet its
-  //       OWN flat normal, so each one mirrors the studio env at a different
-  //       angle = real facet-to-facet contrast even with zero refraction;
-  //   (b) baked vertex colours — light crown, progressively darker pavilion
-  //       into a near-black culet = a fake "looking down through the stone"
-  //       depth cue, the only one that survives without refraction;
-  //   (c) an optional additive sparkle sprite (how real jewellery
-  //       configurators fake "it twinkles" in a soft-box studio).
-  // All of these are live-tunable via the ?zscdebug=1 panel → stoneParams.
-  //
-  // Round 15 (2026-09-15, client: "da li će full-mirror facete, bez ijedne
-  // boje, biti bolje?"). Tested it directly (metalness 1, roughness ~0.02,
-  // no vertex colours at all): it renders WORSE, not better — our studio's
-  // lighting is a handful of deliberately SOFT/blurred panels (good for the
-  // smoothly-curved gold band, see buildStudio() below), so a pure mirror
-  // facet just reflects that same soft blur back and reads as a flat pale
-  // blob, not "sparkly" — real diamond fire needs many small SHARP point
-  // lights for facets to catch differently, which this studio doesn't have.
-  // Landed on a middle ground instead: moderate metalness/clearcoat for a
-  // shinier "cut crystal" read, transmission dropped to 0 (it never did
-  // anything on SwiftShader and only muddied things on a real GPU combined
-  // with the baked colours), and the baked facet colours lightened from
-  // muddy greys to near-white/silver (still darkening toward the culet for
-  // the depth cue, just brighter throughout) — visibly cleaner + brighter
-  // than either the old grey bake or the failed pure-mirror test.
+  // Rebuilt 2026-09-24 (decisions #73 — Pavle's diamond v2, approved side by
+  // side against wamagold-configurator.com). Replaces the Round 10–17 stone
+  // (16-sided approximation + baked vertex colours + additive sparkle
+  // sprites, decisions #51–#72) that always read as a white/milky disc.
+  // See assets/js/diamond-kit.js for the details:
+  //   * exact 57-facet round brilliant (table 57 %, crown 34.5°, pavilion
+  //     40.75°, depth 59.6 %) built as an intersection of half-spaces;
+  //   * a ShaderMaterial that ray-traces light INSIDE the stone against those
+  //     same facet planes — Fresnel, total internal reflection, refraction
+  //     out, 3 IORs for dispersion ("fire"). Pure GLSL maths, so it looks the
+  //     same on SwiftShader (WSL dev box) as on a real GPU — the old hard
+  //     constraint (no transmission on software GL) no longer applies;
+  //   * its OWN sharp, high-contrast cube map (strip lights + small hot
+  //     points + black flags + a dark "viewer's head" disc at the zenith that
+  //     gives the classic arrows pattern). The gold keeps its soft studio —
+  //     the soft studio was the root cause of the flat look (#69/#70).
+  //   * flush ("utisnut") setting done for real: the band fragment shader
+  //     discards a round hole at each stone (attachBottomShade → uHoles) and
+  //     a countersunk seat wall closes it (buildSeatGeometry). The table sits
+  //     level with the band surface, as in the client's .3dm CAD (#69).
+  // Everything live-tunable via ?zscdebug=1 → stoneParams → setStoneMat().
+  const coarsePointer = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
   let stoneParams = {
-    // geometry (unit stone: girdle circle r=0.5 at y=0, table at +crownH,
-    // culet at -pavD; buildStoneFor scales by the mm Ø). Real round-brilliant
-    // total depth ≈ 0.60× Ø → crownH + pavD ≈ 0.60 for a natural silhouette.
-    tableRatio: 0.53,        // table Ø / girdle Ø
-    crownH: 0.16,            // crown height  (× girdle radius)
-    pavD: 0.40,              // pavilion depth (× girdle radius)
-    prominence: 1.9,         // stone mm → scene units (burma stones read big)
-    // girdle plane height above band surface (× pavD × scale). Round 15:
-    // client sent the real production CAD (Ravna/Zaobljena "sa kamenom
-    // 1,5mm" .3dm) — opened in rhino3dm, the stone's table sits within
-    // ~0.08mm of the band's outer radius (i.e. essentially flush) with the
-    // girdle recessed well below it. -0.15 pushes noticeably deeper than
-    // Round 14's 0.05 without fully submerging the crown (no seat carved
-    // into the band mesh yet — see docs/decisions.md #69 for the tradeoff).
-    raise: -0.15,
-    envMapIntensity: 1.6, transmission: 0, roughness: 0.06, ior: 2.4,
-    metalness: 0.35, clearcoat: 0.4, clearcoatRoughness: 0.05,
-    iridescence: 0.12, iridescenceIOR: 1.3, dispersion: 4.0,
-    // baked facet colours (the depth cue) — near-white/silver, darkening
-    // toward the culet. Lightened from the original muddy greys (Round 15).
-    colTable: '#f7fafc', colCrown: '#eef2f6', colGirdle: '#dfe6ec',
-    colPav: '#aab6c2', colCulet: '#3a4652',
-    // sparkle sprites — Round 14 (2026-09-15, client: "poseban efekat
-    // svetlucavosti"): bumped from one faint centred glint to two brighter,
-    // off-centre ones (see makeStoneUnit) — a single dead-centre highlight
-    // reads as a static white dot, real "fire" is 2+ point-glints catching
-    // DIFFERENT facets at once.
-    sparkle: true, sparkleScale: 1.6, sparkleOpacity: 0.6,
+    prominence: 1.0,        // 1 = true size (the approved look); >1 exaggerates
+    envPreset: 'kontrast',  // kontrast | svetlo | tamno (diamond-kit ENV_PRESETS)
+    envIntensity: 1.0,
+    dispersion: 1.0,        // 1 = real diamond spread (nC..nF), 2 = exaggerated
+    bounces: coarsePointer ? 5 : 6,
+    seatMix: 0.85,          // how much light leaving through the pavilion picks up the metal
+    flushDepth: 0.012,      // mm the table sits below the band surface
+    holeTop: 1.03,          // seat opening at the surface (× stone radius)
+    holeBottom: 0.955,      // seat wall at the girdle (× stone radius) — metal overlaps the girdle
   };
-
-  const sharedStoneMat = new THREE.MeshPhysicalMaterial({
-    vertexColors: true, color: 0xffffff, metalness: stoneParams.metalness,
-    roughness: stoneParams.roughness, ior: stoneParams.ior, thickness: 0.5,
-    transmission: stoneParams.transmission, specularIntensity: 1,
-    clearcoat: stoneParams.clearcoat, clearcoatRoughness: stoneParams.clearcoatRoughness,
-    iridescence: stoneParams.iridescence, iridescenceIOR: stoneParams.iridescenceIOR,
-    iridescenceThicknessRange: [120, 480], dispersion: stoneParams.dispersion,
-    envMap: envRT.texture, envMapIntensity: stoneParams.envMapIntensity,
-    side: THREE.DoubleSide,
-  });
-
-  // Additive sparkle sprite — a white core + a faint 4-point star flare,
-  // always facing the camera. Shared texture/material; one Sprite per stone.
-  function makeSparkleTexture() {
-    const c = document.createElement('canvas'); c.width = c.height = 128;
-    const x = c.getContext('2d'), cx = 64;
-    const g = x.createRadialGradient(cx, cx, 0, cx, cx, 46);
-    g.addColorStop(0, 'rgba(255,255,255,1)');
-    g.addColorStop(0.22, 'rgba(255,255,255,.5)');
-    g.addColorStop(1, 'rgba(255,255,255,0)');
-    x.fillStyle = g; x.beginPath(); x.arc(cx, cx, 46, 0, Math.PI * 2); x.fill();
-    for (let i = 0; i < 2; i++) {
-      x.save(); x.translate(cx, cx); x.rotate(i * Math.PI / 4); x.lineWidth = 2;
-      [1, -1].forEach((dir) => {
-        const grd = x.createLinearGradient(0, 0, dir * 62, 0);
-        grd.addColorStop(0, 'rgba(255,255,255,.85)');
-        grd.addColorStop(1, 'rgba(255,255,255,0)');
-        x.strokeStyle = grd; x.beginPath(); x.moveTo(0, 0); x.lineTo(dir * 62, 0); x.stroke();
-      });
-      x.restore();
-    }
-    const t = new THREE.CanvasTexture(c);
-    t.colorSpace = THREE.SRGBColorSpace;
-    return t;
+  const brilliant = buildBrilliant();
+  const gemGeo = new THREE.BufferGeometry();
+  gemGeo.setAttribute('position', new THREE.BufferAttribute(brilliant.positions, 3));
+  gemGeo.setAttribute('normal', new THREE.BufferAttribute(brilliant.normals, 3));
+  gemGeo.computeBoundingSphere();
+  // Built lazily on the first stone, so ring-only scenes pay nothing.
+  let diamondEnvRT = null;
+  let diamondEnvPreset = null;
+  function ensureDiamondEnv() {
+    if (diamondEnvRT && diamondEnvPreset === stoneParams.envPreset) return diamondEnvRT;
+    const old = diamondEnvRT;
+    diamondEnvRT = buildDiamondEnv(THREE, renderer, stoneParams.envPreset);
+    diamondEnvPreset = stoneParams.envPreset;
+    ['her', 'his'].forEach((k) => {
+      const rig = rigs[k];
+      if (rig && rig.gemMat) rig.gemMat.uniforms.uEnv.value = diamondEnvRT.texture;
+    });
+    if (old) old.dispose();
+    return diamondEnvRT;
   }
-  const sparkleTex = makeSparkleTexture();
-  const sparkleMat = new THREE.SpriteMaterial({
-    map: sparkleTex, color: 0xffffff, blending: THREE.AdditiveBlending,
-    depthWrite: false, transparent: true, opacity: stoneParams.sparkleOpacity,
-  });
+  function makeGemMaterial() {
+    return createDiamondMaterial(THREE, brilliant, ensureDiamondEnv().texture, {
+      dispersion: stoneParams.dispersion, bounces: stoneParams.bounces,
+      envIntensity: stoneParams.envIntensity, seatMix: stoneParams.seatMix,
+    });
+  }
+  const MAX_HOLES = 8;
 
   // Client (2026-09-05): the flat base gold colour reads as plain/generic
   // "yellow paint" wherever the environment isn't contributing a highlight,
@@ -487,7 +446,18 @@ function create(canvas, opts = {}) {
   function attachBottomShade(mat) {
     mat.userData.bottomShade = { minY: -10, maxY: 10, strength: 0 };
     mat.userData.colorZones = { count: 0, colors: [new THREE.Color(), new THREE.Color(), new THREE.Color()], stop1: 0, stop2: 0 };
+    // Flush-set stone seats (decisions #73): per hole vec4(axis.x, axis.z,
+    // widthPos, radius) in band-local space + the radial depth below which
+    // nothing is cut (keeps the inner wall intact).
+    mat.userData.holes = {
+      count: 0,
+      list: Array.from({ length: MAX_HOLES }, () => new THREE.Vector4()),
+      z: new Array(MAX_HOLES).fill(1e6),
+    };
     mat.onBeforeCompile = (shader) => {
+      shader.uniforms.uHoleCount = { value: mat.userData.holes.count };
+      shader.uniforms.uHoles = { value: mat.userData.holes.list };
+      shader.uniforms.uHoleZ = { value: mat.userData.holes.z };
       shader.uniforms.uShadeMinY = { value: mat.userData.bottomShade.minY };
       shader.uniforms.uShadeMaxY = { value: mat.userData.bottomShade.maxY };
       shader.uniforms.uShadeStrength = { value: mat.userData.bottomShade.strength };
@@ -498,12 +468,18 @@ function create(canvas, opts = {}) {
       shader.uniforms.uStop1 = { value: mat.userData.colorZones.stop1 };
       shader.uniforms.uStop2 = { value: mat.userData.colorZones.stop2 };
       shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nattribute float aBandY;\nvarying float vShadeWorldY;\nvarying float vBandY;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvShadeWorldY = (modelMatrix * vec4(transformed, 1.0)).y;\nvBandY = aBandY;');
+        .replace('#include <common>', '#include <common>\nattribute float aBandY;\nvarying float vShadeWorldY;\nvarying float vBandY;\nvarying vec3 vBandLocal;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvShadeWorldY = (modelMatrix * vec4(transformed, 1.0)).y;\nvBandY = aBandY;\nvBandLocal = position;');
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <common>',
           '#include <common>\nvarying float vShadeWorldY;\nvarying float vBandY;\nuniform float uShadeMinY;\nuniform float uShadeMaxY;\nuniform float uShadeStrength;'
-          + '\nuniform float uZoneCount;\nuniform vec3 uColorA;\nuniform vec3 uColorB;\nuniform vec3 uColorC;\nuniform float uStop1;\nuniform float uStop2;')
+          + '\nuniform float uZoneCount;\nuniform vec3 uColorA;\nuniform vec3 uColorB;\nuniform vec3 uColorC;\nuniform float uStop1;\nuniform float uStop2;'
+          + '\nvarying vec3 vBandLocal;\nuniform int uHoleCount;\nuniform vec4 uHoles[' + MAX_HOLES + '];\nuniform float uHoleZ[' + MAX_HOLES + '];')
+        .replace('void main() {',
+          'void main() {\n  for (int i = 0; i < ' + MAX_HOLES + '; i++) {\n    if (i >= uHoleCount) break;\n'
+          + '    vec4 h = uHoles[i];\n    float sAx = vBandLocal.x * h.x + vBandLocal.z * h.y;\n'
+          + '    vec3 q = vBandLocal - vec3(h.x * sAx, h.z, h.y * sAx);\n'
+          + '    if (sAx > uHoleZ[i] && dot(q, q) < h.w * h.w) discard;\n  }')
         .replace('#include <color_fragment>',
           '#include <color_fragment>\nif (uZoneCount > 1.5) {\n  vec3 zsColor = (vBandY > uStop1) ? uColorB : uColorA;\n'
           + '  if (uZoneCount > 2.5 && vBandY > uStop2) zsColor = uColorC;\n  diffuseColor.rgb = zsColor;\n}')
@@ -542,8 +518,14 @@ function create(canvas, opts = {}) {
       side: THREE.DoubleSide,
     });
     attachBottomShade(mat);
+    // Seat wall of the flush setting — same metal, a touch rougher (drilled +
+    // burnished). Colour follows the band every frame (see loop()).
+    const seatMat = new THREE.MeshPhysicalMaterial({
+      color: new THREE.Color('#D9A945'), metalness: 1.0, roughness: 0.22,
+      envMap: envRT.texture, envMapIntensity: 0.9, side: THREE.DoubleSide,
+    });
     return {
-      key, root, mat, band: null, stone: null, outer: 8,
+      key, root, mat, seatMat, gemMat: null, stones: [], seats: [], band: null, stone: null, outer: 8,
       blob: pairMode ? makeContactBlob() : null,
       target: { color: new THREE.Color('#D9A945'), roughness: 0.08 },
     };
@@ -770,6 +752,9 @@ function create(canvas, opts = {}) {
     mergeLatheSeamIndices(geo, pts.length, LATHE_SEGMENTS);
     geo.computeVertexNormals();
     carveGroovesIntoGeometry(geo, grooves, innerR, outerR);
+    rig.profilePts = pts;
+    rig.innerR = innerR;
+    rig.thickness = thickness;
     if (rig.band) { rig.band.geometry.dispose(); rig.band.geometry = geo; }
     else {
       rig.band = new THREE.Mesh(geo, rig.mat);
@@ -821,133 +806,61 @@ function create(canvas, opts = {}) {
     return outerR;
   }
 
-  // Faceted round-brilliant gem geometry — non-indexed so
-  // computeVertexNormals() bakes one flat normal per facet (see the big note
-  // above sharedStoneMat). Carries a per-vertex `color` attribute: light
-  // crown → darker pavilion → near-black culet, the fake "depth through the
-  // stone" cue. Rebuilt (not just re-scaled) whenever a stoneParams
-  // geometry/colour knob changes — cheap, ~230 tris.
-  //
-  // Round 14 (2026-09-15, client: "model dijamanta nije baš kao pravi"): the
-  // crown used to be a perfectly uniform 16-gon — every one of the 16 star
-  // facets identical, reading as a plain even pinwheel from above. A real
-  // round brilliant alternates 8 LARGER bezel/main facets with 8 SMALLER
-  // star facets (the classic 8-point star you see looking down into a
-  // diamond) — so the star ring's radius now zigzags out/in every other
-  // vertex (rStarOut/rStarIn) instead of sitting at one fixed radius,
-  // producing that alternation with the same N=16 wedge count.
-  function makeBrilliantGeometry() {
-    const N = 16, phase = 0;
-    const P = stoneParams;
-    const rG = 0.5, rT = rG * P.tableRatio;
-    const rStarOut = rG * (P.tableRatio + (1 - P.tableRatio) * 0.62); // bezel-facet corner
-    const rStarIn = rG * (P.tableRatio + (1 - P.tableRatio) * 0.36);  // star-facet point
-    const rPav = rG * 0.55;                                       // pavilion-main mid ring
-    const yT = P.crownH, yStar = P.crownH * 0.5, yGt = 0.035, yGb = -0.035;
-    const yPav = -P.pavD * 0.52, yC = -P.pavD;
-    const cT = new THREE.Color(P.colTable), cC = new THREE.Color(P.colCrown),
-      cG = new THREE.Color(P.colGirdle), cP = new THREE.Color(P.colPav),
-      cU = new THREE.Color(P.colCulet);
-    const pos = [], col = [];
-    const V = (r, y, i) => { const a = phase + (i / N) * Math.PI * 2; return [Math.cos(a) * r, y, Math.sin(a) * r]; };
-    const starV = (i, y) => V(i % 2 === 0 ? rStarOut : rStarIn, y, i);
-    const tri = (a, b, c, ca, cb, cc) => {
-      pos.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
-      col.push(ca.r, ca.g, ca.b, cb.r, cb.g, cb.b, cc.r, cc.g, cc.b);
-    };
-    // Round 16 (2026-09-16, client's Envato reference — a ray-traced studio
-    // render of a real diamond): facet-to-facet contrast there is SHARP
-    // (near-white right next to near-black), not a smooth radial gradient —
-    // each facet catches a different point of the environment. `facetTint`
-    // shuffles a per-wedge brightness multiplier (i·7 mod N, coprime with
-    // N=16) rather than plain even/odd alternation, so it reads as
-    // irregular sparkle instead of an obvious regular stripe.
-    const facetTint = (i) => 0.55 + 0.55 * (((i * 7) % N) / N); // ~0.55..1.10
-    const TC = [0, yT, 0], CU = [0, yC, 0];
-    for (let i = 0; i < N; i++) {
-      const tint = facetTint(i);
-      const cCw = cC.clone().multiplyScalar(tint);
-      const cGw = cG.clone().multiplyScalar(tint);
-      const cPw = cP.clone().multiplyScalar(tint);
-      const t0 = V(rT, yT, i), t1 = V(rT, yT, i + 1);
-      const s0 = starV(i, yStar), s1 = starV(i + 1, yStar);
-      const gt0 = V(rG, yGt, i), gt1 = V(rG, yGt, i + 1);
-      const gb0 = V(rG, yGb, i), gb1 = V(rG, yGb, i + 1);
-      const p0 = V(rPav, yPav, i), p1 = V(rPav, yPav, i + 1);
-      tri(TC, t0, t1, cT, cCw, cCw);                                    // table (fan)
-      tri(t0, s0, s1, cCw, cCw, cCw); tri(t0, s1, t1, cCw, cCw, cCw);   // star facets
-      tri(s0, gt0, gt1, cCw, cGw, cGw); tri(s0, gt1, s1, cCw, cGw, cCw); // bezel/upper-girdle
-      tri(gt0, gb0, gb1, cGw, cGw, cGw); tri(gt0, gb1, gt1, cGw, cGw, cGw); // girdle band
-      tri(gb0, p0, p1, cGw, cPw, cPw); tri(gb0, p1, gb1, cGw, cPw, cGw); // pavilion upper
-      tri(p0, CU, p1, cPw, cU, cPw);                                    // pavilion → culet
+  // Radius of the band's OUTER surface at width position w (band-local y),
+  // straight from the cross-section loop — so a seat rim sits exactly on a
+  // domed (court / param) profile instead of floating above it.
+  function outerRadiusAt(pts, w) {
+    let best = -Infinity;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1];
+      const lo = Math.min(a.y, b.y), hi = Math.max(a.y, b.y);
+      if (w < lo - 1e-6 || w > hi + 1e-6) continue;
+      const x = Math.abs(b.y - a.y) < 1e-9 ? Math.max(a.x, b.x) : a.x + (b.x - a.x) * ((w - a.y) / (b.y - a.y));
+      if (x > best) best = x;
     }
+    return best > 0 ? best : null;
+  }
+
+  // Countersunk seat wall around one stone, in band-local space. `ax` =
+  // radial axis of the stone, `tg` = circumferential tangent, width axis = Y.
+  function buildSeatGeometry(pts, ax, tg, widthPos, rTop, rBot, zBottom, outerR) {
+    const N = 48, pos = [], idx = [];
+    for (let i = 0; i <= N; i++) {
+      const ang = (i / N) * Math.PI * 2, c = Math.cos(ang), sn = Math.sin(ang);
+      // top ring: on the real surface at that width
+      const wy = widthPos + c * rTop, t = sn * rTop;
+      const R = outerRadiusAt(pts, wy) || outerR;
+      const sTop = Math.sqrt(Math.max(R * R - t * t, 0)) - 0.002;
+      pos.push(ax.x * sTop + tg.x * t, wy, ax.z * sTop + tg.z * t);
+      // bottom ring: just under the girdle
+      const wb = widthPos + c * rBot, tb = sn * rBot;
+      pos.push(ax.x * zBottom + tg.x * tb, wb, ax.z * zBottom + tg.z * tb);
+    }
+    for (let i = 0; i < N; i++) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+    const c0 = pos.length / 3;
+    pos.push(ax.x * (zBottom - 0.002), widthPos, ax.z * (zBottom - 0.002));
+    for (let i = 0; i < N; i++) { const a = i * 2 + 1; idx.push(c0, a + 2, a); }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    g.setIndex(idx);
     g.computeVertexNormals();
     return g;
   }
-  let brilliantGeo = makeBrilliantGeometry();
 
-  // --------------------------------------------------------- krunica/setting
-  //
-  // Round 14 (2026-09-15): client dropped every prong/carree/bezel-frame
-  // setting from Round 10 — "skidamo one kandže, ostavljamo samo ovako nešto
-  // ništa više od toga kao na wamagold-u". Round 15 (2026-09-15, client sent
-  // the actual production CAD — "Ravna/Zaobljena 4mm sa kamenom 1,5mm.3dm"):
-  // opened both in rhino3dm — NO separate rim/collar/prong object exists
-  // anywhere in either file, just the band Brep + one small Gem instance.
-  // "Utisnut"/flush now has NO setting-group mesh at all — the stone sits
-  // directly in the band with nothing around it, matching the real part.
-  const FLUSH_SETTING = 'flush';
-  function makeSettingGroup() { return new THREE.Group(); }
-
-  // Disposes only the geometries owned by a setting-group Mesh tree — never
-  // called on the gem (shared brilliantGeo) or the sparkle Sprite (shared
-  // plane geometry), both pooled across every stone unit.
-  function disposeSettingGroup(grp) {
-    if (!grp) return;
-    grp.traverse((o) => { if (o.isMesh && o.geometry) o.geometry.dispose(); });
+  function setHoles(rig, holes) {
+    const H = rig.mat.userData.holes;
+    H.count = Math.min(holes.length, MAX_HOLES);
+    for (let i = 0; i < MAX_HOLES; i++) {
+      const h = holes[i];
+      if (h) { H.list[i].set(h.ax, h.az, h.w, h.r); H.z[i] = h.z; } else { H.z[i] = 1e6; }
+    }
+    const sh = rig.mat.userData.shader;
+    if (sh && sh.uniforms.uHoleCount) sh.uniforms.uHoleCount.value = H.count;
   }
 
-  // One pooled stone "unit" = gem mesh + setting group + sparkle sprite,
-  // under a Group that buildStoneFor positions/rotates/scales as a whole.
-  // Only one setting exists now (FLUSH_SETTING) so a unit never needs
-  // rebuilding once made — ensureStoneUnit just lazily creates it.
-  function makeStoneUnit(rig) {
-    const unit = new THREE.Group();
-    const gem = new THREE.Mesh(brilliantGeo, sharedStoneMat);
-    gem.renderOrder = 3;
-    unit.add(gem);
-    const settingGroup = makeSettingGroup();
-    unit.add(settingGroup);
-    // Two glints, not one: a single dead-centre sprite reads as a static
-    // white dot; two smaller ones offset toward different facets read as
-    // catching the light at once — closer to real diamond "fire".
-    const sparkles = [
-      { x: 0, z: 0, s: 1 }, { x: 0.22, z: 0.16, s: 0.6 },
-    ].map(({ x, z, s }) => {
-      const spr = new THREE.Sprite(sparkleMat);
-      spr.position.set(x, stoneParams.crownH * 0.85, z);
-      spr.userData.baseScale = s;
-      spr.renderOrder = 4;
-      spr.visible = stoneParams.sparkle;
-      unit.add(spr);
-      return spr;
-    });
-    unit.userData = { gem, sparkle: sparkles, settingGroup };
-    return unit;
-  }
-  function ensureStoneUnit(rig, i) {
-    let u = rig.stones[i];
-    if (u) return u;
-    u = makeStoneUnit(rig);
-    rig.root.add(u);
-    rig.stones[i] = u;
-    return u;
-  }
   const _stoneUp = new THREE.Vector3(0, 1, 0);
-  const _stoneOut = new THREE.Vector3();
+  const _ax = new THREE.Vector3();
+  const _tg = new THREE.Vector3();
 
   // state.stone = { mm, positions: [mm along band, ...], widthPos }.
   // "Količina"/"Pozicioniranje" UI choices resolve to the `positions` list
@@ -957,37 +870,57 @@ function create(canvas, opts = {}) {
     const rig = rigs[key];
     const s = state.stone;
     const positions = s && s.mm ? (s.positions || [typeof s.position === 'number' ? s.position : 0]) : [];
-    const n = positions.length;
-    if (!rig.stones) rig.stones = [];
-    for (let i = 0; i < n; i++) ensureStoneUnit(rig, i);
-    rig.stones.forEach((u, i) => { if (u) u.visible = i < n; }); // nulled slots: dbg.rebuildStone() rebuild pass
-    if (!n) return;
+    const n = Math.min(positions.length, MAX_HOLES);
 
+    rig.seats.forEach((m) => { rig.root.remove(m); m.geometry.dispose(); });
+    rig.seats = [];
+    rig.stones.forEach((m) => { m.visible = false; });
+    if (!n || !rig.profilePts) { setHoles(rig, []); return; }
+
+    if (!rig.gemMat) rig.gemMat = makeGemMaterial();
     const P = stoneParams;
     const size = state.size || 54;
     const innerR = size / (2 * Math.PI);
     const thickness = state.thickness || 1.4;
     const outerR = innerR + thickness;
     const meanCirc = Math.PI * (innerR + outerR);
-    // Flush setting (Round 14): the girdle plane sits `raise·pavD·scale` above
-    // the band's outer surface — raise is near-zero now, so the girdle sits
-    // right AT the surface and the pavilion (culet-ward) simply sits inside
-    // the solid band mesh, hidden from every angle like a real flush stone.
-    // Clamp scale so a big stone on a thin band still reads sensibly rather
-    // than dwarfing it.
-    const maxScale = Math.max(0.6, thickness * 2.2);
-    const scale = Math.min(s.mm * P.prominence, maxScale);
-    const girdleR = outerR + P.raise * P.pavD * scale;
+    // Keep the whole stone (crown + pavilion ≈ 1.19 r deep) inside the metal.
+    const depthPerR = brilliant.yTable - brilliant.yCulet;
+    const r = Math.min((s.mm / 2) * P.prominence, Math.max(0.2, (thickness - 0.1) / depthPerR));
     const widthPos = s.widthPos || 0;
-    positions.forEach((posMm, i) => {
-      const u = rig.stones[i];
-      u.scale.setScalar(scale);
-      (u.userData.sparkle || []).forEach((spr) => spr.scale.setScalar(P.sparkleScale * spr.userData.baseScale));
-      const theta = ((posMm || 0) / meanCirc) * Math.PI * 2;   // 0 = +Z
-      _stoneOut.set(Math.sin(theta), 0, Math.cos(theta));      // radial outward
-      u.position.set(_stoneOut.x * girdleR, widthPos, _stoneOut.z * girdleR);
-      u.quaternion.setFromUnitVectors(_stoneUp, _stoneOut);    // table faces outward
-    });
+    const R = outerRadiusAt(rig.profilePts, widthPos) || outerR;
+    const tableZ = R - P.flushDepth;
+    const girdleZ = tableZ - brilliant.yTable * r;
+    const holes = [];
+
+    for (let i = 0; i < n; i++) {
+      const theta = ((positions[i] || 0) / meanCirc) * Math.PI * 2;   // 0 = +Z
+      _ax.set(Math.sin(theta), 0, Math.cos(theta));
+      _tg.set(Math.cos(theta), 0, -Math.sin(theta));
+      let gem = rig.stones[i];
+      if (!gem) {
+        gem = new THREE.Mesh(gemGeo, rig.gemMat);
+        gem.renderOrder = 3;
+        rig.root.add(gem);
+        rig.stones[i] = gem;
+      }
+      gem.material = rig.gemMat;
+      gem.visible = true;
+      gem.scale.setScalar(r);
+      gem.position.set(_ax.x * girdleZ, widthPos, _ax.z * girdleZ);
+      gem.quaternion.setFromUnitVectors(_stoneUp, _ax);
+      gem.rotateY(Math.PI / 16 + i * 0.37);   // each stone catches light a bit differently
+
+      const seat = new THREE.Mesh(
+        buildSeatGeometry(rig.profilePts, _ax, _tg, widthPos, r * P.holeTop, r * P.holeBottom, girdleZ - 0.012, outerR),
+        rig.seatMat,
+      );
+      rig.root.add(seat);
+      rig.seats.push(seat);
+      holes.push({ ax: _ax.x, az: _ax.z, w: widthPos, r: r * P.holeTop, z: girdleZ - 0.05 });
+    }
+    setHoles(rig, holes);
+    rig.gemMat.uniforms.uSeatColor.value.copy(rig.mat.color).multiplyScalar(0.55);
   }
 
   // Grooves are cut straight into the band geometry — see
@@ -1150,6 +1083,8 @@ function create(canvas, opts = {}) {
       const rig = rigs[k];
       rig.mat.color.lerp(rig.target.color, 0.09);
       rig.mat.roughness += (rig.target.roughness - rig.mat.roughness) * 0.09;
+      rig.seatMat.color.copy(rig.mat.color);
+      if (rig.gemMat) rig.gemMat.uniforms.uSeatColor.value.copy(rig.mat.color).multiplyScalar(0.55);
       // Grooves are part of the band geometry now, so they follow for free.
     });
     const moving = controls.update();       // true while damping / auto-rotating
@@ -1275,7 +1210,7 @@ function create(canvas, opts = {}) {
     const old = envRT;
     envRT = pmrem.fromScene(buildStudio(), studioParams.blur);
     scene.environment = envRT.texture;
-    [rigs.her.mat, rigs.his.mat, sharedStoneMat].forEach((m) => {
+    [rigs.her.mat, rigs.his.mat, rigs.her.seatMat, rigs.his.seatMat].forEach((m) => {
       m.envMap = envRT.texture;
       m.needsUpdate = true;
     });
@@ -1336,56 +1271,29 @@ function create(canvas, opts = {}) {
     getShadeStrength: (ringKey) => rigs[ringKey].mat.userData.bottomShade.strength,
 
     // ---- diamond (?zscdebug=1 "Dijamant" sections) --------------------
-    // The panel mutates stoneParams in place, then calls one of these to push
-    // the change into the live scene. setStoneMat = cheap material uniforms;
-    // rebuildStone = regenerate geometry (needed for shape + baked colours);
-    // setSparkle = the additive sprite.
+    // The panel mutates stoneParams in place, then calls one of these.
+    // setStoneMat = shader uniforms (+ diamond studio preset); rebuildStone =
+    // re-place stones/seats (prominence, flush depth, seat size). setSparkle
+    // stays as a no-op so older panel builds don't throw.
     stoneParams,
     setStoneMat() {
-      const m = sharedStoneMat, P = stoneParams;
-      m.transmission = P.transmission;
-      m.roughness = P.roughness;
-      m.metalness = P.metalness;
-      m.ior = P.ior;
-      m.envMapIntensity = P.envMapIntensity;
-      m.clearcoat = P.clearcoat;
-      m.clearcoatRoughness = P.clearcoatRoughness;
-      m.iridescence = P.iridescence;
-      m.iridescenceIOR = P.iridescenceIOR;
-      if ('dispersion' in m) m.dispersion = P.dispersion;
-      m.needsUpdate = true;
+      const P = stoneParams;
+      if (diamondEnvRT && diamondEnvPreset !== P.envPreset) ensureDiamondEnv();
+      ['her', 'his'].forEach((k) => {
+        const m = rigs[k].gemMat;
+        if (!m) return;
+        m.uniforms.uIor.value.set(...iorTriplet(P.dispersion));
+        m.uniforms.uBounces.value = Math.round(P.bounces);
+        m.uniforms.uEnvIntensity.value = P.envIntensity;
+        m.uniforms.uSeatMix.value = P.seatMix;
+      });
       invalidate(20);
     },
     rebuildStone() {
-      // Geometry knobs (tableRatio/crownH/pavD/…) affect the gem shape, so
-      // it's rebuilt and every pooled unit is force-rebuilt (not just
-      // re-scaled) — cheap, this only runs from the ?zscdebug=1 panel,
-      // never per-frame.
-      const oldB = brilliantGeo;
-      brilliantGeo = makeBrilliantGeometry();
-      ['her', 'his'].forEach((k) => {
-        const rig = rigs[k];
-        (rig.stones || []).forEach((u, i) => {
-          rig.root.remove(u);
-          disposeSettingGroup(u.userData.settingGroup);
-          rig.stones[i] = null;
-        });
-        if (rig.last) buildStoneFor(k, rig.last);
-      });
-      if (oldB) oldB.dispose();
+      ['her', 'his'].forEach((k) => { if (rigs[k].last) buildStoneFor(k, rigs[k].last); });
       invalidate(30);
     },
-    setSparkle() {
-      const P = stoneParams;
-      sparkleMat.opacity = P.sparkleOpacity;
-      ['her', 'his'].forEach((k) => (rigs[k].stones || []).forEach((u) => {
-        (u.userData.sparkle || []).forEach((spr) => {
-          spr.visible = P.sparkle;
-          spr.scale.setScalar(P.sparkleScale * spr.userData.baseScale);
-        });
-      }));
-      invalidate(20);
-    },
+    setSparkle() {},
   };
 
   function dispose() {
@@ -1401,16 +1309,16 @@ function create(canvas, opts = {}) {
       const rg = rigs[k];
       if (rg.engrave) { rg.engrave.geometry.dispose(); rg.engrave.material.dispose(); }
       if (rg.engraveTex) rg.engraveTex.dispose();
-      (rg.stones || []).forEach((u) => u.traverse((o) => { if (o.isMesh) o.geometry.dispose(); }));
+      (rg.seats || []).forEach((m) => m.geometry.dispose());
+      rg.seatMat.dispose();
+      if (rg.gemMat) rg.gemMat.dispose();
     });
     contactTex.dispose();
     glowTex.dispose();
     ground.material.dispose();
     ground.geometry.dispose();
-    brilliantGeo.dispose();
-    sharedStoneMat.dispose();
-    sparkleMat.dispose();
-    sparkleTex.dispose();
+    gemGeo.dispose();
+    if (diamondEnvRT) diamondEnvRT.dispose();
     envRT.texture.dispose();
     pmrem.dispose();
     renderer.dispose();
