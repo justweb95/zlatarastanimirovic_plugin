@@ -9,7 +9,7 @@
 | `main` | poslednje pre današnjeg rada (Round 18, v0.6.10) | netaknut |
 | `faza2-lut-metal` | samo LUT izgled metala (Faza 2) | `cf90ba9` |
 | `dijamant-v2` (origin) | Pavletov dijamant v2 | spojen u `faza2-lut-dijamant` |
-| **`faza2-lut-dijamant`** | **sve današnje: LUT metal + dijamant v2 + Faza 3 profili + cena, v0.7.0** | **aktivna grana, push-ovana na origin** |
+| **`faza2-lut-dijamant`** | **sve današnje: LUT metal + dijamant v2 + Faza 3 profili + cena, v0.7.0** | **aktivna grana — commit-ovana lokalno; push na origin uraditi ručno** (`git push -u origin faza2-lut-dijamant`) |
 
 `main` još NIJE ažuriran — kad klijent potvrdi live, spojiti `faza2-lut-dijamant` → `main`.
 
