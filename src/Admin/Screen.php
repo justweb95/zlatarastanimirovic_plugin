@@ -146,9 +146,10 @@ final class Screen
                     'hdri_url'       => esc_url_raw(wp_unslash($_POST['hdri_url'] ?? '')),
                     'inquiry_emails' => sanitize_text_field(wp_unslash($_POST['inquiry_emails'] ?? '')),
                     'spot_prices'    => array_map(
-                        static fn ($v) => (float) $v,
-                        (array) ($_POST['spot_prices'] ?? [])
+                        static fn ($v) => max(0.0, (float) $v),
+                        (array) wp_unslash($_POST['spot_prices'] ?? [])
                     ),
+                    'finoce'         => self::finoce_from_post(),
                 ]);
 
                 return ['group' => null, 'msg' => 'saved'];
@@ -359,6 +360,33 @@ final class Screen
     }
 
     /**
+     * Finoće iz forme podešavanja: aktivna + gustina po metalu. Oznake,
+     * ključ cene i nijansa ostaju iz postojećeg zapisa (ne uređuju se ovde).
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    private static function finoce_from_post(): array
+    {
+        $current = (array) Settings::get('finoce', []);
+        $posted = (array) wp_unslash($_POST['finoce'] ?? []);
+        $out = [];
+        foreach ($current as $i => $f) {
+            $p = (array) ($posted[$i] ?? []);
+            if (($p['id'] ?? null) !== (string) $f['id']) {
+                $out[] = $f;
+                continue;
+            }
+            $f['enabled'] = empty($p['enabled']) ? 0 : 1;
+            foreach ((array) ($p['density'] ?? []) as $slug => $d) {
+                $f['density'][sanitize_key((string) $slug)] = max(0.0, (float) $d);
+            }
+            $out[] = $f;
+        }
+
+        return $out;
+    }
+
+    /**
      * price_json iz forme: obično prosto polje "Cena" (flat tip — v.
      * option_form_html). Za napredne tipove (per_gram, in_mass) koji nemaju
      * "amount", forma šalje nepromenjen JSON preko skrivenog polja.
@@ -474,16 +502,46 @@ final class Screen
         self::text_row('hdri_url', 'HDRI URL', (string) $s['hdri_url'], 'studijsko okruženje za 3D scenu');
         self::text_row('inquiry_emails', 'Email za upite', (string) $s['inquiry_emails'], 'zarezom razdvojeno (Faza 5)');
 
-        echo '<tr><th>Spot cene metala (RSD/g)</th><td>';
-        foreach ((array) $s['spot_prices'] as $k => $v) {
+        // Finoće: cena po gramu (RSD/g) + gustina po metalu. Jedini izvor cene
+        // za konfigurator (decisions #77) — bez spot/online cene.
+        $metals = Options::all('material');
+        $prices = (array) $s['spot_prices'];
+        $used = [];
+        echo '<tr><th>Cena zlata po gramu (RSD/g)</th><td>';
+        echo '<table class="widefat striped zs-finoce"><thead><tr><th>Aktivna</th><th>Finoća</th><th>Cena RSD/g</th>';
+        foreach ($metals as $m) {
+            printf('<th>Gustina %s (g/cm³)</th>', esc_html($m['label_sr']));
+        }
+        echo '</tr></thead><tbody>';
+        foreach ((array) $s['finoce'] as $i => $f) {
+            $key = (string) ($f['price_key'] ?? '');
+            $used[] = $key;
+            echo '<tr>';
+            printf('<td><input type="hidden" name="finoce[%1$d][id]" value="%2$s"><input type="checkbox" name="finoce[%1$d][enabled]" value="1"%3$s></td>',
+                (int) $i, esc_attr((string) $f['id']), ! empty($f['enabled']) ? ' checked' : '');
+            printf('<td><strong>%s</strong> <span class="zs-muted">%s</span></td>', esc_html((string) $f['label']), esc_html((string) ($f['sub'] ?? '')));
+            printf('<td><input type="number" min="0" step="0.01" name="spot_prices[%s]" value="%s" style="width:9em"></td>',
+                esc_attr($key), esc_attr((string) ($prices[$key] ?? 0)));
+            foreach ($metals as $m) {
+                printf('<td><input type="number" min="0" step="0.01" name="finoce[%d][density][%s]" value="%s" style="width:6em"></td>',
+                    (int) $i, esc_attr($m['slug']), esc_attr((string) ($f['density'][$m['slug']] ?? 0)));
+            }
+            echo '</tr>';
+        }
+        echo '</tbody></table>';
+        echo '<p class="description">Cena je cena tog materijala po gramu i koristi se direktno: cena prstena = masa (g) × cena/g, zaokruženo naviše na ceo dinar. Gustina 0 = taj metal se ne radi u toj finoći. Prazna cena (0) = „Cena na upit“.</p>';
+        foreach ($prices as $k => $v) {
+            if (in_array((string) $k, $used, true)) {
+                continue;
+            }
             printf(
-                '<p><label>%s <input type="number" step="0.01" name="spot_prices[%s]" value="%s"></label></p>',
+                '<p><label>%s (RSD/g) <input type="number" min="0" step="0.01" name="spot_prices[%s]" value="%s"></label></p>',
                 esc_html(strtoupper(str_replace('_', ' ', (string) $k))),
                 esc_attr((string) $k),
                 esc_attr((string) $v)
             );
         }
-        echo '<p class="description">Ručni unos za sada; ERPNext kasnije.</p></td></tr>';
+        echo '</td></tr>';
         echo '</tbody></table>';
         submit_button('Sačuvaj podešavanja');
         echo '</form>';

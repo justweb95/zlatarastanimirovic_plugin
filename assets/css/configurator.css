@@ -306,7 +306,7 @@ body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
 .zs-price-value { font-family: var(--zs-font-serif); font-weight: 400; font-size: var(--zs-fs-price); color: var(--zs-gold); line-height: 1.1; }
 .zs-price-sub { font-size: var(--zs-fs-micro); color: var(--zs-text-muted); line-height: 1.3; }
 /* Per-ring price line beside the pair total (client, 2026-09-08). */
-.zs-price-perring { display: flex; gap: var(--zs-space-4); font-size: var(--zs-fs-micro); color: var(--zs-text-muted); line-height: 1.3; margin-top: 1px; }
+.zs-price-perring { display: flex; flex-direction: column; gap: 0; font-size: var(--zs-fs-micro); color: var(--zs-text-muted); line-height: 1.35; margin-top: 2px; }
 .zs-price-perring span { white-space: nowrap; }
 .zs-trust { display: flex; justify-content: center; gap: var(--zs-space-7); }
 .zs-trust-item { display: flex; flex-direction: column; font-size: var(--zs-fs-micro); }

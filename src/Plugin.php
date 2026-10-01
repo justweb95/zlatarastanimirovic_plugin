@@ -28,6 +28,10 @@ final class Plugin
 
     public function boot(): void
     {
+        // One-time data upgrade of existing option rows after a plugin update
+        // (a single autoloaded option check once done).
+        Data\Seeder::upgrade_data();
+
         // Shortcode + template tag. The shortcode callback is the ONLY place
         // that enqueues frontend assets (golden rule 1).
         add_shortcode('zs_configurator', [Configurator::instance(), 'shortcode']);

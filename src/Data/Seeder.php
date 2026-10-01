@@ -20,6 +20,45 @@ defined('ABSPATH') || exit;
  */
 final class Seeder
 {
+    /** Bumped when existing rows need a data upgrade (see upgrade_data). */
+    private const DATA_VERSION = 2;
+    private const DATA_VERSION_OPT = 'zs_data_version';
+
+    /**
+     * One-time upgrade of rows that already exist on a site (run() never
+     * touches them). Cheap on every load: a single autoloaded option check.
+     *
+     * v2 (Faza 3, decisions #76): profile → Wama construction id
+     * (`params.wama`, only where missing) and the thickness slider 0.8–2.5 /
+     * step 0.1 / default 1.2.
+     */
+    public static function upgrade_data(): void
+    {
+        if ((int) get_option(self::DATA_VERSION_OPT, 0) >= self::DATA_VERSION) {
+            return;
+        }
+        $wama = [];
+        foreach (self::rows() as $r) {
+            if ($r['group_key'] === 'profile' && ! empty($r['params_json']['wama'])) {
+                $wama[$r['slug']] = $r['params_json']['wama'];
+            }
+        }
+        foreach (Options::all('profile') as $row) {
+            if (isset($wama[$row['slug']]) && empty($row['params_json']['wama'])) {
+                $row['params_json']['wama'] = $wama[$row['slug']];
+                Options::save($row);
+            }
+        }
+        foreach (Options::all('width') as $row) {
+            if ($row['slug'] === 'thickness') {
+                $row['params_json'] = array_merge((array) $row['params_json'], self::shank()['thickness']);
+                Options::save($row);
+            }
+        }
+        update_option(self::DATA_VERSION_OPT, self::DATA_VERSION, true);
+        Compiler::flush_all();
+    }
+
     public static function run(): void
     {
         global $wpdb;
@@ -42,10 +81,9 @@ final class Seeder
     {
         return [
             'width'     => ['min' => 3.0, 'max' => 8.0, 'step' => 0.5, 'default' => 4.0, 'unit' => 'mm'],
-            // step 0.5 (client, 2026-09-06): was 0.1 — produced ugly non-aligned tick
-            // labels (4.3/5.5/6.8 instead of clean halves). Default nudged 1.4→1.5 to
-            // land on the new grid.
-            'thickness' => ['min' => 1.0, 'max' => 2.5, 'step' => 0.5, 'default' => 1.5, 'unit' => 'mm'],
+            // Faza 3 (2026-10-01, decisions #76): 0.8–2.5 in 0.1 steps, like Wama
+            // (was 1.0–2.5 / 0.5, client 2026-09-06). Default = Wama ring 1.
+            'thickness' => ['min' => 0.8, 'max' => 2.5, 'step' => 0.1, 'default' => 1.2, 'unit' => 'mm'],
             'size'      => ['min' => 44,  'max' => 68,  'step' => 0.5, 'default' => 54,  'unit' => 'EU'],
         ];
     }
@@ -141,22 +179,26 @@ final class Seeder
         //     `fill` = cross-section fill factor for the weight formula.
         //     Order (client, 2026-09-07): "Zaobljeni" first/default, "Ravni"
         //     last within the first group.
+        //     Faza 3 (2026-10-01, decisions #76): each profile is BUILT with the
+        //     construction rules of a Wama Gold profile (`wama` => P1–P24, see
+        //     docs/faza3/FAZA3-geometrija.md §1.1/§8, scene.module.js
+        //     wamaSpec). `shape` + param knobs are kept only as fallback.
         $profiles = [
             // [slug, label, group, params(without fill), fill]
-            ['zaobljeni',       'Zaobljeni',       'Osnovni profili',    ['shape' => 'court'],     0.86],
-            ['d-profil',        'D-profil',        'Osnovni profili',    ['shape' => 'd-comfort'], 0.90],
-            ['okrugli',         'Okrugli',         'Osnovni profili',    ['shape' => 'round'],     0.79],
-            ['ravni',           'Ravni',           'Osnovni profili',    ['shape' => 'flat'],      1.00],
+            ['zaobljeni',       'Zaobljeni',       'Osnovni profili',    ['shape' => 'court', 'wama' => 'P16'],     0.86],
+            ['d-profil',        'D-profil',        'Osnovni profili',    ['shape' => 'd-comfort', 'wama' => 'P11'], 0.90],
+            ['okrugli',         'Okrugli',         'Osnovni profili',    ['shape' => 'round', 'wama' => 'P10'],     0.79],
+            ['ravni',           'Ravni',           'Osnovni profili',    ['shape' => 'flat', 'wama' => 'P6'],      1.00],
 
-            ['poluokrugli',     'Poluokrugli',     'Zaobljeni profili',  ['shape' => 'param', 'dome' => 1.0, 'cham' => 0.0],                   0.80],
-            ['blago-zaobljeni', 'Blago zaobljeni', 'Zaobljeni profili',  ['shape' => 'param', 'dome' => 0.35, 'cham' => 0.25],                 0.92],
-            ['anatomski',       'Anatomski',       'Zaobljeni profili',  ['shape' => 'param', 'dome' => 0.6, 'relief' => 0.5, 'cham' => 0.12], 0.84],
-            ['bombirani',       'Bombirani',       'Zaobljeni profili',  ['shape' => 'param', 'dome' => 0.85, 'belly' => 0.55],                0.83],
+            ['poluokrugli',     'Poluokrugli',     'Zaobljeni profili',  ['shape' => 'param', 'wama' => 'P18', 'dome' => 1.0, 'cham' => 0.0],                   0.80],
+            ['blago-zaobljeni', 'Blago zaobljeni', 'Zaobljeni profili',  ['shape' => 'param', 'wama' => 'P15', 'dome' => 0.35, 'cham' => 0.25],                 0.92],
+            ['anatomski',       'Anatomski',       'Zaobljeni profili',  ['shape' => 'param', 'wama' => 'P4', 'dome' => 0.6, 'relief' => 0.5, 'cham' => 0.12], 0.84],
+            ['bombirani',       'Bombirani',       'Zaobljeni profili',  ['shape' => 'param', 'wama' => 'P13', 'dome' => 0.85, 'belly' => 0.55],                0.83],
 
-            ['ravni-faseta',    'Ravni sa fazom',  'Ravni profili',      ['shape' => 'param', 'dome' => 0.0, 'cham' => 0.55],                  0.96],
-            ['trapezni',        'Trapezni',        'Ravni profili',      ['shape' => 'param', 'dome' => 0.05, 'taper' => 0.55, 'cham' => 0.1],  0.88],
-            ['jastucasti',      'Jastučasti',      'Ravni profili',      ['shape' => 'param', 'dome' => 0.28, 'cham' => 0.5, 'belly' => 0.22],  0.90],
-            ['pljosnati',       'Pljosnati',       'Ravni profili',      ['shape' => 'param', 'dome' => 0.14, 'cham' => 0.16],                  0.97],
+            ['ravni-faseta',    'Ravni sa fazom',  'Ravni profili',      ['shape' => 'param', 'wama' => 'P5', 'dome' => 0.0, 'cham' => 0.55],                  0.96],
+            ['trapezni',        'Trapezni',        'Ravni profili',      ['shape' => 'param', 'wama' => 'P8', 'dome' => 0.05, 'taper' => 0.55, 'cham' => 0.1],  0.88],
+            ['jastucasti',      'Jastučasti',      'Ravni profili',      ['shape' => 'param', 'wama' => 'P12', 'dome' => 0.28, 'cham' => 0.5, 'belly' => 0.22],  0.90],
+            ['pljosnati',       'Pljosnati',       'Ravni profili',      ['shape' => 'param', 'wama' => 'P1', 'dome' => 0.14, 'cham' => 0.16],                  0.97],
 
             // "Šiljati profili" grupa (nozasti, siljati-oval) izbačena iz
             // ponude (client, 2026-09-14). Postojeće opcije nisu obrisane iz

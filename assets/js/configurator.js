@@ -28,13 +28,13 @@
  * The 3D viewport is real-time WebGL (scene.module.js) — this module only
  * builds the surrounding UI shell and pushes state into it.
  *
- * Live weight/price estimate uses the client's jeweller formula:
- *   meanCircumference_mm = size + PI * thickness
- *   area_mm2             = width * thickness * fill
- *   volume_cm3           = area_mm2 * meanCircumference_mm / 1000
- *   weight_g            = volume_cm3 * density(finoća)
- *   ringPrice           = base + weight_g * pricePerGram + finish + diamond + engraving
- *   pairPrice           = ringHer + ringHis
+ * Live weight/price (decisions #76/#77), per ring:
+ *   volume_mm3  = enclosed volume of the ring's real band mesh (scene.ringVolume:
+ *                 profile × width × thickness × size, grooves carved in)
+ *   mass_g      = volume_mm3 / 1000 × density(metal, finoća)          — CMS
+ *   ringPrice   = ceil(mass_g × pricePerGram(finoća) + finish + diamond + engraving)
+ *                 pricePerGram = admin-entered RSD/g (CMS), used as is; no spot price
+ *   pairPrice   = ringHer + ringHis   (sum of the two ceiled ring prices)
  * Authoritative price is recomputed server-side on inquiry (Faza 5).
  */
 (function () {
@@ -43,16 +43,17 @@
   var STEPS = ['Profil', 'Dimenzije', 'Materijal', 'Žlebovi', 'Dijamanti', 'Gravura'];
   var RINGS = [{ key: 'her', label: 'Njena burma' }, { key: 'his', label: 'Njegova burma' }];
 
-  // Fineness (finoća) — client's real catalogue is 14k (585); 18k (750) is the
-  // common upsell, matching the Breuning reference's 333/375/585/750 selector.
-  // Copies only what genuinely renders: density (→ weight → price) + a slight
-  // colour deepening on 18k gold. `dens` is specific gravity g/cm³ by metal
-  // slug; `deepen` lerps the swatch colour toward a richer 18k tone.
-  var FINOCA = [
-    { id: '585', label: '585', sub: '14k', dens: { zuto: 13.07, belo: 12.90, crveno: 13.00 }, deepen: 0 },
-    { id: '750', label: '750', sub: '18k', dens: { zuto: 15.55, belo: 15.90, crveno: 15.45 }, deepen: 0.30 }
-  ];
-  function finocaDef(id) { for (var i = 0; i < FINOCA.length; i++) if (FINOCA[i].id === id) return FINOCA[i]; return FINOCA[0]; }
+  // Fineness (finoća/karat) — comes from the WordPress CMS (Podešavanja →
+  // „Cena zlata po gramu“, zs_settings.finoce → payload pricing.finoce,
+  // decisions #77): id/label, price_key into pricing.spotPrices (RSD/g, admin
+  // entered, used AS IS), density g/cm³ per metal slug, `deepen` swatch tint.
+  // Nothing about price or density is hardcoded here.
+  function finoceOf(c) { return (c && c.pricing && c.pricing.finoce) || []; }
+  function finocaDef(c, id) {
+    var list = finoceOf(c);
+    for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+    return list[0] || { id: '', label: '', sub: '', price_key: '', density: {}, deepen: 0 };
+  }
 
   // Which state fields each accordion step owns — used by "Primeni na drugu
   // burmu" (client/Breuning: "Einstellung für Ring 1 übernehmen" per step).
@@ -155,8 +156,22 @@
     return pts;
   }
 
-  function crossSectionPath(shape, w, h, p) {
+  // `mm` = { W, H } real width/thickness. Keyword profiles are drawn from the
+  // exact loop the 3D band is built from (ZSCScene.profileLoop, decisions
+  // #75) once the scene module is loaded; the hand-drawn paths below are only
+  // the fallback before that.
+  function crossSectionPath(shape, w, h, p, mm) {
     var r = Math.min(w, h) * 0.16;
+    var wama = p && p.wama;
+    if ((shape !== 'param' || wama) && window.ZSCScene && window.ZSCScene.profileLoop) {
+      var W = (mm && mm.W) || 5, H = (mm && mm.H) || 1.5;
+      var loop = window.ZSCScene.profileLoop(shape, W, H, null, wama);
+      var sx = w / W, sy = h / H, path = '';
+      for (var k = 0; k < loop.length; k++) {
+        path += (k ? ' L ' : 'M ') + (loop[k][0] * sx).toFixed(2) + ' ' + ((H / 2 - loop[k][1]) * sy).toFixed(2);
+      }
+      return path + ' Z';
+    }
     if (shape === 'param') {
       var o = paramProfileOutline(p), hw = w / 2, hh = h / 2;
       var d = 'M ' + (o[0][0] * hw).toFixed(2) + ' ' + (o[0][1] * hh).toFixed(2);
@@ -207,7 +222,7 @@
     var w, h;
     if (ratio >= 1) { w = maxSpan; h = maxSpan / ratio; } else { h = maxSpan; w = maxSpan * ratio; }
     h = Math.max(h, 26); w = Math.max(w, 40);
-    var d = crossSectionPath(shape, w, h, p);
+    var d = crossSectionPath(shape, w, h, p, { W: widthMm, H: thicknessMm });
     var cx = vw / 2, cy = vh / 2 - 6;
     var arrowY = cy + h / 2 + 26;
     return '<svg viewBox="0 0 ' + vw + ' ' + vh + '" class="zs-cs-diagram" aria-hidden="true">' +
@@ -270,7 +285,9 @@
     var wCfg = g.width || shank.width || { min: 3, max: 8, step: 0.5, default: 4 };
     var tCfg = g.thickness || shank.thickness || { min: 1, max: 2.5, step: 0.5, default: 1.5 };
     var sCfg = shank.size || { min: 44, max: 68, step: 0.5, default: 54 };
-    var delta = ringKey === 'her' ? -1 : (ringKey === 'his' ? 1 : 0);
+    // Faza 3 (decisions #76): opening sizes = Wama's — his 5 × 1,2 vel. 62,
+    // her 5 × 1,0 vel. 54 (same profile/geometry rules for both rings).
+    var def = ringKey === 'her' ? { w: 5, t: 1.0, size: 54 } : { w: 5, t: 1.2, size: 62 };
     return {
       material: firstAvail(g.material),
       profile: firstSlug(g.profile),
@@ -279,11 +296,11 @@
       // competitor default ("Keine"/no diamond group until the customer picks
       // a setting type); was firstAvail(g.diamond), which pre-selected the
       // first stock stone before the customer had chosen anything.
-      width: snap(num(wCfg.default, 4) + delta * 1.0, wCfg.min, wCfg.max, wCfg.step || 0.5),
-      thickness: snap(num(tCfg.default, 1.5) + delta * 0.5, tCfg.min, tCfg.max, tCfg.step || 0.5),
-      size: snap(num(sCfg.default, 54) + delta * 6, sCfg.min, sCfg.max, sCfg.step || 0.5),
+      width: snap(def.w, wCfg.min, wCfg.max, wCfg.step || 0.5),
+      thickness: snap(def.t, tCfg.min, tCfg.max, tCfg.step || 0.1),
+      size: snap(def.size, sCfg.min, sCfg.max, sCfg.step || 0.5),
       autoRatio: false,
-      finoca: '585',
+      finoca: (finoceOf(c)[0] || {}).id || '',
       colorPattern: 'single',
       colorSubPattern: '',
       grooveTab: 0,
@@ -336,6 +353,10 @@
       this.scene = window.ZSCScene.create(this._canvas, { pair: true });
       this._view.classList.add('has-3d');
       this.pushScene();
+      // Profile icons/diagram drawn before the scene module loaded used the
+      // fallback paths — redraw them from the real profile geometry.
+      if (this._panel) this.renderPanel();
+      this.recalc(); // weight/price from the real band mesh (scene.ringVolume)
       // Exposes the app for the ?zscdebug=1 live-tuning panel
       // (assets/js/debug-panel.js, enqueued in Configurator.php under the same
       // query flag). Re-enabled 2026-09-10 for the diamond rebuild pass.
@@ -370,14 +391,15 @@
     var profParams = (prof && prof.params) || {};
     // 18k gold reads slightly richer/deeper than 14k — nudge the swatch colour
     // toward a warmer gold by the fineness' `deepen` amount (no-op for 585).
-    var fdef = finocaDef(s.finoca);
+    var fdef = finocaDef(c, s.finoca);
     var baseColor = pbr.color || '#D9A945';
     var matColor = fdef.deepen > 0 ? mixHex(baseColor, '#C98A2E', fdef.deepen) : baseColor;
     return {
       width: s.width, thickness: s.thickness, size: s.size,
       profileShape: profParams.shape || 'flat',
       profileKey: s.profile,
-      profileOutline: profParams.shape === 'param' ? paramProfileOutline(profParams) : null,
+      profileWama: profParams.wama || null, // section built with this Wama profile's rules (decisions #76)
+      profileOutline: profParams.shape === 'param' && !profParams.wama ? paramProfileOutline(profParams) : null,
       materialColor: matColor,
       metal: s.material, // scene picks the metal's LUT by slug (Faza 2 look)
       roughness: typeof finPbr.roughness === 'number' ? finPbr.roughness : (pbr.roughness || 0.08),
@@ -390,8 +412,31 @@
     };
   };
 
+  // HeightAdaptation (Wama, FAZA3 §3.4): some profiles can't be built below
+  // a thickness (bombé P13 ≥ 1,4, jastučasti P12 ≥ 1,2, deep domes on wide
+  // bands…). Lift the ring's thickness to that minimum instead of building
+  // an impossible section; the visible slider follows.
+  Configurator.prototype.adaptHeights = function () {
+    if (!window.ZSCScene || !window.ZSCScene.profileMinH) return;
+    var g = this.c.groups || {}, self = this;
+    var tCfg = g.thickness || { min: 0.8, max: 2.5, step: 0.1, unit: 'mm' };
+    ['her', 'his'].forEach(function (k) {
+      var s = self.state[k], pp = profileParamsOf(g, s.profile) || {};
+      var minH = window.ZSCScene.profileMinH(pp.shape || 'flat', s.width, pp.wama);
+      if (s.thickness < minH - 1e-9) {
+        s.thickness = snap(minH, tCfg.min, tCfg.max, tCfg.step || 0.1);
+        if (k === self.activeRing && self._tSlider) {
+          self._tSlider.querySelector('input[type="range"]').value = s.thickness;
+          self._tSlider.querySelector('.zs-slider-val').textContent = fmtNum(s.thickness) + ' ' + (tCfg.unit || 'mm');
+          self.refreshDiagrams();
+        }
+      }
+    });
+  };
+
   Configurator.prototype.pushScene = function () {
     if (!this.scene) return;
+    this.adaptHeights();
     this.scene.setState({ her: this.sceneStateFor('her'), his: this.sceneStateFor('his') });
     // setState makes both rings visible again; re-assert any "view solo" state.
     this.applyViewSolo();
@@ -643,6 +688,7 @@
     var tCfg = g.thickness || { min: 1, max: 2.5, step: 0.5, unit: 'mm' };
     var wSlider = slider('Širina', wCfg, s.width, function (v) { s.width = v; self.refreshDiagrams(); });
     var tSlider = slider('Debljina', tCfg, s.thickness, function (v) { s.thickness = v; self.refreshDiagrams(); });
+    this._tSlider = tSlider;
     row.appendChild(wSlider);
     row.appendChild(tSlider);
     box.appendChild(row);
@@ -820,11 +866,11 @@
 
     box.appendChild(hx('p', 'zs-eyebrow', 'Finoća'));
     var finRow = el('div', 'zs-chips');
-    FINOCA.forEach(function (f) {
+    finoceOf(this.c).forEach(function (f) {
       var b = el('button', 'zs-chip');
       b.type = 'button';
       b.innerHTML = esc(f.label) + ' <span class="zs-chip-sub">' + esc(f.sub) + '</span>';
-      b.setAttribute('aria-pressed', String((s.finoca || '585') === f.id));
+      b.setAttribute('aria-pressed', String(finocaDef(self.c, s.finoca).id === f.id));
       b.addEventListener('click', function () {
         s.finoca = f.id;
         self.renderPanel(); self.recalc(); self.pushScene();
@@ -1335,11 +1381,11 @@
     var bar = el('div', 'zs-bottombar');
     bar.innerHTML =
       '<div class="zs-price">' +
-        '<span class="zs-price-label">Cena za par</span>' +
+        '<span class="zs-price-label">Ukupno</span>' +
         '<span class="zs-price-value">—</span>' +
         '<span class="zs-price-sub">PDV uključen · <span class="zs-weight">—</span></span>' +
         '<span class="zs-price-perring">' +
-          '<span data-ring="her">Njena —</span><span data-ring="his">Njegova —</span>' +
+          '<span data-ring="her">Cena prvog prstena: —</span><span data-ring="his">Cena drugog prstena: —</span>' +
         '</span>' +
       '</div>' +
       '<div class="zs-trust">' +
@@ -1376,51 +1422,69 @@
     this.applyViewSolo();
   };
 
+  // Price (decisions #77): each ring on its own —
+  //   exact band volume (3D mesh) → exact mass → raw price → Math.ceil
+  // and the pair total is the SUM of the two ceiled ring prices (two separate
+  // pieces), never ceil(rawA + rawB). Whole RSD, no decimals.
   Configurator.prototype.recalc = function () {
+    this.adaptHeights();
     var her = this._ringPrice('her'), his = this._ringPrice('his');
-    var total = her.total + his.total;
+    var total = her.total + his.total;                  // both already integers (ceiled)
     var priceable = her.priceable && his.priceable;
-    var wPair = this.ringWeight('her') + this.ringWeight('his');
-    if (this._weightEl) this._weightEl.textContent = wPair > 0 ? ('≈ ' + fmtNum(wPair) + ' g za par') : '';
-    if (this._priceValue) this._priceValue.textContent = priceable ? money(Math.round(total), this.c) : 'Cena na upit';
+    var wPair = her.mass + his.mass;                    // display only — never fed back into price
+    if (this._weightEl) this._weightEl.textContent = wPair > 0 ? ('≈ ' + fmtMass(wPair) + ' g za par') : '';
+    if (this._priceValue) this._priceValue.textContent = priceable ? money(total, this.c) : 'Cena na upit';
     // Per-ring price line (client/Breuning: price shown per ring beside the pair total).
-    if (this._priceHerEl) this._priceHerEl.textContent = 'Njena ' + (her.priceable ? money(Math.round(her.total), this.c) : 'na upit');
-    if (this._priceHisEl) this._priceHisEl.textContent = 'Njegova ' + (his.priceable ? money(Math.round(his.total), this.c) : 'na upit');
+    // „prvi“ = RINGS[0] (Njena burma), „drugi“ = RINGS[1] (Njegova burma)
+    if (this._priceHerEl) this._priceHerEl.textContent = 'Cena prvog prstena: ' + (her.priceable ? money(her.total, this.c) : 'na upit');
+    if (this._priceHisEl) this._priceHisEl.textContent = 'Cena drugog prstena: ' + (his.priceable ? money(his.total, this.c) : 'na upit');
+    this._lastPrice = { her: her, his: his, total: total, priceable: priceable }; // QA handle
   };
 
   Configurator.prototype._ringPrice = function (ringKey) {
     var c = this.c, g = c.groups || {}, s = this.state[ringKey];
     var mat = bySlug(g.material, s.material);
-    var weight = this.ringWeight(ringKey);
-    var total = 0; // all 4 catalogue "model" rows carry basePrice 0 (Seeder) — nothing lost by not tracking a model choice
+    var fdef = finocaDef(c, s.finoca);
+    var mass = this.ringWeight(ringKey);                // exact grams (not rounded)
+    var raw = 0; // all 4 catalogue "model" rows carry basePrice 0 (Seeder) — nothing lost by not tracking a model choice
     var priceable = true;
+    var perGram = 0;
 
     if (mat && mat.price && mat.price.type === 'per_gram') {
-      var perGram = (c.pricing && c.pricing.spotPrices && c.pricing.spotPrices[mat.price.spot_key]) || 0;
-      if (perGram > 0) total += weight * perGram;
+      // CMS price of THIS fineness per gram, used as is (no purity factor).
+      perGram = Number(c.pricing && c.pricing.spotPrices && c.pricing.spotPrices[fdef.price_key]) || 0;
+      if (perGram > 0 && mass > 0) raw += mass * perGram;
       else priceable = false;
     }
-    total += flat(bySlug(g.finish, s.finish));
-    total += flat(bySlug(g.diamond, s.diamond)) * Math.max(1, s.diamondQty || 1);
-    if (s.engravingText && g.engraving && g.engraving.price) total += g.engraving.price.amount || 0;
-    return { total: total, priceable: priceable };
+    raw += flat(bySlug(g.finish, s.finish));
+    raw += flat(bySlug(g.diamond, s.diamond)) * Math.max(1, s.diamondQty || 1);
+    if (s.engravingText && g.engraving && g.engraving.price) raw += g.engraving.price.amount || 0;
+    return { total: Math.ceil(raw), raw: raw, mass: mass, perGram: perGram, finoca: fdef.id, priceable: priceable };
   };
 
-  // client's jeweller formula → grams for one ring
+  // Exact metal volume of one ring (mm³): the band mesh the scene builds for
+  // this ring's state — profile, width, thickness, size AND carved grooves.
+  // Before the scene module has loaded: exact section (Pappus), and before
+  // even that the old fill-factor estimate (recalc runs again on scene ready).
+  Configurator.prototype.ringVolume = function (ringKey) {
+    var g = this.c.groups || {}, s = this.state[ringKey];
+    if (this.scene && this.scene.ringVolume) return this.scene.ringVolume(this.sceneStateFor(ringKey));
+    var pp = profileParamsOf(g, s.profile) || {};
+    if (window.ZSCScene && window.ZSCScene.profileStats) {
+      var st = window.ZSCScene.profileStats(pp.shape || 'flat', s.width, s.thickness, null, pp.wama);
+      return st.area * (s.size + 2 * Math.PI * st.centroidZ);
+    }
+    return s.width * s.thickness * num(pp.fill, 1.0) * (s.size + Math.PI * s.thickness);
+  };
+
+  // grams for one ring: volume (cm³) × density of the chosen metal in the
+  // chosen fineness (CMS). Exact value — rounding is display-only.
   Configurator.prototype.ringWeight = function (ringKey) {
-    var c = this.c, g = c.groups || {}, s = this.state[ringKey];
-    var mat = bySlug(g.material, s.material);
-    var prof = bySlug(g.profile, s.profile);
-    var baseDensity = (mat && mat.price && mat.price.density) || 0;
-    if (!baseDensity) return 0;
-    // Fineness picks the specific gravity (18k gold is denser → heavier ring).
-    var fdef = finocaDef(s.finoca);
-    var density = fdef.dens[s.material] || baseDensity;
-    var fill = num(prof && prof.params && prof.params.fill, 1.0);
-    var meanCirc = s.size + Math.PI * s.thickness;      // mm
-    var area = s.width * s.thickness * fill;            // mm²
-    var volume_cm3 = area * meanCirc / 1000;
-    return volume_cm3 * density;                        // g
+    var c = this.c, s = this.state[ringKey];
+    var fdef = finocaDef(c, s.finoca);
+    var density = Number(fdef.density && fdef.density[s.material]) || 0;
+    if (!density) return 0;
+    return (this.ringVolume(ringKey) / 1000) * density;
   };
 
   /* -------------------------------------------------------------- tiny helpers */
@@ -1645,10 +1709,14 @@
   function cssEsc(s) { return String(s).replace(/"/g, '\\"'); }
   function bubble(node) { node.dispatchEvent(new Event('change', { bubbles: true })); }
   function fmtNum(n) { return (Math.round(Number(n) * 10) / 10).toString().replace('.', ','); }
+  // n is already a whole number (ceiled ring price / sum of them).
+  var MONEY_FMT = (typeof Intl !== 'undefined') ? new Intl.NumberFormat('sr-RS', { maximumFractionDigits: 0, minimumFractionDigits: 0 }) : null;
   function money(n, c) {
     var cur = (c && c.pricing && c.pricing.currency) || (c && c.currency) || 'RSD';
-    return Math.round(Number(n) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ' ' + cur;
+    var v = Number(n) || 0;
+    return (MONEY_FMT ? MONEY_FMT.format(v) : String(v).replace(/\B(?=(\d{3})+(?!\d))/g, '.')) + ' ' + cur;
   }
+  function fmtMass(g) { return (Number(g) || 0).toFixed(2).replace('.', ','); }  // display only
 
   document.addEventListener('click', function (e) {
     if (!e.target.closest('.zs-pattern-wrap')) {

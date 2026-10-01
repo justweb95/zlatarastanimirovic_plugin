@@ -131,17 +131,23 @@ final class Compiler
                 'engraving' => $engraving,
             ]),
             // Everything the client-side live estimate needs. Authoritative price
-            // is recomputed server-side on inquiry (Faza 5). Formula:
-            //   meanCircumference_mm = size + PI * thickness
-            //   area_mm2             = width * thickness * fill
-            //   volume_cm3           = area_mm2 * meanCircumference_mm / 1000
+            // is recomputed server-side on inquiry (Faza 5). Formula (Faza 3,
+            // decisions #76/#77 — volume of the actual 3D band mesh, grooves
+            // included, computed client-side; `fill` is only the pre-load fallback):
+            //   volume_cm3           = band mesh volume_mm3 / 1000
             //   weight_g            = volume_cm3 * density(finoća)
-            //   ringPrice           = base + weight_g * pricePerGram + finish + diamond + engraving
-            //   pairPrice           = ringHer + ringHis
+            //   ringPrice           = ceil(weight_g * pricePerGram(finoća) + finish + diamond + engraving)
+            //   pairPrice           = ringHer + ringHis   (each ring ceiled on its own, #77)
             'pricing' => [
                 'currency'    => $settings['currency'],
+                // Admin-entered RSD/g per fineness (the ONLY price source, #77).
                 'spotPrices'  => $settings['spot_prices'],
-                'formula'     => 'weight_g = width * thickness * fill * (size + PI*thickness) / 1000 * density',
+                // Offered finenesses: price key + density per metal (enabled only).
+                'finoce'      => array_values(array_filter(
+                    (array) $settings['finoce'],
+                    static fn ($f) => ! empty($f['enabled'])
+                )),
+                'formula'     => 'ringPrice = ceil(volume_mm3 / 1000 * density * pricePerGram + extras)',
             ],
             'spotPrices' => $settings['spot_prices'],
         ];

@@ -1025,6 +1025,107 @@ Sve odluke donete 2026-08-31 osim gde je drugačije navedeno. Format: odluka →
     - Ostaje: 18K „deepen“ se ignoriše (traži sopstveni LUT — V2 boje);
       oštrije normale na kosinama (Korak 3 paketa) nisu rađene.
 
+75. **Profili prstena = tačna geometrija preseka (2026-10-01).**
+    Uzrok lošeg „Ravnog“: (1) presek je bio golih 4 tačke (pravougaonik), bez
+    kosina i comfort zaobljenja iz reference; (2) `computeVertexNormals()` je
+    usrednjavao normale na SVAKOM uglu preseka → ravna traka je dobijala
+    normale nagnute 45° i reflektovala kao zaobljena; (3) prva/poslednja tačka
+    petlje su bili odvojeni verteksi → pregib („šav“) po obimu kod okruglih
+    profila; (4) 2D dijagram u UI-ju nije crtao isti oblik kao 3D.
+    - `profilePoints()` (modul nivo, `scene.module.js`), mm:
+      * **Ravni = P6 iz reference** (`faza2/kontekst/wama-analiza.md` §2,
+        `createRingP6Geometry`): ravna traka sa samo 2 tačke, kosine 45° ×
+        0,52 mm (tvrde ivice na oba kraja), bočni zid, comfort r 0,40 (3 × 30°),
+        ravna unutrašnja strana. Za tanke/uske trake kosina ≤ 0,45·H i ≤ 0,2·W.
+        (Round 14 je izbacio kosine zbog „duplih ivica“ — to je bilo sa PBR-om
+        i usrednjenim normalama; referenca ih traži.)
+      * **D** = ista P6 osnova (ravno iznutra, isti comfort r, zidovi), spolja
+        JEDAN kružni luk od zida do zida; tvrda ivica gde luk sreće zid.
+      * **Okrugli** = potpuno zaobljen, bez ivica: krug kad je širina =
+        debljina, inače elipsa upisana u širina × debljina.
+      * **Zaobljeni** (default) — isti oblik, finije uzorkovan; glatko svuda.
+      * **param** — nepromenjeni outline iz `configurator.js`.
+    - `withHardEdges()`: ugao preseka > 38° = prava ivica → tačka se duplira
+      (odvojene normale); krive ostaju glatke. Važi za sve profile, i param.
+      Petlja bez ijednog ugla se zavari (`weldProfileClosure`) → nema šava.
+    - UI dijagrami (ikone + veliki presek) crtaju istu petlju
+      (`ZSCScene.profileLoop`).
+    - Izmereno (W 5, H 1,5, vel. 48): svih 12 profila — Ø unutra 15,279,
+      Ø spolja 18,279, debljina 1,5, odstupanje po obimu ≈ 1e-6 mm; tvrde
+      ivice: ravni 4, D 2, okrugli/zaobljeni 0 (zavareno). LUT test prolazi
+      za sve (odsjaj sistem netaknut).
+    - Debljina = od najviše spoljašnje do najniže unutrašnje tačke preseka —
+      tačno `thickness` iz UI-ja za sve profile, oba prstena (comfort/kosine
+      su unutar nje). Utisak „deblji“ je bio od podrazumevanih vrednosti po
+      prstenu (`defaultState`: ženski 3 × 1,0 vel. 48, muški 5 × 2,0 vel. 60).
+    - Kamen podignut (`stoneParams.lift` 0,5): centar kamena je na pola puta
+      od ranije utisnute pozicije do spoljne površine (5 × 1,5: 8,531 →
+      8,835 mm od ose, vrh 9,139); radi za sve debljine, culet ostaje u metalu.
+
+## Odluke — 2026-10-01 (Faza 3 — geometrija po Wama pravilima)
+
+76. **Svi profili se grade po Wama Gold pravilima konstrukcije** (paket
+    `docs/faza3/`, `FAZA3-geometrija.md`; klijent odobrio A + B2 + C + D).
+    Zamenjuje oblike iz #75 (osim definicije debljine, koja je ista).
+    - `scene.module.js`: `wamaSpec()` (pravila §8, tabele P7/P8 i P15–P24
+      preuzete iz `reference/wamaProfile.js`) + `wamaHalf()/wamaSectionLoop()`
+      (vrh → gornje zaobljenje → zid = ostatak → donje zaobljenje → unutra).
+      Zaobljenja/kosine u apsolutnim mm (0,3 / 0,4 / 0,52 / 0,8), zid je
+      ostatak, donji r se smanjuje kad nema mesta. Kosine = oštre ivice
+      (eksplicitno, duplirana tačka), ostalo tangentno/glatko (zavareno).
+      Lukovi: tetiva ≤ 0,007 mm, ≤ 30°/korak; kupole ≤ 4°/korak.
+    - Mapiranje (`params.wama` u `wp_zs_options`/Seeder): Zaobljeni P16 ·
+      D-profil P11 · Okrugli P10 · Ravni P6 · Poluokrugli P18 · Blago
+      zaobljeni P15 · Anatomski P4 · Bombirani P13 · Ravni sa fazom P5 ·
+      Trapezni P8 · Jastučasti P12 · Pljosnati P1 (po §1.1 nazivima; kod
+      param profila stari oblik je bio podjednako daleko od više P-ova).
+    - Provera: prema `wamaProfile.js` (gusto 0,005 mm) za 12 korišćenih
+      P-ova × W 3–8 (0,5) × sve izvodljive H 0,8–2,5 (0,1): max odstupanje
+      obrisa ≤ 0,0105 mm. Na 5 × 1,5 vel. 62, na mreži, oba prstena:
+      min r − 62/2π = 0, H = 1,500, t 0,25 i t prosek u ±0,02 od §1.2 za
+      svih 12. LUT test prolazi za sve.
+    - **HeightAdaptation**: `wamaMinH()` = najmanja H koju Wama prihvata
+      (P12 1,2 · P13 1,4 · P16 1,0) i na kojoj presek fizički staje; UI
+      podiže debljinu na nju (`configurator.js adaptHeights`).
+    - **Debljina** 0,8–2,5 korak 0,1 (Seeder + baza). **Podrazumevano kao
+      Wama**: njegov 5 × 1,2 vel. 62, njen 5 × 1,0 vel. 54.
+    - **Težina iz preseka**: ρ · A · (vel. + 2π·z težišta) / 1000 (A i z iz
+      `ZSCScene.profileStats`); `fill` ostaje samo kao rezerva pre učitavanja
+      scene. Npr. 5 × 1,5 vel. 62 žuto 585: Ravni 6,54 → 6,23 g, Zaobljeni
+      5,62 → 5,34 g, D 5,89 → 5,52 g.
+    - **Kamera kao Wama**: FOV 32° → 14°, razdaljina skalirana da prstenovi
+      zauzmu isti deo ekrana (≈ 59 → ≈ 145 mm; Wama 160). Perspektivno
+      naduvavanje bliže ivice ≈ +24 % → ≈ +8 %.
+    - 2D ikone/dijagram: iz istog preseka (`ZSCScene.profileLoop` + wama id).
+
+77. **Obračun cene: CMS cena po gramu × masa iz stvarne 3D zapremine,
+    `Math.ceil` po prstenu (2026-10-01).**
+    - **Jedini izvor cene = WordPress admin** (Podešavanja → „Cena zlata po
+      gramu“). Postojeća `zs_settings.spot_prices` (RSD/g po ključu, ime
+      zadržano) + nova `zs_settings.finoce`: finoća (585/750/916/999 =
+      14K/18K/22K/24K), `price_key`, gustina g/cm³ po metalu, aktivna.
+      Kroz postojeći Compiler payload (`pricing.spotPrices`,
+      `pricing.finoce`, samo aktivne); `Settings::update` prazni keš, pa nova
+      cena važi od sledećeg učitavanja. Bez spot/online cene, bez hardkoda u
+      JS-u (uklonjen `FINOCA`).
+    - Cena po gramu se koristi **kako jeste** (cena te legure) — bez množenja
+      čistoćom. Ranije je 18K koristio cenu 14K (`spot_key` materijala) —
+      ispravljeno: cenu bira finoća.
+    - Po prstenu: `volume_mm3` = zapremina mreže trake koju scena crta
+      (`scene.ringVolume`, profil × širina × debljina × veličina, žlebovi
+      usečeni; ležište kamena je shader-rupa i ne ulazi, < 1 %) → masa =
+      V/1000 × gustina (tačno, bez zaokruživanja) → raw = masa × cena/g +
+      dodaci (obrada, kamen, gravura) → **`Math.ceil(raw)`**. Par =
+      `ceil(A) + ceil(B)`. Prikaz `Intl.NumberFormat('sr-RS')`, bez decimala;
+      masa se prikazuje na 2 decimale (samo prikaz).
+    - Višebojni prsten (Dve/Tri boje) za sada koristi gustinu glavnog metala.
+    - Testovi (admin UI → konfigurator, 18K 9.500 RSD/g, 5 × 1,5): Ravni
+      njena (vel. 54) 419,47 mm³ / 6,523 g / 61.967 RSD, njegov (vel. 62)
+      476,72 mm³ / 7,413 g / 70.424 RSD, par 132.391; promena cene u adminu na
+      9.800 → odnos tačno 1,031579; Zaobljeni/Okrugli/deblji/žleb menjaju
+      zapreminu → masu → cenu. Mreža vs. tačan presek −0,010 %. Posle testa
+      cene vraćene na 0 („Cena na upit“).
+
 ## Otvorena pitanja (blokiraju procenu obima)
 
 | # | Pitanje | Zašto je bitno |

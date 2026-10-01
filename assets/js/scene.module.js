@@ -296,6 +296,320 @@ function mergeLatheSeamIndices(geo, rows, segments) {
   idx.needsUpdate = true;
 }
 
+// ------------------------------------------------------------ ring profiles
+//
+// Faza 3 (2026-10-01, decisions #76; docs/faza3/FAZA3-geometrija.md): every
+// profile is built with the Wama Gold construction rules (reverse-engineered
+// from their own section data, docs/faza3/reference/wamaProfile.js):
+//
+//   outer apex (z = H) ─ top: flat | dome R | chamfer dx×dy
+//                        top corner fillet rt (tangent; none on a chamfer)
+//                        straight side wall = whatever height is left (≥ 0)
+//                        inner fillet ri (tangent; shrinks only if the wall
+//                          would go negative)
+//   inner apex (z = 0) ─ inner: flat | dome R | slope + dome (P13/P14)
+//
+//   * Thickness H = max z − min z, radial, inner apex → outer apex. The
+//     inner apex sits exactly on the finger line R = size / 2π (EU size =
+//     inner circumference). Comfort domes are INSIDE H.
+//   * Fillets and chamfers are absolute mm (0.3 / 0.4 / 0.52 / 0.8) — they do
+//     not scale with width or thickness; dome depths follow the per-profile
+//     rules of §8 (R = (c² + s²) / 2s, c = W/2, never deeper than a half
+//     circle).
+//   * Chamfer/slope edges are sharp (duplicated profile point → separate
+//     normals); every other transition is tangent → smooth.
+//
+// Coordinates: section space x = across the band (0 = centre), z = height
+// above the finger line. profilePoints() turns that into the (radius, width)
+// Vector2 loop LatheGeometry wants.
+
+// Our profile slugs map to a Wama id through params.wama (Seeder); a
+// keyword shape without one falls back to this table.
+const SHAPE_WAMA = { flat: 'P6', 'd-comfort': 'P11', round: 'P10', court: 'P16' };
+// Smallest thickness Wama accepts for a profile (measured, §3.4); wamaMinH()
+// additionally requires the section to actually fit (side wall ≥ 0 even with
+// the inner fillet shrunk to 0). The UI lifts the thickness to that value
+// when such a profile/width is picked (their HeightAdaptation).
+const WAMA_MIN_H = { P12: 1.2, P13: 1.4, P16: 1.0 };
+
+const WRs = (c, s) => (c * c + s * s) / (2 * s);
+const WdomeR = (c, s) => Math.max(WRs(c, Math.max(s, 0.005)), c * 1.01);   // ≤ half circle
+const WTAB = {
+  slope78: { 2: [0.34, 0.27], 3: [0.51, 0.41], 5: [0.86, 0.45], 8: [1.29, 0.50], 12: [1.47, 0.57] },
+  P15: { top: { 2: 2.5, 3: 3.5, 5: 9.5, 8: 24, 12: 44 }, inner: { 2: 3, 3: 3, 5: 10, 8: 16, 12: 70 }, inner25: { 12: 24 } },
+  P16: { top: { 2: 1.5, 3: 2.5, 5: 7, 8: 17.5, 12: 33.5 }, inner: { 2: 4, 3: 6, 5: 10, 8: 16, 12: 34 }, inner25: { 12: 24 } },
+  P17: { top: { 2: 1.2, 3: 2, 5: 5.5, 8: 13.5, 12: 25.5 }, inner: { 2: 6, 3: 6, 5: 12, 8: 18, 12: 50 }, inner25: { 12: 24 } },
+  P18: { top: { 2: 1.2, 3: 2, 5: 4.5, 8: 11.5, 12: 23.5 }, inner: { 2: 6, 3: 6, 5: 10, 8: 22, 12: 60 }, inner25: { 12: 24 } },
+  P19: { top: { 2: 2, 3: 3, 5: 8, 8: 20, 12: 36 }, inner: { 2: 3.5, 3: 5, 5: 9, 8: 16, 12: 32 }, inner25: { 12: 24 } },
+  P20: { top: { 2: 1.5, 3: 2.5, 5: 6, 8: 15, 12: 31 }, inner: { 2: 4, 3: 5, 5: 9, 8: 16, 12: 36 }, inner25: { 12: 24 } },
+  P21: { top: { 2: 1.5, 3: 2.5, 5: 6, 8: 15.5, 12: 27.5 }, inner: { 2: 4, 3: 5, 5: 9, 8: 16, 12: 42 }, inner25: { 12: 24 } },
+  P22: { top: { 2: 1.5, 3: 2.5, 5: 7, 8: 18, 12: 34 }, inner: { 2: 4, 3: 4.5, 5: 8, 8: 14, 12: 33 }, inner25: { 12: 22 } },
+  P23: { top: { 2: 1.2, 3: 2, 5: 6.5, 8: 12.5, 12: 20.5 }, inner: { 2: 3, 3: 3.5, 5: 5.5, 8: 19, 12: 100 }, inner25: { 12: 25 } },
+  P24: { top: { 2: 1.2, 3: 2, 5: 5.5, 8: 11.5, 12: 23.5 }, inner: { 2: 3, 3: 3.5, 5: 7.5, 8: 22.5, 12: 60 }, inner25: { 12: 23 } },
+  P7: { inner: { 2: 6, 3: 3, 5: 7, 8: 19, 12: 50 }, inner25: { 12: 24 }, innerAt5: { 1.2: 20, 1.5: 7, 2: 5 } },
+  at5: { P15: { 1.2: 10, 1.5: 10, 2: 10 }, P16: { 1: 25, 1.2: 10, 1.5: 10, 2: 10 }, P17: { 1.2: 17, 1.5: 12, 2: 12 },
+         P18: { 1.5: 10, 2: 10, 2.5: 10 }, P19: { 1.2: 9, 1.5: 9, 2: 9 }, P20: { 1.2: 14, 1.5: 9, 2: 9 }, P21: { 1.2: 14, 1.5: 9, 2: 9 },
+         P22: { 1.2: 10, 1.5: 8, 2: 8 }, P23: { 1.2: 11, 1.5: 5.5, 2: 5.5 }, P24: { 1.2: 17, 1.5: 7.5, 2: 6 } },
+  P13dx: { 1.5: 0.46, 2: 0.585, 2.5: 0.63 },
+  P14dx: { 1.5: 0.447, 2: 0.514, 2.5: 0.565 },
+};
+const Wsag = (R, c) => R - Math.sqrt(Math.max(0, R * R - c * c));
+function WinterpR(table, W) {                       // interpolate dome DEPTH between measured widths
+  const ws = Object.keys(table).map(Number).sort((a, b) => a - b);
+  const sOf = (w) => Wsag(table[w], w / 2);
+  if (W <= ws[0]) return WdomeR(W / 2, sOf(ws[0]));
+  if (W >= ws[ws.length - 1]) return WdomeR(W / 2, sOf(ws[ws.length - 1]));
+  for (let i = 0; i < ws.length - 1; i++) if (W >= ws[i] && W <= ws[i + 1]) {
+    if (W === ws[i]) return table[ws[i]];
+    const t = (W - ws[i]) / (ws[i + 1] - ws[i]);
+    return WdomeR(W / 2, sOf(ws[i]) * (1 - t) + sOf(ws[i + 1]) * t);
+  }
+  return table[ws[0]];
+}
+function WinterpPair(table, W) {
+  const ws = Object.keys(table).map(Number).sort((a, b) => a - b);
+  if (W <= ws[0]) return table[ws[0]];
+  if (W >= ws[ws.length - 1]) return table[ws[ws.length - 1]];
+  for (let i = 0; i < ws.length - 1; i++) if (W >= ws[i] && W <= ws[i + 1]) {
+    const t = (W - ws[i]) / (ws[i + 1] - ws[i]);
+    return table[ws[i]].map((v, k) => v * (1 - t) + table[ws[i + 1]][k] * t);
+  }
+  return table[ws[0]];
+}
+function WinnerR(t, at5, W, H) {                     // inner dome: depth at (W, 1.5) scaled by the H ratio measured at W 5
+  if (H >= 2.4 && W >= 11.5 && t.inner25) return t.inner25[12];
+  const c = W / 2;
+  let s = Wsag(WinterpR(t.inner, W), c);
+  if (at5) {
+    const hs = Object.keys(at5).map(Number).sort((a, b) => a - b);
+    const s5 = (h) => Wsag(at5[h], 2.5);
+    const ref = at5[1.5] ? s5(1.5) : s5(hs[0]);
+    let k = 1;
+    if (H <= hs[0]) k = s5(hs[0]) / ref;
+    else if (H >= hs[hs.length - 1]) k = s5(hs[hs.length - 1]) / ref;
+    else for (let i = 0; i < hs.length - 1; i++) if (H >= hs[i] && H <= hs[i + 1]) {
+      const u = (H - hs[i]) / (hs[i + 1] - hs[i]);
+      k = (s5(hs[i]) * (1 - u) + s5(hs[i + 1]) * u) / ref;
+    }
+    s *= k;
+  }
+  return WdomeR(c, s);
+}
+const WnearestKey = (obj, v) => Object.keys(obj).map(Number).reduce((a, b) => (Math.abs(b - v) < Math.abs(a - v) ? b : a));
+
+// Construction spec per Wama id (§8). Ids we don't use (P3 concave) fall
+// back to P1.
+function wamaSpec(id, W, H) {
+  const c = W / 2;
+  switch (id) {
+    case 'P1':  return { top: { type: 'flat' }, rt: 0.3, inner: { type: 'flat' }, ri: 0.4 };
+    case 'P2':  return { top: { type: 'flat' }, rt: 0.3, inner: { type: 'dome', R: WdomeR(c, H / 2 - 0.10) }, ri: 0.4 };
+    case 'P4':  return { top: { type: 'dome', R: WdomeR(c, 0.305 * (H - 0.44)) }, rt: 0.3, inner: { type: 'dome', R: WdomeR(c, 0.695 * (H - 0.44)) }, ri: 0.3 };
+    case 'P5':  return { top: { type: 'chamfer', dx: 0.52, dy: 0.52 }, inner: { type: 'dome', R: WdomeR(c, H / 2 - 0.31) }, ri: 0.4 };
+    case 'P6':  return { top: { type: 'chamfer', dx: 0.52, dy: 0.52 }, inner: { type: 'flat' }, ri: H >= 1.2 ? 0.4 : (H >= 1.0 ? 0.3 : 0.28) };
+    case 'P7': { const [dx, dy] = WinterpPair(WTAB.slope78, W);
+      return { top: { type: 'chamfer', dx, dy }, inner: { type: 'dome', R: WinnerR(WTAB.P7, WTAB.P7.innerAt5, W, H) }, ri: 0.4 }; }
+    case 'P8': { const [dx, dy] = WinterpPair(WTAB.slope78, W);
+      return { top: { type: 'chamfer', dx, dy }, inner: { type: 'flat' }, ri: H >= 1.0 ? 0.4 : 0.3 }; }
+    case 'P9':  return { top: { type: 'dome', R: WdomeR(c, 0.42 * H) }, rt: 0.3, inner: { type: 'flat' }, ri: Math.min(c, Math.max(0.4, H / 2 - 0.2)) };
+    case 'P10': return { top: { type: 'dome', R: WdomeR(c, H / 2 - 0.21) }, rt: 0.3, inner: { type: 'dome', R: WdomeR(c, H / 2 - 0.21) }, ri: 0.3 };
+    case 'P11': return { top: { type: 'dome', R: WdomeR(c, 0.42 * H) }, rt: 0.3, inner: { type: 'flat' }, ri: 0.4 };
+    case 'P12': return { top: { type: 'flat' }, rt: 0.8, inner: { type: 'dome', R: H >= 1.5 ? WdomeR(c, H - 1.15) : 18 * (W / 5) }, ri: 0.4 };
+    case 'P13': return { top: { type: 'dome', R: WdomeR(c, H / 2 - 0.612) }, rt: 0.3,
+      inner: { type: 'slope', wall: 0.4, dx: WTAB.P13dx[WnearestKey(WTAB.P13dx, H)], R: WRs(c, 0.263) } };
+    case 'P14': return { top: { type: 'flat' }, rt: 0.3,
+      inner: { type: 'slope', wall: H / 2 - 0.25, dx: WTAB.P14dx[WnearestKey(WTAB.P14dx, H)], R: WRs(c, 0.263) } };
+    default: {
+      const t = WTAB[id];
+      if (!t) return wamaSpec('P1', W, H);
+      return { top: { type: 'dome', R: WinterpR(t.top, W) }, rt: 0.3, inner: { type: 'dome', R: WinnerR(t, WTAB.at5[id], W, H) }, ri: 0.4 };
+    }
+  }
+}
+
+// Arc sampling: chord error ≤ 0.007 mm (so a section measured 0.25 mm from
+// the side, across two fillets, stays within ±0.02 of Wama — FAZA3 §10.3.6)
+// and ≤ 30° per step; domes ≤ 4° per step so the per-vertex reflection stays
+// a smooth sweep. Every step stays under HARD_EDGE_DEG, so arcs are never
+// mistaken for corners.
+function arcSteps(r, sweep) {
+  const chord = 2 * Math.acos(Math.max(-1, 1 - 0.007 / r));
+  const max = Math.min(Math.PI / 6, chord, r > 1.2 ? (4 * Math.PI) / 180 : Math.PI);
+  return Math.max(1, Math.ceil(Math.abs(sweep) / max));
+}
+
+// Half section (right side), internal y DOWN with y = 0 at mid-H; returns
+// [{x, y, hard}], outer apex → inner apex.
+function wamaHalf(W, H, spec) {
+  const c = W / 2, PI = Math.PI;
+  const out = [];
+  out.fits = true;
+  const pt = (x, y, hard) => out.push({ x, y, hard: !!hard });
+  const arc = (cx, cy, r, a0, a1) => {             // shortest sweep, start included, end excluded
+    let da = a1 - a0; while (da > PI) da -= 2 * PI; while (da < -PI) da += 2 * PI;
+    const n = arcSteps(r, da);
+    for (let k = 0; k < n; k++) { const a = a0 + (da * k) / n; pt(cx + r * Math.cos(a), cy + r * Math.sin(a)); }
+  };
+  const ang = (x, y, cx, cy) => Math.atan2(y - cy, x - cx);
+
+  let ytSide;
+  const T = spec.top, rt = spec.rt ?? 0.3;
+  if (T.type === 'flat') {
+    const yt = -H / 2; pt(0, yt); arc(c - rt, yt + rt, rt, -PI / 2, 0); ytSide = yt + rt;
+  } else if (T.type === 'dome') {
+    const R = T.R, yc = -H / 2 + R, d = R - rt, fx = c - rt, fy = yc - Math.sqrt(Math.max(0, d * d - fx * fx));
+    const tx = (fx * R) / d, ty = yc + ((fy - yc) * R) / d;
+    arc(0, yc, R, -PI / 2, ang(tx, ty, 0, yc)); arc(fx, fy, rt, ang(tx, ty, fx, fy), 0); ytSide = fy;
+  } else {                                          // chamfer: both of its ends are sharp
+    const yt = -H / 2; pt(0, yt); pt(c - T.dx, yt, true); ytSide = yt + T.dy; pt(c, ytSide, true);
+  }
+  const startSide = () => { if (T.type !== 'chamfer') pt(c, ytSide); };
+
+  const I = spec.inner;
+  let ri = spec.ri ?? 0.4;
+  if (I.type === 'slope') {
+    const ys = ytSide + I.wall, R = I.R, yc = H / 2 - R, xe = c - I.dx, ye = yc + Math.sqrt(Math.max(0, R * R - xe * xe));
+    startSide(); pt(c, ys, true); pt(xe, ye, true); arc(0, yc, R, ang(xe, ye, 0, yc), PI / 2);
+  } else {
+    const sideY = (r) => {
+      if (I.type === 'flat') return H / 2 - r;
+      const R = I.R, yc = H / 2 - R, d = R - r, fx = c - r; return yc + Math.sqrt(Math.max(0, d * d - fx * fx));
+    };
+    if (sideY(0) < ytSide - 1e-9) out.fits = false;  // does not fit at this H (see wamaMinH)
+    if (sideY(ri) < ytSide) {                       // no room → shrink the inner fillet until the wall is 0
+      let lo = 0, hi = ri; for (let k = 0; k < 60; k++) { const m = (lo + hi) / 2; if (sideY(m) < ytSide) hi = m; else lo = m; } ri = lo;
+    }
+    const ybSide = sideY(ri);
+    if (ybSide - ytSide > 1e-6) startSide();       // straight wall (skipped when it has zero length)
+    else if (T.type === 'chamfer') { /* chamfer foot already emitted */ }
+    if (I.type === 'flat') { arc(c - ri, H / 2 - ri, ri, 0, PI / 2); pt(c - ri, H / 2); }
+    else {
+      const R = I.R, yc = H / 2 - R, d = R - ri, fx = c - ri, fy = ybSide, tx = (fx * R) / d, ty = yc + ((fy - yc) * R) / d;
+      arc(fx, fy, ri, 0, ang(tx, ty, fx, fy)); arc(0, yc, R, ang(tx, ty, 0, yc), PI / 2);
+    }
+  }
+  pt(0, H / 2);                                     // inner apex
+  return out;
+}
+
+// Thinnest buildable thickness (0.1 mm steps, 0.8–2.5) for a profile at a width.
+function wamaMinH(id, W) {
+  for (let k = 8; k <= 25; k++) {
+    const H = k / 10;
+    if (H >= (WAMA_MIN_H[id] || 0) - 1e-9 && wamaHalf(W, H, wamaSpec(id, W, H)).fits) return H;
+  }
+  return 2.5;
+}
+
+// Closed section loop [[x, z, hard], …] (z above the finger line), mirrored
+// from the right half; exactly collinear points on straight runs are dropped
+// (a flat top keeps only its 2 corner points, as in the reference mesh).
+function wamaSectionLoop(id, W, H) {
+  const right = wamaHalf(W, H, wamaSpec(id, W, H));
+  const left = right.slice(1, -1).reverse().map((p) => ({ x: -p.x, y: p.y, hard: p.hard }));
+  const all = right.concat(left).map((p) => [p.x, H / 2 - p.y, p.hard]);
+  const n = all.length;
+  return all.filter((p, i) => {
+    if (p[2]) return true;
+    const a = all[(i - 1 + n) % n], b = all[(i + 1) % n];
+    const cross = (p[0] - a[0]) * (b[1] - p[1]) - (p[1] - a[1]) * (b[0] - p[0]);
+    const dot = (p[0] - a[0]) * (b[0] - p[0]) + (p[1] - a[1]) * (b[1] - p[1]);
+    return !(Math.abs(cross) < 1e-12 && dot > 0);
+  });
+}
+
+const HARD_EDGE_DEG = 38;                           // fallback corner detection for raw outlines
+
+// Cross-section in the (radius, axial) plane: x = distance from the finger
+// axis, y = position across the width. Closed Vector2 loop (last == first),
+// inner face walked −y → +y, outer face +y → −y. Sharp corners come out as
+// two coincident points (see withHardEdges). Units: mm.
+function profilePoints(shape, innerR, thickness, width, outline, wamaId) {
+  const id = wamaId || SHAPE_WAMA[shape];
+  const pts = [];
+  if (id) {
+    // reversed: the Wama loop walks the outer face −x → +x
+    const loop = wamaSectionLoop(id, width, thickness).reverse();
+    for (const [x, z, hard] of loop) {
+      pts.push(new THREE.Vector2(innerR + z, x));
+      if (hard) pts.push(new THREE.Vector2(innerR + z, x));
+    }
+  } else if (Array.isArray(outline) && outline.length > 2) {
+    // legacy: normalised outline from configurator.js (nx width, ny thickness, ny=-1 outer)
+    for (let i = 0; i < outline.length; i++) {
+      pts.push(new THREE.Vector2(innerR + ((1 - outline[i][1]) / 2) * thickness, outline[i][0] * (width / 2)));
+    }
+  } else {
+    return profilePoints('flat', innerR, thickness, width, null, null);
+  }
+  if (pts.length && pts[0].distanceTo(pts[pts.length - 1]) > 1e-9) pts.push(pts[0].clone());
+  return pts;
+}
+
+// Turns a closed profile loop into what buildBandFor feeds LatheGeometry:
+//   * explicit sharp corners (two coincident points) stay split → separate
+//     vertices → separate normals; the loop is rotated to start on one;
+//   * a loop without them (raw outline) gets corners from the turn angle
+//     (> HARD_EDGE_DEG);
+//   * a loop with no corner at all comes back with `weld: true` so its
+//     first/last row is joined and no crease runs round the ring.
+function withHardEdges(loop) {
+  const L = loop.slice(0, -1);                      // drop the closing copy
+  const n = L.length;
+  const same = (a, b) => a.distanceToSquared(b) < 1e-18;
+  let j = -1;
+  for (let i = 0; i < n; i++) if (same(L[i], L[(i - 1 + n) % n])) { j = i; break; }
+  if (j >= 0) {
+    // start on the 2nd point of a coincident pair; the loop then ends on the
+    // 1st one, which is the (separate-vertex) closing point
+    const out = [];
+    for (let k = 0; k < n; k++) out.push(L[(j + k) % n].clone());
+    return { pts: out, weld: false };
+  }
+  // no explicit corners → angle rule
+  const cosLim = Math.cos((HARD_EDGE_DEG * Math.PI) / 180);
+  const hard = [];
+  const u = new THREE.Vector2(), v = new THREE.Vector2();
+  for (let i = 0; i < n; i++) {
+    u.subVectors(L[i], L[(i - 1 + n) % n]);
+    v.subVectors(L[(i + 1) % n], L[i]);
+    hard[i] = u.lengthSq() > 1e-14 && v.lengthSq() > 1e-14 && u.normalize().dot(v.normalize()) < cosLim;
+  }
+  const start = hard.indexOf(true);
+  if (start < 0) return { pts: loop, weld: true };
+  const out = [];
+  for (let k = 0; k <= n; k++) {
+    const i = (start + k) % n;
+    out.push(L[i].clone());
+    if (hard[i] && k > 0 && k < n) out.push(L[i].clone());
+  }
+  return { pts: out, weld: false };
+}
+
+// Topological weld of a closed, corner-free profile: every vertex of the
+// LAST profile row is redirected to the first row (same position) in the
+// index buffer, BEFORE computeVertexNormals — same idea as the angular seam
+// weld above.
+function weldProfileClosure(geo, rows, segments) {
+  const arr = geo.index.array;
+  for (let k = 0; k < arr.length; k++) {
+    if (arr[k] % rows === rows - 1) arr[k] -= rows - 1;
+  }
+  geo.index.needsUpdate = true;
+}
+
+// Section area + centroid height (z above the finger line) of a profile —
+// for the weight formula (ρ · A · 2π · R_centroid).
+function sectionStats(loop) {
+  let A = 0, Cz = 0;
+  for (let i = 0; i < loop.length; i++) {
+    const [x1, z1] = loop[i], [x2, z2] = loop[(i + 1) % loop.length];
+    const cr = x1 * z2 - x2 * z1;
+    A += cr; Cz += (z1 + z2) * cr;
+  }
+  return { area: Math.abs(A) / 2, centroidZ: A ? Cz / (3 * A) : 0 };
+}
+
 // Faza 2: min 2 even at DPR 1 (the LUT look lives in thin chamfer lines),
 // max 3.
 function viewPixelRatio() {
@@ -374,8 +688,14 @@ function create(canvas, opts = {}) {
   let envRT = pmrem.fromScene(buildStudio(), studioParams.blur);
   scene.environment = envRT.texture;
 
-  const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 2000);
-  const homePos = new THREE.Vector3(2, 7, 30);
+  // Faza 3 (decisions #76, FAZA3 §10.1 H6): Wama's long lens — FOV 14°
+  // instead of 32°. Distances below are scaled by CAM_K so the pair keeps
+  // the same size on screen (≈ 138 mm instead of ≈ 59 mm; Wama ≈ 160 mm),
+  // which cuts the perspective swell of the near rim from ≈ +24 % to ≈ +8 %.
+  const CAM_FOV = 14;
+  const CAM_K = Math.tan((32 * Math.PI) / 360) / Math.tan((CAM_FOV * Math.PI) / 360);
+  const camera = new THREE.PerspectiveCamera(CAM_FOV, 1, 1, 4000);
+  const homePos = new THREE.Vector3(2, 7, 30).multiplyScalar(CAM_K);
   const homeTarget = new THREE.Vector3(0, 0, 0);
   camera.position.copy(homePos);
 
@@ -391,8 +711,8 @@ function create(canvas, opts = {}) {
   // the ring instead of scrolling — the page scroll would "stick". The +/−
   // toolbar buttons (scene.zoom()) still dolly the camera, so no feature lost.
   controls.enableZoom = false;
-  controls.minDistance = 10;
-  controls.maxDistance = 160;
+  controls.minDistance = 10 * CAM_K;
+  controls.maxDistance = 160 * CAM_K;
   // The camera can rise all the way to a full flat-lay top-down shot
   // (minPolarAngle≈0), but going the other way it stops just past the
   // horizon — like a real camera "bouncing off" the table, close enough to
@@ -595,7 +915,12 @@ function create(canvas, opts = {}) {
     dispersion: 1.0,        // 1 = real diamond spread (nC..nF), 2 = exaggerated
     bounces: coarsePointer ? 5 : 6,
     seatMix: 0.85,          // how much light leaving through the pavilion picks up the metal
-    flushDepth: 0.012,      // mm the table sits below the band surface
+    flushDepth: 0.012,      // mm the table sits below the band surface (base pose)
+    // 2026-10-01 (client): the flush stone sat too deep to read. Its centre
+    // (table↔culet mid-height) is raised this fraction of the way from the
+    // flush pose up to the ring's outer surface at the stone: 0 = flush,
+    // 0.5 = halfway (approved), 1 = centre on the surface.
+    lift: 0.5,
     holeTop: 1.03,          // seat opening at the surface (× stone radius)
     holeBottom: 0.955,      // seat wall at the girdle (× stone radius) — metal overlaps the girdle
   };
@@ -673,85 +998,6 @@ function create(canvas, opts = {}) {
   }
 
   // ------------------------------------------------------------------ geometry
-
-  // Cross-section in the (radius, axial) plane. x = distance from finger axis,
-  // y = position across the band width. Returned as a closed Vector2 loop.
-  function profilePoints(shape, innerR, thickness, width, outline) {
-    const outerR = innerR + thickness;
-    const h = width / 2;
-    const pts = [];
-
-    // Parametric profiles (client, 2026-09-08): configurator.js samples the
-    // cross-section outline once (paramProfileOutline) and passes it in via
-    // sceneStateFor, so the 3D band is exactly the shape the Profil card
-    // drew. outline pts are normalised: nx in [-1,1] width axis, ny in
-    // [-1,1] thickness axis (ny=-1 outer / ny=+1 inner/finger side).
-    if (shape === 'param' && Array.isArray(outline) && outline.length > 2) {
-      for (let i = 0; i < outline.length; i++) {
-        const nx = outline[i][0], ny = outline[i][1];
-        const r = innerR + ((1 - ny) / 2) * thickness;
-        pts.push(new THREE.Vector2(r, nx * h));
-      }
-      if (!pts[0].equals(pts[pts.length - 1])) pts.push(pts[0].clone());
-      return pts;
-    }
-    const arc = (cx, cy, r, a0, a1, steps) => {
-      for (let i = 0; i <= steps; i++) {
-        const a = a0 + (a1 - a0) * (i / steps);
-        pts.push(new THREE.Vector2(cx + Math.cos(a) * r, cy + Math.sin(a) * r));
-      }
-    };
-
-    if (shape === 'round') {
-      // full oval cross-section
-      const cx = (innerR + outerR) / 2;
-      const rx = thickness / 2;
-      for (let i = 0; i <= 48; i++) {
-        const a = (i / 48) * Math.PI * 2;
-        pts.push(new THREE.Vector2(cx + Math.cos(a) * rx, Math.sin(a) * h));
-      }
-    } else if (shape === 'd-comfort') {
-      // flat inside, domed outside (D)
-      const bulge = Math.min(thickness * 0.9, h);
-      pts.push(new THREE.Vector2(innerR, -h));
-      pts.push(new THREE.Vector2(innerR, h));
-      // outer dome from top edge to bottom edge
-      for (let i = 0; i <= 24; i++) {
-        const a = Math.PI / 2 - (i / 24) * Math.PI; // +90° -> -90°
-        pts.push(new THREE.Vector2((outerR - bulge) + Math.cos(a) * bulge, Math.sin(a) * h));
-      }
-    } else if (shape === 'court') {
-      // comfort/court: gently domed outside, slightly relieved inside
-      const inR = thickness * 0.28;   // inner comfort curve depth
-      const outR = thickness * 0.55;  // outer dome
-      // inner curve (bulges toward the finger centre a touch)
-      for (let i = 0; i <= 16; i++) {
-        const a = -Math.PI / 2 + (i / 16) * Math.PI;
-        pts.push(new THREE.Vector2(innerR + inR - Math.cos(a) * inR, Math.sin(a) * h));
-      }
-      // outer dome
-      for (let i = 0; i <= 24; i++) {
-        const a = Math.PI / 2 - (i / 24) * Math.PI;
-        pts.push(new THREE.Vector2((outerR - outR) + Math.cos(a) * outR, Math.sin(a) * h));
-      }
-    } else {
-      // 'flat' (ravni) — plain rectangle, sharp outer corners. Used to have a
-      // small chamfer on each outer edge; client (Round 14, 2026-09-15,
-      // screenshot): "duple ivice" — the chamfer's two facet boundaries
-      // (top-face→chamfer, chamfer→outer-wall) sit close enough together
-      // that the studio's few hard-edged lights put a separate bright
-      // specular streak on each, reading as a doubled/duplicated rim line
-      // rather than one clean bevel. A single sharp corner has only one
-      // edge to catch a highlight — matches WamaGold's plain flat-band look.
-      pts.push(new THREE.Vector2(innerR, -h));
-      pts.push(new THREE.Vector2(innerR, h));
-      pts.push(new THREE.Vector2(outerR, h));
-      pts.push(new THREE.Vector2(outerR, -h));
-    }
-    // close the loop
-    if (pts.length && !pts[0].equals(pts[pts.length - 1])) pts.push(pts[0].clone());
-    return pts;
-  }
 
   const LATHE_SEGMENTS = 260;
 
@@ -855,13 +1101,16 @@ function create(canvas, opts = {}) {
     return { minY, maxY, x, z };
   }
 
-  function buildBandFor(key, state) {
-    const rig = rigs[key];
+  // The band mesh for a ring state (profile → lathe → grooves carved in).
+  // Shared by buildBandFor (what is drawn) and ringVolume (what is priced),
+  // so the price always follows the exact geometry on screen.
+  function makeBandGeometry(state) {
     const size = state.size || 54;                 // EU size ≈ inner circumference mm
     const innerR = size / (2 * Math.PI);
     const thickness = state.thickness || 1.4;
     const outerR = innerR + thickness;
-    let pts = profilePoints(state.profileShape || 'flat', innerR, thickness, state.width || 4, state.profileOutline);
+    const prof = withHardEdges(profilePoints(state.profileShape || 'flat', innerR, thickness, state.width || 4, state.profileOutline, state.profileWama));
+    let pts = prof.pts;
     const grooves = state.grooves || [];
     // Grooves are cut into the band itself now — densify the cross-section so
     // the carve below has enough vertex rows for sharp groove walls.
@@ -884,8 +1133,40 @@ function create(canvas, opts = {}) {
     }
     geo.rotateY(-Math.PI / 2);     // move the lathe seam to the left silhouette edge
     mergeLatheSeamIndices(geo, pts.length, LATHE_SEGMENTS);
+    if (prof.weld) weldProfileClosure(geo, pts.length, LATHE_SEGMENTS);
     geo.computeVertexNormals();
     carveGroovesIntoGeometry(geo, grooves, innerR, outerR);
+    return { geo, pts, innerR, thickness, outerR };
+  }
+
+  // Enclosed metal volume (mm³) of a ring state's band mesh: signed
+  // tetrahedra sum over the closed, indexed lathe mesh (grooves included;
+  // the shader-cut stone seats are not geometry and are ignored — a 2 mm
+  // stone's hole is < 1 % of the band). Cached per geometry-relevant state.
+  const volumeCache = new Map();
+  const _va = new THREE.Vector3(), _vb = new THREE.Vector3(), _vc = new THREE.Vector3();
+  function ringVolume(state) {
+    const k = JSON.stringify([state.size, state.thickness, state.width, state.profileShape, state.profileWama, state.profileOutline, state.grooves || []]);
+    if (volumeCache.has(k)) return volumeCache.get(k);
+    const { geo } = makeBandGeometry(state);
+    const pos = geo.attributes.position, idx = geo.index.array;
+    let v6 = 0;
+    for (let t = 0; t < idx.length; t += 3) {
+      _va.fromBufferAttribute(pos, idx[t]);
+      _vb.fromBufferAttribute(pos, idx[t + 1]);
+      _vc.fromBufferAttribute(pos, idx[t + 2]);
+      v6 += _va.dot(_vb.cross(_vc));
+    }
+    geo.dispose();
+    const vol = Math.abs(v6) / 6;
+    if (volumeCache.size > 200) volumeCache.clear();
+    volumeCache.set(k, vol);
+    return vol;
+  }
+
+  function buildBandFor(key, state) {
+    const rig = rigs[key];
+    const { geo, pts, innerR, thickness, outerR } = makeBandGeometry(state);
     rig.profilePts = pts;
     rig.innerR = innerR;
     rig.thickness = thickness;
@@ -1017,7 +1298,9 @@ function create(canvas, opts = {}) {
     const r = Math.min((s.mm / 2) * P.prominence, Math.max(0.2, (thickness - 0.1) / depthPerR));
     const widthPos = s.widthPos || 0;
     const R = outerRadiusAt(rig.profilePts, widthPos) || outerR;
-    const tableZ = R - P.flushDepth;
+    const flushTableZ = R - P.flushDepth;
+    const flushCentreZ = flushTableZ - (depthPerR * r) / 2;
+    const tableZ = flushTableZ + (R - flushCentreZ) * P.lift;
     const girdleZ = tableZ - brilliant.yTable * r;
     const holes = [];
 
@@ -1176,7 +1459,7 @@ function create(canvas, opts = {}) {
       if (rigs.his.band) box.union(new THREE.Box3().setFromObject(rigs.his.root));
       const center = box.getCenter(new THREE.Vector3());
       const diag = box.getSize(new THREE.Vector3()).length();
-      const radius = diag * 1.4;
+      const radius = diag * 1.4 * CAM_K;
       homePos.set(center.x + radius * 0.05, center.y + radius * 0.42, center.z + radius * 0.95);
       homeTarget.copy(center);
       // Centre the shadow camera on the pair's REAL centre too — it was
@@ -1186,7 +1469,7 @@ function create(canvas, opts = {}) {
       key.target.position.copy(center);
       key.target.updateMatrixWorld();
     } else {
-      homePos.set(maxOuter * 0.05, maxOuter * 1.15, maxOuter * 2.35);
+      homePos.set(maxOuter * 0.05, maxOuter * 1.15, maxOuter * 2.35).multiplyScalar(CAM_K);
       homeTarget.set(0, 0, 0);
     }
     camera.position.copy(homePos);
@@ -1515,10 +1798,21 @@ function create(canvas, opts = {}) {
   }
 
   return {
-    setState, resize, dispose, screenshot, zoom, reset, setAutoRotate, setSolo, controls, renderer,
+    setState, resize, dispose, screenshot, zoom, reset, setAutoRotate, setSolo, controls, renderer, ringVolume,
     debug: debugApi, // temporary — see comment above debugApi's definition
   };
 }
 
-window.ZSCScene = { create };
+// profileLoop: the exact cross-section the band is built from, for the UI's
+// 2D diagrams — [[y (width, mm, centred), d (mm above the inner face)], …].
+function profileLoop(shape, width, thickness, outline, wamaId) {
+  return profilePoints(shape, 0, thickness, width, outline, wamaId).map((v) => [v.y, v.x]);
+}
+// profileStats: area (mm²) + centroid height above the finger line (mm) of
+// the exact section — configurator.js's weight formula.
+function profileStats(shape, width, thickness, outline, wamaId) {
+  return sectionStats(profileLoop(shape, width, thickness, outline, wamaId));
+}
+
+window.ZSCScene = { create, profileLoop, profileStats, profileMinH: (shape, width, wamaId) => wamaMinH(wamaId || SHAPE_WAMA[shape] || 'P1', width) };
 document.dispatchEvent(new Event('zsc:scene-ready'));
