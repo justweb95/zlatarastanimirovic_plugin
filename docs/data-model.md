@@ -115,6 +115,19 @@ MODEL i (ako ih bude) jedinstvene GLAVE mogu biti CPT `zs_ring_model` / `zs_head
 > **Ažurirano 2026-09-14** (decisions #60): grupa "Šiljati profili" (Nožasti,
 > Šiljati oval) izbačena iz ponude — `enabled=0`, redovi ostaju u bazi.
 
+## Cena — Faza 4 (decisions #78) — važi umesto formule ispod
+
+```
+po traci k:  V_k  = zapremina metala trake (ring-geometry bandVolumes: žlebovi oduzeti, kuglice dodate)
+             m_k  = V_k / 1000 × ρ(metal_k, finoća)                         ← CMS finoce[].density
+raw = Σ m_k × (cena/g(finoća) + class_extra[klasa](finoća) + metal_k.surcharge_per_gram)
+    + Σ različitih metala surcharge_flat + (rodijum ? pricing.rhodium : 0)
+    + obrada + kamen × kom + gravura
+klasa = wavy (talas/dijagonala) | multi (≥ 2 trake) | special (V60/U/kvadratni/perlaž ili ivica) | simple — samo najviša
+cenaPrstena = Math.ceil(raw); par = zbir
+```
+CMS: `zs_settings.finoce[]` = `{id, label, sub, price_key, enabled, deepen, density{zuto,belo,crveno,manganovo,belo-pd}, class_extra{special,multi,wavy}}`, `zs_settings.rodijum`; materijal `price_json {type:'per_gram', surcharge_flat, surcharge_per_gram}`, `params_json {pbr.color (swatch), lut, rhodium, combinable}`. Stanje prstena u UI-ju: `bandMetals[]`, `rhodium[]`, `division {id, pct, cycles, cuts}`, `grooves [{form, pos (mm od leve ivice), width, depth}]`, `edges {left, right}`, `separation {active, form, width, depth}`.
+
 ## Cena — formula (implementirano 2026-10-01, decisions #77)
 
 Po prstenu, u `configurator.js` (`ringVolume` → `ringWeight` → `_ringPrice`):

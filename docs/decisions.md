@@ -1126,6 +1126,72 @@ Sve odluke donete 2026-08-31 osim gde je drugačije navedeno. Format: odluka →
       zapreminu → masu → cenu. Mreža vs. tačan presek −0,010 %. Posle testa
       cene vraćene na 0 („Cena na upit“).
 
+## Odluke — 2026-10-01 (Faza 4 — metali i žlebovi po Wama pravilima)
+
+78. **Metali, podela boja, žlebovi, ivice i cena po Wama Gold specifikaciji**
+    (paket `docs/faza4/`, `FAZA4-metali-i-zlebovi.md`; detalji, mapiranje i
+    rezultati u `docs/faza4/IMPLEMENTACIJA.md`). v0.8.0, grana
+    `faza4-metali-zlebovi`.
+    - **Nov modul `assets/js/ring-geometry.js`** (čista matematika, import map
+      `zsc/ring-geometry`): profili iz Faze 3 (premešteni iz scene), katalog
+      žlebova, `buildSection` (žlebovi/ivice/razdvajanje u preseku),
+      `bandVolumes` (zapremina po traci), pravila pozicije/dubine, klasa cene.
+      Ista funkcija daje 3D, masu i UI ograničenja.
+    - **Metali** = 5 Wama legura: žuto, belo (Ni, rodijum), crveno, manganovo
+      (samo jednobojno), belo Pd. Metal je BOJA (`params.lut`) — gustina i
+      cena/g su po finoći u Podešavanjima. Gustine = Wama (10,9 / 11,2 / 13,3 /
+      15,5; Mn 12,2, Pd 14,8 samo 585). Finoće 333/375 dodate, isključene.
+      Doplate metala (CMS, materijal): po prstenu (Mn) i po gramu trake (Pd).
+      Rodijum: CMS iznos po prstenu, bez vizuelne promene (kao Wama).
+    - **Podela boja** = 24 Wama preseta (ravno / talas / dijagonala /
+      slobodno 2–5 traka), trake po širini, metal i rodijum po traci, jedna
+      finoća po prstenu. Metal koji nema finoću → finoća se menja (poruka);
+      manganovo onemogućeno u višebojnom (Wama ga pretvara u ceo prsten —
+      naše: jasnije onemogućiti). 1-2-1 talas/dijagonala gradimo stvarno 1:2:1
+      (Wama server vraća 1:1:1 — greška kod njih).
+    - **Žlebovi** = 7 Wama oblika sa tačnim listama mera; pozicija = centar
+      u mm od LEVE ivice (0,01); ivica žleba ≥ 0,5 mm od ivice prstena, ivice
+      i drugog žleba (pomeri / odbij kao `MoveGroove` / `grooveCollision`);
+      auto pozicija centar → najširi slobodan razmak (2,5 → 3,8 → 1,2 → nema
+      mesta, kao Wama); dubina ≤ ½ zida (tanji prsten smanjuje / uklanja žleb).
+      Uklonjeno iz UI-ja: „Površina“ žleba (Wama nudi samo poliranu) i
+      „Orijentacija“ (Wama žleb uvek 360°). Stari oblici (Ugaoni, Karbon) zamenjeni.
+    - **Razdvajajući žleb** na svakoj granici (V90 0,2 × 0,1), tab „Granice
+      boja“: uključi/isključi, V60/V90/V120/U/kvadratni, 0,2–0,5. Talas:
+      amplituda se nudi samo dok granica ostaje ≥ 0,5 mm od ivice (naše pravilo).
+    - **Ivice** (tab „Ivice“): leva/desna — bez / stepenik (širina × dubina) /
+      perlaž (0,325–0,8, kuglice).
+    - **3D**: žleb u preseku (lathe, oštre ivice), kuglice instancirane, LUT
+      atlas (do 5 traka, talas u shaderu), talasasti razdvajajući žleb kao
+      strip + shader rez. LUT test (`?calib=1`) prolazi za svih 5 metala,
+      raspodela svetline identična v0.7.0.
+    - **Cena (naša odluka po §25 preporuci)**: masa je STVARNA (žlebovi
+      oduzeti, kuglice dodate; Wama naplaćuje punu masu), po traci sa njenom
+      gustinom; cena/g + doplata KLASE po finoći (CMS: poseban žleb ili ivica
+      / više boja / talas — samo najviša, kao Wama) + doplate metala +
+      rodijum + obrada + kamen + gravura → `Math.ceil` po prstenu.
+      Wama cene uneta kao CMS vrednosti reprodukuju 18/18 slučajeva iz §24
+      do zlota (P16 red ±3 zbog poznate razlike profila iz Faze 3).
+    - Nepoznato kod Wame → naše odluke: dizajnerski žleb ne prati talas;
+      postojeći žleb na tanjem prstenu se smanjuje; obrada je po prstenu (Wama
+      po traci, doplata ionako jednom); faza talasa sin(n·φ) od 0.
+
+79. **Dijamant i žleb se fizički ne dodiruju (klijent, 2026-10-01).**
+    Ležište kamena (1,03 × poluprečnik) mora imati ≥ 0,2 mm metala do oboda
+    svakog žleba, ivice i razdvajajućeg žleba (talas: cela širina koju granica
+    prebriše). Ranije: fiksnih 0,4 mm od CENTRA kamena bez obzira na veličinu
+    + tiho „guranje“ → kamen 0,03 ct je mogao da preseče žleb.
+    - Ko je prvi, taj ima prednost: žlebovi (i ivice/dimenzije) su ograničenje
+      za kamen; nov ili pomeren žleb zaobilazi već postavljen kamen
+      (`geoOf(s, true)` → `stone` prepreka u `ring-geometry.grooveObstacles`).
+    - Dijamanti → Pozicioniranje: zauzete pozicije (Levo/Centar/Desno) su
+      onemogućene i ispod piše zašto („Centar: V-žleb 90° na 2,50 mm“);
+      „Slobodno“ klizač preskače zabranjene zone i ispisuje dozvoljene raspone.
+    - Kad promena (žleb, širina…) zauzme mesto kamena: kamen prelazi na prvu
+      slobodnu poziciju (centar → levo → desno → najbliže slobodno) uz poruku;
+      ako mesta nema, kamen se uklanja uz poruku. `configurator.js`
+      `stoneLayout` / `normalizeStone`.
+
 ## Otvorena pitanja (blokiraju procenu obima)
 
 | # | Pitanje | Zašto je bitno |

@@ -147,7 +147,9 @@ final class Compiler
                     (array) $settings['finoce'],
                     static fn ($f) => ! empty($f['enabled'])
                 )),
-                'formula'     => 'ringPrice = ceil(volume_mm3 / 1000 * density * pricePerGram + extras)',
+                // Rhodium plating, flat RSD per ring (white gold, decisions #78).
+                'rhodium'     => (float) ($settings['rodijum'] ?? 0),
+                'formula'     => 'ringPrice = ceil(sum_bands(V/1000 * density(metal, finoca) * (pricePerGram + classExtra + metal.surcharge_per_gram)) + metal flat surcharges + rhodium + extras)',
             ],
             'spotPrices' => $settings['spot_prices'],
         ];

@@ -1,0 +1,25 @@
+{
+ "_note": "S8 reload: live mesh sections at angle pi/2; size 62 (R_in 9.8676).",
+ "left_P16_5x1.8_apex_11.6676": {
+  "outer": [[0,10.9961],[0.0251,11.1163],[0.0962,11.2163],[0.2015,11.2795],[0.4554,11.3624],[0.7123,11.4355],[1.6943,11.6211],[1.9717,11.6476],[2.25,11.6631],[2.75,11.6631],[3.0512,11.6459],[3.3514,11.6156],[3.65,11.5725],[4.15,11.4704],[4.4766,11.3828],[4.7985,11.2795],[4.9038,11.2163],[4.9749,11.1163],[5,10.9961]],
+  "square_w0.3_d0.3_at3.9": [[3.65,11.5725],[3.75,11.1704],[3.75,11.4725],[4.05,11.1704],[4.05,11.3704],[4.15,11.4704]],
+  "v90_w0.5_at2.5": [[2.25,11.6631],[2.5,11.4131],[2.75,11.6631]],
+  "u_w1.0_d0.27_at1.2_offcentre_rotated": [[0.7123,11.4255],[0.7123,11.4355],[0.8023,11.3489],[0.9057,11.2916],[1.0183,11.2557],[1.1357,11.2426],[1.2535,11.253],[1.3668,11.2863],[1.4714,11.3413],[1.5632,11.4158],[1.6384,11.5069],[1.6943,11.6111],[1.6943,11.6211]],
+  "inner": [[0,10.5001],[0,10.9961],[0.0398,10.3261],[0.1514,10.1867],[0.3125,10.1098],[0.7449,10.0228],[1.1807,9.955],[1.619,9.9065],[2.0591,9.8773],[2.5,9.8676],[2.9409,9.8773],[3.381,9.9065],[3.8193,9.955],[4.2551,10.0228],[4.6875,10.1098],[4.8486,10.1867],[4.9602,10.3261],[5,10.5001],[5,10.9961]]
+ },
+ "right_P11_5x1.8_white": {
+  "outer": [[0,10.747],[0.0172,10.8472],[0.0668,10.9358],[0.1432,11.0028],[0.4033,11.1506],[0.6726,11.2808],[0.95,11.3929],[1.65,11.5868],[2.0287,11.6429],[2.4108,11.6667],[2.7936,11.658],[3.1742,11.6169],[3.55,11.5437],[4.05,11.3929],[4.4631,11.2179],[4.8568,11.0028],[4.9332,10.9358],[4.9828,10.8472],[5,10.747]],
+  "v60_w0.5_at3.8": [[3.55,11.5437],[3.8,11.0353],[4.05,11.3929]],
+  "square_w0.5_d0.3_at1.3": [[0.95,11.3929],[1.05,11.0929],[1.05,11.2929],[1.55,11.0929],[1.55,11.4868],[1.65,11.5868]],
+  "inner": [[0,10.2676],[0,10.747],[0.0536,10.0676],[0.2,9.9212],[0.4,9.8676],[4.6,9.8676],[4.8,9.9212],[4.9464,10.0676],[5,10.2676],[5,10.747]]
+ },
+ "rules_verified": {
+  "V": "edges at x = pos +- w/2 on the surface (no rotation); bottom at x = pos, r = mean(r_left_edge, r_right_edge) - depth (P1, P16 centre/off-centre, P11)",
+  "square": "45deg chamfer 0.1x0.1 outside nominal width on both sides (chamfer follows surface: inner point = outer point - 0.1 radially); vertical walls; flat floor at r = min(outer edge r) - depth; nominal width = floor width; total opening = w + 0.2",
+  "U": "circular arc between the two rim points, sagitta = depth, radius = ((w/2)^2 + d^2)/(2d); 0.01 mm vertical step at both rims; groove rotated so its axis is normal to the chord between rim points (off-centre on domes)",
+  "convex": "two side walls of height h(0.1) at pos +- w/2 (rotated with chord on domes), floor is a convex arc whose apex is flush with the original surface (sagitta h)",
+  "perlage": "channel width w, depth 0.1 (0.05 chamfer at rims), beads diameter 7/9*w as spheres (perlageHeight = perlageWidth), touching, count ~ floor(2*pi*R_bead/d)",
+  "edge_normal": "rabbet w x d at the ring edge (engine: rect groove of width 2w centred on the edge)",
+  "edge_perlage": "edge widths 0.325/0.445/0.645/0.8 -> beads 0.30/0.39/0.54/0.70 in groove 0.35/0.5/0.75/0.9 deep 0.1"
+ }
+}

@@ -140,11 +140,16 @@ final class Configurator
         // mapped here with its own filemtime so an update busts the cache.
         $kitFile = ZSC_DIR . 'assets/js/diamond-kit.js';
         $kitVer  = file_exists($kitFile) ? (string) filemtime($kitFile) : ZSC_VERSION;
+        // Faza 4 (decisions #78): profile/groove/division/volume math, shared
+        // by the scene, the price and the UI.
+        $geoFile = ZSC_DIR . 'assets/js/ring-geometry.js';
+        $geoVer  = file_exists($geoFile) ? (string) filemtime($geoFile) : ZSC_VERSION;
         $map = wp_json_encode([
             'imports' => [
-                'three'           => $three . 'three.module.min.js',
-                'three/addons/'   => $three . 'addons/',
-                'zsc/diamond-kit' => ZSC_URL . 'assets/js/diamond-kit.js?ver=' . $kitVer,
+                'three'             => $three . 'three.module.min.js',
+                'three/addons/'     => $three . 'addons/',
+                'zsc/diamond-kit'   => ZSC_URL . 'assets/js/diamond-kit.js?ver=' . $kitVer,
+                'zsc/ring-geometry' => ZSC_URL . 'assets/js/ring-geometry.js?ver=' . $geoVer,
             ],
         ], JSON_UNESCAPED_SLASHES);
 

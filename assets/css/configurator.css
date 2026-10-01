@@ -420,13 +420,21 @@ body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
 .zs-cs-label { font-size: 11px; letter-spacing: .1em; fill: var(--zs-text-muted); font-family: var(--zs-font-sans); }
 
 /* --------------------------------------------------------------- Materijal */
-.zs-pattern-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: var(--zs-space-3); margin-bottom: var(--zs-space-4); }
+.zs-pattern-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--zs-space-3); margin-bottom: var(--zs-space-4); }
 .zs-pattern-wrap { position: relative; }
-.zs-pat-fill { fill: var(--zs-surface); }
-.zs-pat-fill-a { fill: var(--zs-surface-2); }
-.zs-pat-fill-b { fill: var(--zs-bronze); opacity: .45; }
-.zs-pat-fill-free { fill: var(--zs-surface); opacity: .5; }
-.zs-pat-dash { stroke: var(--zs-text-muted); stroke-width: 1.4; stroke-dasharray: 3 2; }
+.zs-pattern-wrap > .zs-pattern-box { width: 100%; height: 100%; }
+/* Faza 4: division icons = the band unrolled round the ring, in the ring's
+   own band colours (configurator.js divisionIconSVG). */
+.zs-div-icon { width: 100%; max-width: 92px; height: auto; display: block; }
+.zs-div-frame { fill: none; stroke: rgba(38, 38, 38, .22); stroke-width: .8; }
+.zs-div-line { fill: none; stroke: rgba(38, 38, 38, .45); stroke-width: .9; }
+.zs-pattern-cur { font-size: 11px; color: var(--zs-green); font-weight: 700; letter-spacing: .04em; }
+.zs-div-params { margin-bottom: var(--zs-space-2); }
+.zs-div-params .zs-chip { min-width: 44px; justify-content: center; }
+.zs-materijal > .zs-field { margin-bottom: var(--zs-space-4); }
+.zs-materijal .zs-slider-compact { margin-bottom: var(--zs-space-3); }
+.zs-flash:empty { display: none; }
+.zs-flash { color: var(--zs-green); }
 /* Opens to the LEFT of its trigger (client, 2026-09-07) — the options panel
    sits at the right edge of the layout, so a popover opening rightward/below
    has nowhere to go but off-screen; opening left, over the viewport column,
@@ -438,15 +446,21 @@ body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
 }
 @media (max-width: 1180px) {
   /* stacked single-column layout — no room to the left either; fall back to opening below */
-  .zs-pattern-popover { right: auto; left: 0; top: calc(100% + 6px); width: min(280px, 100%); }
+  /* Faza 4: full width of the 2×2 grid, under it (the presets need room) */
+  .zs-pattern-grid { position: relative; }
+  .zs-pattern-wrap { position: static; }
+  .zs-pattern-popover { right: 0; left: 0; top: calc(100% + 6px); width: auto; }
 }
-.zs-pattern-sub-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--zs-space-2); }
+.zs-pattern-sub-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--zs-space-2); max-height: 60vh; overflow-y: auto; }
 .zs-pattern-sub {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
   border: 1px solid var(--zs-border); border-radius: var(--zs-radius); background: #fff;
-  padding: var(--zs-space-2) var(--zs-space-3); font-size: var(--zs-fs-micro); color: inherit; text-align: left;
+  padding: var(--zs-space-2); font-size: var(--zs-fs-micro); color: inherit; text-align: center;
 }
+.zs-pattern-sub .zs-div-icon { max-width: 76px; }
 .zs-pattern-sub:hover { border-color: var(--zs-bronze); }
 .zs-pattern-sub[aria-pressed="true"] { border-color: var(--zs-green); color: var(--zs-green); font-weight: 700; }
+@media (max-width: 1180px) { .zs-pattern-sub-grid { grid-template-columns: repeat(3, 1fr); } }
 
 /* ----------------------------------------------------------------- Žlebovi
    Redesigned to the Breuning "Fugen / Stufen" layout (client, 2026-09-09):
@@ -499,31 +513,20 @@ body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
 .zs-groove-del { margin-left: auto; color: var(--zs-bronze); }
 .zs-groove-del .zs-icon { width: 13px; height: 13px; }
 
-/* preview is now a full-width landscape "band surface" tile above the params
-   (2026-09-09: the tall 56×120 vertical strip read as an empty bar). The
-   groove shows as a carved channel — dark core, bright edges — at its real
-   width-position and orientation. */
+/* Faza 4: the old flat "band surface" preview is replaced by the exact
+   grooved section at the top of the step (grooveSectionSVG). */
 .zs-groove-body { display: block; padding: var(--zs-space-4); }
-.zs-groove-preview {
-  position: relative; width: 100%; height: 54px;
-  border-radius: var(--zs-radius); overflow: hidden;
-  margin-bottom: var(--zs-space-4);
-  box-shadow: inset 0 0 0 1px rgba(38, 38, 38, .10);
-}
-.zs-groove-preview-line {
-  position: absolute; top: 7px; bottom: 7px; width: 4px;
-  left: 50%; transform: translateX(-50%); border-radius: 2px;
-  background: linear-gradient(90deg, rgba(255,255,255,.30), rgba(38,38,38,.52) 45%, rgba(38,38,38,.52) 55%, rgba(255,255,255,.30));
-}
-.zs-groove-preview-line.is-h {
-  top: 50%; left: 7px; right: 7px; bottom: auto; width: auto; height: 4px;
-  transform: translateY(-50%);
-  background: linear-gradient(180deg, rgba(255,255,255,.30), rgba(38,38,38,.52) 45%, rgba(38,38,38,.52) 55%, rgba(255,255,255,.30));
-}
-.zs-groove-preview-line.is-wave {
-  top: 6px; bottom: 6px; width: 11px; left: 50%; transform: translateX(-50%);
-  background: repeating-linear-gradient(-35deg, rgba(38,38,38,.5) 0 2px, rgba(255,255,255,.16) 2px 5px);
-}
+.zs-groove-section { margin-bottom: var(--zs-space-4); }
+.zs-groove-metal { fill: var(--zs-surface); }
+.zs-cs-bead { fill: #E9D9A6; stroke: var(--zs-bronze); stroke-width: 1; }
+.zs-groove-fixed { font-size: var(--zs-fs-micro); color: var(--zs-text); }
+.zs-groove-pos { display: flex; flex-wrap: wrap; align-items: center; gap: var(--zs-space-2) var(--zs-space-3); min-width: 0; }
+.zs-groove-pos input[type="range"] { flex: 1 1 110px; min-width: 0; accent-color: var(--zs-gold); }
+.zs-groove-pos .zs-groove-posinput input { width: 66px; }
+.zs-groove-sep .zs-check-row, .zs-groove-edges .zs-check-row { margin-bottom: var(--zs-space-3); }
+.zs-groove-edges > .zs-eyebrow { margin-top: var(--zs-space-4); }
+.zs-groove-edges > .zs-eyebrow:first-child { margin-top: 0; }
+.zs-groove-edges .zs-groove-rows { margin-top: var(--zs-space-2); }
 
 .zs-groove-rows { display: flex; flex-direction: column; }
 .zs-groove-row {
@@ -533,8 +536,6 @@ body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
 .zs-groove-row:last-child { border-bottom: 0; }
 .zs-groove-row-label { font-size: var(--zs-fs-micro); color: var(--zs-text-muted); }
 .zs-groove-row .zs-select { width: 100%; }
-.zs-groove-orient { margin: 0; }
-.zs-groove-orient .zs-chip { padding: var(--zs-space-1) var(--zs-space-3); font-size: var(--zs-fs-micro); }
 .zs-groove-posinput { display: inline-flex; align-items: center; gap: var(--zs-space-2); }
 .zs-groove-posinput input {
   width: 78px; border: 1px solid var(--zs-border); border-radius: var(--zs-radius);
@@ -598,3 +599,10 @@ body.zs-fullscreen { margin: 0; background: var(--zs-bg); }
 }
 @keyframes zs-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 @media (prefers-reduced-motion: reduce) { .zs-config-skeleton { animation: none; } }
+
+/* Dijamanti: why a stone position is not offered (stone ↔ groove, 2026-10-01) */
+.zs-stone-note {
+  margin-top: var(--zs-space-3); padding: var(--zs-space-3); font-size: var(--zs-fs-micro); line-height: 1.45;
+  border-left: 2px solid var(--zs-gold); background: var(--zs-surface); color: var(--zs-text);
+}
+.zs-stone-note strong { display: block; margin-bottom: 2px; }

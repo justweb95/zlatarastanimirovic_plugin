@@ -1,0 +1,17 @@
+import { wamaSection } from '../reference/wamaProfile.js';
+import * as G from '../reference/wamaMetalsGrooves.js';
+import fs from 'fs';
+const out = {};
+const prof = (id, W, H) => G.fromSection(wamaSection(id, W, H, 0.004).points, W);
+const add = (key, id, W, H, grooves) => { const poly = prof(id, W, H); const s = G.surfaceFn(poly); out[key] = { id, W, H, poly, grooves: grooves.map(([form, g]) => ({ form, g, pts: G.grooveOutline(form, g, s, 0.005).points })) }; };
+add('P1_V', 'P1', 5, 1.5, [['v-groove-60', { pos: 1.0, width: 0.5 }], ['v-groove-90', { pos: 2.5, width: 0.5 }], ['v-groove-120', { pos: 4.0, width: 0.5 }]]);
+add('P1_U', 'P1', 8, 2.0, [['u-groove', { pos: 1.0, width: 0.5, depth: 0.06 }], ['u-groove', { pos: 2.1, width: 0.8, depth: 0.15 }], ['u-groove', { pos: 3.3, width: 1.0, depth: 0.27 }], ['u-groove', { pos: 4.6, width: 0.35, depth: 0.03 }], ['u-groove', { pos: 6.3, width: 1.5, depth: 0.3 }]]);
+add('P1_U2', 'P1', 8, 2.0, [['u-groove', { pos: 2.0, width: 2.0, depth: 0.4 }], ['u-groove', { pos: 5.5, width: 1.2, depth: 0.6 }]]);
+add('P1_SQ', 'P1', 8, 2.0, [['square-groove', { pos: 1.2, width: 0.3, depth: 0.5 }], ['square-groove', { pos: 2.6, width: 0.8, depth: 0.2 }], ['square-groove', { pos: 4.6, width: 2.0, depth: 0.05 }], ['square-groove', { pos: 6.7, width: 1.0, depth: 0.5 }]]);
+add('P1_CP', 'P1', 8, 2.0, [['convex-u-groove', { pos: 1.5, width: 1.5, depth: 0.1 }], ['convex-u-groove', { pos: 3.6, width: 1.0, depth: 0.1 }], ['perlage', { pos: 5.0, width: 0.5 }], ['perlage', { pos: 6.5, width: 1.2 }]]);
+add('P16_6x2', 'P16', 6, 2.0, [['convex-u-groove', { pos: 1.3, width: 1.5, depth: 0.1 }], ['v-groove-90', { pos: 3.0, width: 0.5 }], ['square-groove', { pos: 4.4, width: 0.3, depth: 0.5 }]]);
+add('P16_5x1.8', 'P16', 5, 1.8, [['u-groove', { pos: 1.2, width: 1.0, depth: 0.27 }], ['v-groove-90', { pos: 2.5, width: 0.5 }], ['square-groove', { pos: 3.9, width: 0.3, depth: 0.3 }]]);
+add('P11_5x1.8', 'P11', 5, 1.8, [['square-groove', { pos: 1.3, width: 0.5, depth: 0.3 }], ['v-groove-60', { pos: 3.8, width: 0.5 }]]);
+add('P1_6x1.5', 'P1', 6, 1.5, []);
+fs.writeFileSync('data/_outlines_for_figs.json', JSON.stringify(out));
+console.log(Object.keys(out).join(' '));

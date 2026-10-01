@@ -21,7 +21,7 @@ defined('ABSPATH') || exit;
 final class Seeder
 {
     /** Bumped when existing rows need a data upgrade (see upgrade_data). */
-    private const DATA_VERSION = 2;
+    private const DATA_VERSION = 3;
     private const DATA_VERSION_OPT = 'zs_data_version';
 
     /**
@@ -34,9 +34,22 @@ final class Seeder
      */
     public static function upgrade_data(): void
     {
-        if ((int) get_option(self::DATA_VERSION_OPT, 0) >= self::DATA_VERSION) {
+        $from = (int) get_option(self::DATA_VERSION_OPT, 0);
+        if ($from >= self::DATA_VERSION) {
             return;
         }
+        if ($from < 2) {
+            self::upgrade_v2();
+        }
+        if ($from < 3) {
+            self::upgrade_v3();
+        }
+        update_option(self::DATA_VERSION_OPT, self::DATA_VERSION, true);
+        Compiler::flush_all();
+    }
+
+    private static function upgrade_v2(): void
+    {
         $wama = [];
         foreach (self::rows() as $r) {
             if ($r['group_key'] === 'profile' && ! empty($r['params_json']['wama'])) {
@@ -55,8 +68,65 @@ final class Seeder
                 Options::save($row);
             }
         }
-        update_option(self::DATA_VERSION_OPT, self::DATA_VERSION, true);
-        Compiler::flush_all();
+    }
+
+    /**
+     * v3 (Faza 4, decisions #78): metals as Wama — LUT/rhodium/combinable
+     * params + surcharge fields on existing material rows, the two new metals
+     * (manganovo, belo-pd) inserted, finenesses 333/375 added (off), and the
+     * Wama densities + price-class extras in zs_settings.finoce. Densities the
+     * admin already changed (anything but our old defaults) are kept.
+     */
+    private static function upgrade_v3(): void
+    {
+        self::run(); // inserts the new material rows only
+        $seed = [];
+        foreach (self::rows() as $r) {
+            if ($r['group_key'] === 'material') {
+                $seed[$r['slug']] = $r;
+            }
+        }
+        foreach (Options::all('material') as $row) {
+            if (! isset($seed[$row['slug']])) {
+                continue;
+            }
+            $row['params_json'] = array_merge($seed[$row['slug']]['params_json'], (array) $row['params_json']);
+            $row['price_json'] = array_merge($seed[$row['slug']]['price_json'], (array) $row['price_json']);
+            Options::save($row);
+        }
+
+        $stored = get_option('zs_settings', []);
+        if (! is_array($stored) || empty($stored['finoce'])) {
+            return; // defaults already carry everything
+        }
+        $old = ['585' => ['zuto' => 13.07, 'belo' => 12.90, 'crveno' => 13.00], '750' => ['zuto' => 15.55, 'belo' => 15.90, 'crveno' => 15.45]];
+        $def = [];
+        foreach (Settings::default_finoce() as $f) {
+            $def[$f['id']] = $f;
+        }
+        $out = [];
+        $have = [];
+        foreach ((array) $stored['finoce'] as $f) {
+            $id = (string) ($f['id'] ?? '');
+            $have[$id] = true;
+            if (isset($def[$id])) {
+                foreach ($def[$id]['density'] as $slug => $rho) {
+                    $cur = $f['density'][$slug] ?? null;
+                    if ($cur === null || (isset($old[$id][$slug]) && abs((float) $cur - $old[$id][$slug]) < 1e-6)) {
+                        $f['density'][$slug] = $rho;
+                    }
+                }
+                $f['class_extra'] = array_merge($def[$id]['class_extra'], (array) ($f['class_extra'] ?? []));
+            }
+            $out[] = $f;
+        }
+        foreach (['375', '333'] as $id) {   // lower finenesses go first, switched off
+            if (empty($have[$id])) {
+                array_unshift($out, $def[$id]);
+            }
+        }
+        $stored['finoce'] = $out;
+        update_option('zs_settings', $stored, false);
     }
 
     public static function run(): void
@@ -148,22 +218,30 @@ final class Seeder
             ],
         ];
 
-        // 2 — MATERIJAL. 3 golds, all 14K (client's real catalogue). density =
-        //     specific gravity g/cm³ used by the weight formula; spot_key points
-        //     at a per-gram price in Podešavanja. finish variants live in group 5.
+        // 2 — MATERIJAL. Faza 4 (decisions #78, FAZA4 §1/§22): Wama's 5 alloys.
+        //     The METAL is a colour (`lut` = 3D gradient) — density and the price
+        //     per gram come from the fineness table in Podešavanja (zs_settings
+        //     .finoce); a metal not made in a fineness has density 0 there.
+        //     price_json: per-gram metal + optional surcharges (RSD) — flat per
+        //     ring (Wama: manganese) and per gram of that band (Wama: Pd white).
+        //     params: rhodium = white gold can be rhodium plated; combinable =
+        //     may sit next to another colour (manganese: single-colour only).
         $materials = [
-            // slug,  label,             filter colour, density(14K), spot_key
-            // Colours sharpened/richened (client, 2026-09-06) — same 3 golds, more
-            // saturated + less washed-out than the original V-Ray filter-colour pull.
-            ['zuto',   'Žuto zlato',   '#D9A945', 13.07, 'au_14k'],
-            ['belo',   'Belo zlato',   '#D6D9DE', 12.90, 'au_14k'],
-            ['crveno', 'Crveno zlato', '#E8A28C', 13.00, 'au_14k'],
+            // slug,       label,             swatch,    lut,         rhodium, combinable
+            ['zuto',      'Žuto zlato',      '#D9A945', 'yellow',    false, true],
+            ['belo',      'Belo zlato',      '#D6D9DE', 'white',     true,  true],
+            ['crveno',    'Crveno zlato',    '#E8A28C', 'red',       false, true],
+            ['manganovo', 'Manganovo zlato', '#C9C8CC', 'manganese', false, false],
+            ['belo-pd',   'Belo zlato (Pd)', '#A8A5A3', 'white-pd',  false, true],
         ];
-        foreach ($materials as $i => [$slug, $label, $color, $density, $spotKey]) {
+        foreach ($materials as $i => [$slug, $label, $color, $lut, $rhodium, $combinable]) {
             $rows[] = [
                 'group_key' => 'material', 'slug' => $slug, 'label_sr' => $label, 'sort' => ($i + 1) * 10,
-                'price_json'  => ['type' => 'per_gram', 'spot_key' => $spotKey, 'density' => $density, 'finoca' => '585'],
-                'params_json' => ['pbr' => ['color' => $color, 'metalness' => 1.0, 'roughness' => 0.08]],
+                'price_json'  => ['type' => 'per_gram', 'surcharge_flat' => 0, 'surcharge_per_gram' => 0],
+                'params_json' => [
+                    'pbr' => ['color' => $color, 'metalness' => 1.0, 'roughness' => 0.08],
+                    'lut' => $lut, 'rhodium' => $rhodium, 'combinable' => $combinable,
+                ],
             ];
         }
 

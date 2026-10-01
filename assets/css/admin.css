@@ -223,3 +223,7 @@
   .zs-admin .zs-tab { padding: 10px 12px; }
   .zs-admin .zs-opt-table thead { display: none; }
 }
+
+/* Faza 4: fineness table grew class-extra + 5 density columns */
+.zs-finoce-scroll { overflow-x: auto; max-width: 100%; }
+.zs-finoce-scroll .zs-finoce th { white-space: normal; min-width: 6em; font-size: 12px; }

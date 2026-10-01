@@ -115,7 +115,7 @@ final class Screen
                     // params_json i compat_json se ne uređuju kroz formu (v.
                     // option_form_html) — uvek se vraćaju nepromenjeni preko
                     // skrivenog polja (client, 2026-09-14: JSON polja zbunjuju).
-                    'params_json' => wp_unslash($_POST['params_json_raw'] ?? ''),
+                    'params_json' => $gkey === 'material' ? self::material_params_from_post() : wp_unslash($_POST['params_json_raw'] ?? ''),
                     'compat_json' => wp_unslash($_POST['compat_json_raw'] ?? ''),
                 ]);
 
@@ -150,6 +150,7 @@ final class Screen
                         (array) wp_unslash($_POST['spot_prices'] ?? [])
                     ),
                     'finoce'         => self::finoce_from_post(),
+                    'rodijum'        => max(0.0, (float) wp_unslash($_POST['rodijum'] ?? 0)),
                 ]);
 
                 return ['group' => null, 'msg' => 'saved'];
@@ -380,6 +381,11 @@ final class Screen
             foreach ((array) ($p['density'] ?? []) as $slug => $d) {
                 $f['density'][sanitize_key((string) $slug)] = max(0.0, (float) $d);
             }
+            foreach (['special', 'multi', 'wavy'] as $cls) {
+                if (isset($p['class_extra'][$cls])) {
+                    $f['class_extra'][$cls] = max(0.0, (float) $p['class_extra'][$cls]);
+                }
+            }
             $out[] = $f;
         }
 
@@ -394,6 +400,15 @@ final class Screen
     private static function price_json_from_post(): string
     {
         $raw = wp_unslash($_POST['price_json_raw'] ?? '');
+        if ($raw !== '' && isset($_POST['surcharge_flat'])) {
+            // Materijal (per_gram): doplate po prstenu / po gramu (decisions #78)
+            $pj = json_decode($raw, true);
+            $pj = is_array($pj) ? $pj : ['type' => 'per_gram'];
+            $pj['surcharge_flat'] = max(0.0, (float) wp_unslash($_POST['surcharge_flat']));
+            $pj['surcharge_per_gram'] = max(0.0, (float) wp_unslash($_POST['surcharge_per_gram'] ?? 0));
+
+            return wp_json_encode($pj, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: $raw;
+        }
         if ($raw !== '') {
             return $raw;
         }
@@ -401,6 +416,24 @@ final class Screen
         $amount = isset($_POST['price_amount']) ? (float) $_POST['price_amount'] : 0.0;
 
         return wp_json_encode(['type' => 'flat', 'amount' => $amount], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '';
+    }
+
+    /**
+     * Materijal: params_json from the hidden raw JSON + the visible metal
+     * fields (3D boja / rodijum / kombinovanje — decisions #78).
+     */
+    private static function material_params_from_post(): string
+    {
+        $pp = json_decode(wp_unslash($_POST['params_json_raw'] ?? ''), true);
+        $pp = is_array($pp) ? $pp : [];
+        $lut = sanitize_key($_POST['param_lut'] ?? '');
+        if (in_array($lut, ['yellow', 'red', 'white', 'manganese', 'white-pd'], true)) {
+            $pp['lut'] = $lut;
+        }
+        $pp['rhodium'] = ! empty($_POST['param_rhodium']);
+        $pp['combinable'] = ! empty($_POST['param_combinable']);
+
+        return wp_json_encode($pp, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '';
     }
 
     /**
@@ -458,6 +491,22 @@ final class Screen
         } else {
             printf('<input type="hidden" name="price_json_raw" value="%s">', $j($row['price_json'] ?? null));
         }
+        if ($g === 'material') {
+            // Faza 4 (decisions #78): metal = 3D boja (LUT) + doplate + pravila.
+            // Gustina i cena po gramu su po finoći u Podešavanjima.
+            $pj = (array) ($row['price_json'] ?? []);
+            $pp = (array) ($row['params_json'] ?? []);
+            self::text_row('surcharge_flat', 'Doplata po prstenu (RSD)', (string) ($pj['surcharge_flat'] ?? 0), 'Jednom po prstenu kad je ovaj metal u njemu (npr. manganovo zlato). 0 = bez doplate.', 'number');
+            self::text_row('surcharge_per_gram', 'Doplata po gramu (RSD/g)', (string) ($pj['surcharge_per_gram'] ?? 0), 'Na masu trake od ovog metala (npr. belo zlato sa paladijumom). 0 = bez doplate.', 'number');
+            $luts = ['yellow' => 'Žuta', 'white' => 'Bela (topla)', 'red' => 'Crvena', 'manganese' => 'Manganova (hladna svetla)', 'white-pd' => 'Bela Pd (tamnija siva)'];
+            echo '<tr><th><label for="zs-param_lut">Boja u 3D</label></th><td><select id="zs-param_lut" name="param_lut">';
+            foreach ($luts as $k => $l) {
+                printf('<option value="%s"%s>%s</option>', esc_attr($k), selected($k, $pp['lut'] ?? '', false), esc_html($l));
+            }
+            echo '</select></td></tr>';
+            printf('<tr><th>Rodijumiranje</th><td><label><input type="checkbox" name="param_rhodium" value="1"%s> kupac može da izabere rodijum (belo zlato)</label></td></tr>', checked(! empty($pp['rhodium']), true, false));
+            printf('<tr><th>Više boja</th><td><label><input type="checkbox" name="param_combinable" value="1"%s> može u dvobojnom/trobojnom prstenu</label></td></tr>', checked(! array_key_exists('combinable', $pp) || ! empty($pp['combinable']), true, false));
+        }
 
         // params_json i compat_json: sirov JSON, zbunjivao je klijenta — sklonjeno
         // iz forme za sada (client, 2026-09-14). Vrednosti ostaju nepromenjene
@@ -508,7 +557,11 @@ final class Screen
         $prices = (array) $s['spot_prices'];
         $used = [];
         echo '<tr><th>Cena zlata po gramu (RSD/g)</th><td>';
-        echo '<table class="widefat striped zs-finoce"><thead><tr><th>Aktivna</th><th>Finoća</th><th>Cena RSD/g</th>';
+        $classes = ['special' => '+ Poseban žleb / ivica', 'multi' => '+ Više boja', 'wavy' => '+ Talas / dijagonala'];
+        echo '<div class="zs-finoce-scroll"><table class="widefat striped zs-finoce"><thead><tr><th>Aktivna</th><th>Finoća</th><th>Cena RSD/g</th>';
+        foreach ($classes as $cl) {
+            printf('<th>%s (RSD/g)</th>', esc_html($cl));
+        }
         foreach ($metals as $m) {
             printf('<th>Gustina %s (g/cm³)</th>', esc_html($m['label_sr']));
         }
@@ -522,14 +575,19 @@ final class Screen
             printf('<td><strong>%s</strong> <span class="zs-muted">%s</span></td>', esc_html((string) $f['label']), esc_html((string) ($f['sub'] ?? '')));
             printf('<td><input type="number" min="0" step="0.01" name="spot_prices[%s]" value="%s" style="width:9em"></td>',
                 esc_attr($key), esc_attr((string) ($prices[$key] ?? 0)));
+            foreach (array_keys($classes) as $cl) {
+                printf('<td><input type="number" min="0" step="0.01" name="finoce[%d][class_extra][%s]" value="%s" style="width:6em"></td>',
+                    (int) $i, esc_attr($cl), esc_attr((string) ($f['class_extra'][$cl] ?? 0)));
+            }
             foreach ($metals as $m) {
                 printf('<td><input type="number" min="0" step="0.01" name="finoce[%d][density][%s]" value="%s" style="width:6em"></td>',
                     (int) $i, esc_attr($m['slug']), esc_attr((string) ($f['density'][$m['slug']] ?? 0)));
             }
             echo '</tr>';
         }
-        echo '</tbody></table>';
-        echo '<p class="description">Cena je cena tog materijala po gramu i koristi se direktno: cena prstena = masa (g) × cena/g, zaokruženo naviše na ceo dinar. Gustina 0 = taj metal se ne radi u toj finoći. Prazna cena (0) = „Cena na upit“.</p>';
+        echo '</tbody></table></div>';
+        echo '<p class="description">Cena je cena tog materijala po gramu i koristi se direktno: cena prstena = masa (g) × (cena/g + doplata klase), zaokruženo naviše na ceo dinar. Klasa (kao Wama): poseban žleb (V 60°, U, kvadratni, perlaž) ili ivica → „Poseban žleb“; dve ili više boja → „Više boja“; talas ili dijagonala → „Talas“. Važi samo najviša klasa, ne sabiraju se. Masa je stvarna (žlebovi oduzeti). Gustina 0 = taj metal se ne radi u toj finoći. Prazna cena (0) = „Cena na upit“. Doplate po metalu (npr. manganovo, Pd) su u Opcijama → Materijal.</p>';
+        printf('<p><label>Rodijumiranje belog zlata (RSD po prstenu) <input type="number" min="0" step="0.01" name="rodijum" value="%s" style="width:9em"></label></p>', esc_attr((string) ($s['rodijum'] ?? 0)));
         foreach ($prices as $k => $v) {
             if (in_array((string) $k, $used, true)) {
                 continue;

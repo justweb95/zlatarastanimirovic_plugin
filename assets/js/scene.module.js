@@ -40,6 +40,9 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { buildBrilliant, createDiamondMaterial, buildDiamondEnv, iorTriplet } from 'zsc/diamond-kit';
+// Profile / grooves / colour division / volume — pure math shared with the
+// price and the UI (Faza 4, decisions #78).
+import * as RG from 'zsc/ring-geometry';
 
 // Pose of each ring in "pair" mode, tuned live via the ?zscdebug=1 panel
 // (Round 8, 2026-09-05) — resolves the earlier "her 30° relative to his"
@@ -90,10 +93,19 @@ const LUT_STOPS = {
   manganese: '0101010404050708090b0b0d100f1113131717171b1b1b1e2020242626292b2c3031323736363c3c3e4243454a494b4f4f505657585c5c5e6062636668696b6c6c727272757777797c797e7f7d7f8382848887898b8a8f90909294949899989b9e9c9fa1a0a2a5a4a7aaa9aaaeadafb3b1b3b7b4b6bababbbebcbec2c1c1c7c3c6cac9c9cdccccd0d0d1d3d3d5d7d5d7d9d8d9dadadcdddddfe0e0e2e2e2e4e5e5e6e7e7e9eaeaebececedefeff0f2f2f2f4f4f4f6f6f6f9f9f9fbfbfbfdfdfdfefefe',
   'white-pd': '0201020202020606060a090a0d0c0c1010101413131817171a1a1a1e1e1e2221222525252929292d2c2c3030303434333837373b3a3a3f3d3d4342414745454a48474e4c4b52504f5554525a57565e5b5a625f5d6663626865646c6967706d6c7471707875757c7979817f7e8583828987868d8b8a918f8e9593929a97969f9c9ca3a1a0a7a5a5aba9a9afadadb5b3b2b9b7b7bdbbbbc1c0bfc7c4c4cbc9c9cfcecdd3d1d0d8d5d5dddbdbe1dfdfe5e3e3e8e8e7edececf2f2f1f7f6f5fafaf9fcfcfb',
 };
-// Material option slug (wp_zs_options, group "material") → LUT. A slug with
-// no entry falls back to yellow with a console warning.
-const METAL_LUT = { zuto: 'yellow', crveno: 'red', roze: 'red', belo: 'white', paladijum: 'white-pd' };
+// Material option slug (wp_zs_options, group "material") → LUT key. The
+// payload's material `params.lut` wins (configurator.js resolves it); this
+// table is the fallback. Unknown → yellow with a console warning.
+const METAL_LUT = {
+  zuto: 'yellow', crveno: 'red', roze: 'red', belo: 'white', paladijum: 'white-pd',
+  'belo-pd': 'white-pd', manganovo: 'manganese',
+};
 const LUT_SIZE = 512;
+// Faza 4: all LUTs live in ONE atlas texture (a column per metal, 512 rows),
+// so a ring can carry up to MAX_ZONES colour bands (Wama: 1–5) with a single
+// sampler; a band picks its column by uniform.
+const LUT_KEYS = ['yellow', 'red', 'white', 'manganese', 'white-pd', 'identity'];
+const MAX_ZONES = 5;
 // Flush-set stone seats cut into the band per ring (diamond v2, decisions #73).
 const MAX_HOLES = 8;
 // Finishes rougher than this read the blurred studio (Mat 0.42, Grebano 0.34;
@@ -109,9 +121,9 @@ function lutStops(packed) {
   return stops;
 }
 
-// 1 × 512 ramp, raw display values (NoColorSpace), linear filtered, no mips.
-function createLutTexture(stops) {
-  const data = new Uint8Array(LUT_SIZE * 4);
+// 512-entry RGB ramp from measured stops (linear between stops).
+function lutRamp(stops) {
+  const data = new Uint8Array(LUT_SIZE * 3);
   let k = 0;
   for (let i = 0; i < LUT_SIZE; i++) {
     const t = i / (LUT_SIZE - 1);
@@ -119,46 +131,53 @@ function createLutTexture(stops) {
     const [t0, a] = stops[k];
     const [t1, b] = stops[k + 1];
     const f = Math.min(1, Math.max(0, (t - t0) / ((t1 - t0) || 1)));
-    for (let c = 0; c < 3; c++) data[i * 4 + c] = Math.round(a[c] + (b[c] - a[c]) * f);
-    data[i * 4 + 3] = 255;
+    for (let c = 0; c < 3; c++) data[i * 3 + c] = Math.round(a[c] + (b[c] - a[c]) * f);
   }
-  const tex = new THREE.DataTexture(data, 1, LUT_SIZE, THREE.RGBAFormat);
+  return data;
+}
+
+// Built once per page, shared by every scene instance. Raw display values
+// (NoColorSpace), linear filtered, no mips; columns sampled at texel centres.
+let atlasCache = null;
+function getAtlas() {
+  if (atlasCache) return atlasCache;
+  const cols = LUT_KEYS.length;
+  const data = new Uint8Array(cols * LUT_SIZE * 4);
+  const ramps = {};
+  LUT_KEYS.forEach((key, c) => {
+    const ramp = key === 'identity' ? lutRamp([[0, [0, 0, 0]], [1, [255, 255, 255]]]) : lutRamp(lutStops(LUT_STOPS[key]));
+    ramps[key] = ramp;
+    for (let i = 0; i < LUT_SIZE; i++) {
+      const o = (i * cols + c) * 4;
+      data[o] = ramp[i * 3]; data[o + 1] = ramp[i * 3 + 1]; data[o + 2] = ramp[i * 3 + 2]; data[o + 3] = 255;
+    }
+  });
+  const tex = new THREE.DataTexture(data, cols, LUT_SIZE, THREE.RGBAFormat);
   tex.colorSpace = THREE.NoColorSpace;
   tex.minFilter = THREE.LinearFilter;
   tex.magFilter = THREE.LinearFilter;
   tex.generateMipmaps = false;
   tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
   tex.needsUpdate = true;
-  return tex;
+  atlasCache = { tex, ramps, cols };
+  return atlasCache;
 }
-
-// Built once per page, shared by every scene instance (three.js keeps GPU
-// copies per renderer, the CPU-side objects can be shared).
-let lutCache = null;
-function getLuts() {
-  if (!lutCache) {
-    lutCache = {};
-    Object.keys(LUT_STOPS).forEach((k) => { lutCache[k] = createLutTexture(lutStops(LUT_STOPS[k])); });
-    // Identity ramp (black → white) for the ?calib=1 brightness distribution.
-    lutCache.identity = createLutTexture([[0, [0, 0, 0]], [1, [255, 255, 255]]]);
-  }
-  return lutCache;
+function lutKeyFor(slugOrKey) {
+  if (LUT_KEYS.includes(slugOrKey)) return slugOrKey;
+  const key = METAL_LUT[slugOrKey];
+  if (!key && slugOrKey) console.warn('[zsc] no LUT for metal "' + slugOrKey + '", using yellow');
+  return key || 'yellow';
 }
+const lutCol = (key) => Math.max(0, LUT_KEYS.indexOf(key));
 // Metal tint the diamond picks up through its pavilion (diamond-kit
-// uSeatColor): LUT colour at t = 0.55 — about where the old flat PBR metal
-// colour sat on the ramp — × 0.55 like before, in linear (working) space.
-function seatColorFor(lut) {
-  if (!lut.userData.seatColor) {
-    const i = Math.round(0.55 * (LUT_SIZE - 1)) * 4, d = lut.image.data;
-    lut.userData.seatColor = new THREE.Color().setRGB(d[i] / 255, d[i + 1] / 255, d[i + 2] / 255, THREE.SRGBColorSpace).multiplyScalar(0.55);
+// uSeatColor): LUT colour at t = 0.55 × 0.55, in linear (working) space.
+const seatColors = {};
+function seatColorFor(key) {
+  if (!seatColors[key]) {
+    const r = getAtlas().ramps[key] || getAtlas().ramps.yellow, i = Math.round(0.55 * (LUT_SIZE - 1)) * 3;
+    seatColors[key] = new THREE.Color().setRGB(r[i] / 255, r[i + 1] / 255, r[i + 2] / 255, THREE.SRGBColorSpace).multiplyScalar(0.55);
   }
-  return lut.userData.seatColor;
-}
-function lutFor(slug) {
-  const luts = getLuts();
-  const key = METAL_LUT[slug];
-  if (!key && slug) console.warn('[zsc] no LUT for metal "' + slug + '", using yellow');
-  return luts[key || 'yellow'];
+  return seatColors[key];
 }
 
 // Grayscale studio cubes, read as a luminance INDEX (never as light). URL is
@@ -191,28 +210,34 @@ function getEnvs() {
 }
 
 // The metal material. One per ring (her/his can be different metals), all
-// sharing one compiled program (customProgramCacheKey); switching metal or
-// finish only changes uniforms — never a recompile.
-//   uLut / uLutPrev / uLutMix — current + previous LUT, cross-faded on switch
-//   uLutB / uLutC + uZoneCount / uStop1 / uStop2 — "Dve boje"/"Tri boje"
-//     zones (per-vertex aBandY = local width-axis position, see buildBandFor)
+// sharing one compiled program (customProgramCacheKey); switching metal,
+// bands or finish only changes uniforms — never a recompile.
+//   uAtlas — every metal LUT, one column each (getAtlas)
+//   uZoneCount / uZoneCol[5] / uZonePrev[5] / uLutMix — colour bands across
+//     the width (Faza 4 division: 1–5 bands); each band's current + previous
+//     LUT column, cross-faded on switch
+//   uCuts[4] / uWaveA / uWaveN — band boundaries in band-local y (mm, centred)
+//     and the wave: boundary y = cut − A·sin(n·φ), φ = angle round the ring
+//     (the same φ the band geometry is swept with, see makeBandGeometry)
 //   uEnvBlur / uBlurMix — blurred studio for Mat/Grebano, cross-faded
 //   uHoles / uHoleZ / uHoleCount — flush stone seats (diamond v2): per hole
 //     vec4(axis.x, axis.z, widthPos, radius) in band-local space + the radial
 //     depth below which nothing is cut; the fragment is discarded inside
-// `shared` = another metal material's userData.lut, so the stone seat wall
-// follows its band's LUT/zones/cross-fades (it gets its own uBlurMix).
-function createLutMetalMaterial(env, shared) {
-  const luts = getLuts();
-  const u = shared ? { ...shared, uBlurMix: { value: shared.uBlurMix.value } } : {
-    uLut: { value: luts.yellow },
-    uLutPrev: { value: luts.yellow },
+// Band-local position comes from `position` (or the instance matrix for the
+// perlage beads), so seats/beads pick the same band colour as the band.
+// `shared` = another metal material's userData.lut (seat wall, beads): same
+// LUT/zones/cross-fades; `ownBlur` gives it its own uBlurMix (seat wall).
+function createLutMetalMaterial(env, shared, ownBlur = true) {
+  const atlas = getAtlas();
+  const u = shared ? (ownBlur ? { ...shared, uBlurMix: { value: shared.uBlurMix.value } } : shared) : {
+    uAtlas: { value: atlas.tex },
+    uZoneCount: { value: 1 },
+    uZoneCol: { value: new Array(MAX_ZONES).fill(0) },
+    uZonePrev: { value: new Array(MAX_ZONES).fill(0) },
     uLutMix: { value: 1 },
-    uLutB: { value: luts.yellow },
-    uLutC: { value: luts.yellow },
-    uZoneCount: { value: 0 },
-    uStop1: { value: 0 },
-    uStop2: { value: 0 },
+    uCuts: { value: new Array(MAX_ZONES - 1).fill(1e3) },
+    uWaveA: { value: 0 },
+    uWaveN: { value: 0 },
     uEnvBlur: { value: env.blur },
     uBlurMix: { value: 0 },
   };
@@ -220,6 +245,10 @@ function createLutMetalMaterial(env, shared) {
     uHoleCount: { value: 0 },
     uHoles: { value: Array.from({ length: MAX_HOLES }, () => new THREE.Vector4()) },
     uHoleZ: { value: new Array(MAX_HOLES).fill(1e6) },
+    // wavy separation groove: the band's outer surface within uSepHalf of a
+    // boundary is cut away; the groove walls are their own mesh (makeBandGeometry)
+    uSepHalf: { value: 0 },
+    uSepMinR: { value: 0 },
   };
   const m = new THREE.MeshBasicMaterial({
     color: 0xffffff, envMap: env.sharp, combine: THREE.MultiplyOperation, reflectivity: 1,
@@ -231,39 +260,44 @@ function createLutMetalMaterial(env, shared) {
   m.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, u, holes);
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute float aBandY;\nvarying float vBandY;\nvarying vec3 vBandLocal;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvBandY = aBandY;\nvBandLocal = position;');
+      .replace('#include <common>', '#include <common>\nvarying vec3 vBandLocal;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvBandLocal = transformed;\n'
+        + '#ifdef USE_INSTANCING\nvBandLocal = ( instanceMatrix * vec4( transformed, 1.0 ) ).xyz;\n#endif');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying float vBandY;\n'
-        + 'uniform sampler2D uLut;\nuniform sampler2D uLutPrev;\nuniform float uLutMix;\n'
-        + 'uniform sampler2D uLutB;\nuniform sampler2D uLutC;\n'
-        + 'uniform float uZoneCount;\nuniform float uStop1;\nuniform float uStop2;\n'
+      .replace('#include <common>', '#include <common>\n'
+        + 'uniform sampler2D uAtlas;\nuniform float uZoneCount;\nuniform float uZoneCol[' + MAX_ZONES + '];\nuniform float uZonePrev[' + MAX_ZONES + '];\n'
+        + 'uniform float uLutMix;\nuniform float uCuts[' + (MAX_ZONES - 1) + '];\nuniform float uWaveA;\nuniform float uWaveN;\n'
         + 'uniform samplerCube uEnvBlur;\nuniform float uBlurMix;\n'
-        + 'varying vec3 vBandLocal;\nuniform int uHoleCount;\nuniform vec4 uHoles[' + MAX_HOLES + '];\nuniform float uHoleZ[' + MAX_HOLES + '];')
+        + 'varying vec3 vBandLocal;\nuniform int uHoleCount;\nuniform vec4 uHoles[' + MAX_HOLES + '];\nuniform float uHoleZ[' + MAX_HOLES + '];\n'
+        + 'uniform float uSepHalf;\nuniform float uSepMinR;')
       .replace('void main() {',
         'void main() {\n  for (int i = 0; i < ' + MAX_HOLES + '; i++) {\n    if (i >= uHoleCount) break;\n'
         + '    vec4 h = uHoles[i];\n    float sAx = vBandLocal.x * h.x + vBandLocal.z * h.y;\n'
         + '    vec3 q = vBandLocal - vec3(h.x * sAx, h.z, h.y * sAx);\n'
-        + '    if (sAx > uHoleZ[i] && dot(q, q) < h.w * h.w) discard;\n  }')
+        + '    if (sAx > uHoleZ[i] && dot(q, q) < h.w * h.w) discard;\n  }\n'
+        + '  if (uSepHalf > 0.0 && length(vBandLocal.xz) > uSepMinR) {\n'
+        + '    float sW = uWaveA * sin(uWaveN * atan(vBandLocal.z, -vBandLocal.x));\n'
+        + '    for (int i = 0; i < ' + (MAX_ZONES - 1) + '; i++) {\n'
+        + '      if (float(i) < uZoneCount - 1.0 && abs(vBandLocal.y - (uCuts[i] - sW)) < uSepHalf) discard;\n    }\n  }')
       .replace('#include <opaque_fragment>', `#include <opaque_fragment>
         float envV = gl_FragColor.r;
         if ( uBlurMix > 0.001 ) {
           float envB = textureCube( uEnvBlur, envMapRotation * vec3( flipEnvMap * vReflect.x, vReflect.yz ) ).r;
           envV = mix( envV, envB, uBlurMix );
         }
-        vec2 lutUv = vec2( 0.5, ( clamp( envV, 0.0, 1.0 ) * 511.0 + 0.5 ) / 512.0 );
-        vec3 lutC;
-        if ( uZoneCount > 1.5 ) {
-          lutC = ( vBandY > uStop1 ) ? texture2D( uLutB, lutUv ).rgb : texture2D( uLut, lutUv ).rgb;
-          if ( uZoneCount > 2.5 && vBandY > uStop2 ) lutC = texture2D( uLutC, lutUv ).rgb;
-        } else {
-          lutC = texture2D( uLut, lutUv ).rgb;
-          if ( uLutMix < 0.999 ) lutC = mix( texture2D( uLutPrev, lutUv ).rgb, lutC, uLutMix );
+        float zWave = uWaveA * sin( uWaveN * atan( vBandLocal.z, -vBandLocal.x ) );
+        float zCol = uZoneCol[0];
+        float zPrev = uZonePrev[0];
+        for ( int i = 1; i < ${MAX_ZONES}; i++ ) {
+          if ( float( i ) < uZoneCount && vBandLocal.y > uCuts[i - 1] - zWave ) { zCol = uZoneCol[i]; zPrev = uZonePrev[i]; }
         }
+        float lutV = ( clamp( envV, 0.0, 1.0 ) * 511.0 + 0.5 ) / 512.0;
+        vec3 lutC = texture2D( uAtlas, vec2( ( zCol + 0.5 ) / ${LUT_KEYS.length}.0, lutV ) ).rgb;
+        if ( uLutMix < 0.999 ) lutC = mix( texture2D( uAtlas, vec2( ( zPrev + 0.5 ) / ${LUT_KEYS.length}.0, lutV ) ).rgb, lutC, uLutMix );
         gl_FragColor.rgb = lutC;`)
       .replace('#include <colorspace_fragment>', ''); // LUT values are already display values
   };
-  m.customProgramCacheKey = () => 'zsc-lut-metal-v2';
+  m.customProgramCacheKey = () => 'zsc-lut-metal-v4';
   return m;
 }
 
@@ -283,8 +317,7 @@ function createLutMetalMaterial(env, shared) {
 // ~1.4°/segment elsewhere (9×). Real fix: merge the seam TOPOLOGICALLY, in
 // the index buffer, BEFORE computeVertexNormals() ever runs, so seam vertices
 // pick up faces from both sides like every other ring does — no separate
-// post-hoc averaging step needed, and it stays correct even after
-// carveGroovesIntoGeometry's own computeVertexNormals() re-run.
+// post-hoc averaging step needed.
 function mergeLatheSeamIndices(geo, rows, segments) {
   const idx = geo.index;
   if (!idx) return;
@@ -298,292 +331,26 @@ function mergeLatheSeamIndices(geo, rows, segments) {
 
 // ------------------------------------------------------------ ring profiles
 //
-// Faza 3 (2026-10-01, decisions #76; docs/faza3/FAZA3-geometrija.md): every
-// profile is built with the Wama Gold construction rules (reverse-engineered
-// from their own section data, docs/faza3/reference/wamaProfile.js):
-//
-//   outer apex (z = H) ─ top: flat | dome R | chamfer dx×dy
-//                        top corner fillet rt (tangent; none on a chamfer)
-//                        straight side wall = whatever height is left (≥ 0)
-//                        inner fillet ri (tangent; shrinks only if the wall
-//                          would go negative)
-//   inner apex (z = 0) ─ inner: flat | dome R | slope + dome (P13/P14)
-//
-//   * Thickness H = max z − min z, radial, inner apex → outer apex. The
-//     inner apex sits exactly on the finger line R = size / 2π (EU size =
-//     inner circumference). Comfort domes are INSIDE H.
-//   * Fillets and chamfers are absolute mm (0.3 / 0.4 / 0.52 / 0.8) — they do
-//     not scale with width or thickness; dome depths follow the per-profile
-//     rules of §8 (R = (c² + s²) / 2s, c = W/2, never deeper than a half
-//     circle).
-//   * Chamfer/slope edges are sharp (duplicated profile point → separate
-//     normals); every other transition is tangent → smooth.
-//
-// Coordinates: section space x = across the band (0 = centre), z = height
-// above the finger line. profilePoints() turns that into the (radius, width)
-// Vector2 loop LatheGeometry wants.
+// The section construction (Wama profile rules, Faza 3 #76) and everything
+// cut into it (grooves, edge steps, separation grooves — Faza 4 #78) lives in
+// ring-geometry.js (RG). Its sections are [[x, z, hard], …] loops: x across the
+// band (centred), z above the finger line, hard = sharp corner.
 
-// Our profile slugs map to a Wama id through params.wama (Seeder); a
-// keyword shape without one falls back to this table.
-const SHAPE_WAMA = { flat: 'P6', 'd-comfort': 'P11', round: 'P10', court: 'P16' };
-// Smallest thickness Wama accepts for a profile (measured, §3.4); wamaMinH()
-// additionally requires the section to actually fit (side wall ≥ 0 even with
-// the inner fillet shrunk to 0). The UI lifts the thickness to that value
-// when such a profile/width is picked (their HeightAdaptation).
-const WAMA_MIN_H = { P12: 1.2, P13: 1.4, P16: 1.0 };
-
-const WRs = (c, s) => (c * c + s * s) / (2 * s);
-const WdomeR = (c, s) => Math.max(WRs(c, Math.max(s, 0.005)), c * 1.01);   // ≤ half circle
-const WTAB = {
-  slope78: { 2: [0.34, 0.27], 3: [0.51, 0.41], 5: [0.86, 0.45], 8: [1.29, 0.50], 12: [1.47, 0.57] },
-  P15: { top: { 2: 2.5, 3: 3.5, 5: 9.5, 8: 24, 12: 44 }, inner: { 2: 3, 3: 3, 5: 10, 8: 16, 12: 70 }, inner25: { 12: 24 } },
-  P16: { top: { 2: 1.5, 3: 2.5, 5: 7, 8: 17.5, 12: 33.5 }, inner: { 2: 4, 3: 6, 5: 10, 8: 16, 12: 34 }, inner25: { 12: 24 } },
-  P17: { top: { 2: 1.2, 3: 2, 5: 5.5, 8: 13.5, 12: 25.5 }, inner: { 2: 6, 3: 6, 5: 12, 8: 18, 12: 50 }, inner25: { 12: 24 } },
-  P18: { top: { 2: 1.2, 3: 2, 5: 4.5, 8: 11.5, 12: 23.5 }, inner: { 2: 6, 3: 6, 5: 10, 8: 22, 12: 60 }, inner25: { 12: 24 } },
-  P19: { top: { 2: 2, 3: 3, 5: 8, 8: 20, 12: 36 }, inner: { 2: 3.5, 3: 5, 5: 9, 8: 16, 12: 32 }, inner25: { 12: 24 } },
-  P20: { top: { 2: 1.5, 3: 2.5, 5: 6, 8: 15, 12: 31 }, inner: { 2: 4, 3: 5, 5: 9, 8: 16, 12: 36 }, inner25: { 12: 24 } },
-  P21: { top: { 2: 1.5, 3: 2.5, 5: 6, 8: 15.5, 12: 27.5 }, inner: { 2: 4, 3: 5, 5: 9, 8: 16, 12: 42 }, inner25: { 12: 24 } },
-  P22: { top: { 2: 1.5, 3: 2.5, 5: 7, 8: 18, 12: 34 }, inner: { 2: 4, 3: 4.5, 5: 8, 8: 14, 12: 33 }, inner25: { 12: 22 } },
-  P23: { top: { 2: 1.2, 3: 2, 5: 6.5, 8: 12.5, 12: 20.5 }, inner: { 2: 3, 3: 3.5, 5: 5.5, 8: 19, 12: 100 }, inner25: { 12: 25 } },
-  P24: { top: { 2: 1.2, 3: 2, 5: 5.5, 8: 11.5, 12: 23.5 }, inner: { 2: 3, 3: 3.5, 5: 7.5, 8: 22.5, 12: 60 }, inner25: { 12: 23 } },
-  P7: { inner: { 2: 6, 3: 3, 5: 7, 8: 19, 12: 50 }, inner25: { 12: 24 }, innerAt5: { 1.2: 20, 1.5: 7, 2: 5 } },
-  at5: { P15: { 1.2: 10, 1.5: 10, 2: 10 }, P16: { 1: 25, 1.2: 10, 1.5: 10, 2: 10 }, P17: { 1.2: 17, 1.5: 12, 2: 12 },
-         P18: { 1.5: 10, 2: 10, 2.5: 10 }, P19: { 1.2: 9, 1.5: 9, 2: 9 }, P20: { 1.2: 14, 1.5: 9, 2: 9 }, P21: { 1.2: 14, 1.5: 9, 2: 9 },
-         P22: { 1.2: 10, 1.5: 8, 2: 8 }, P23: { 1.2: 11, 1.5: 5.5, 2: 5.5 }, P24: { 1.2: 17, 1.5: 7.5, 2: 6 } },
-  P13dx: { 1.5: 0.46, 2: 0.585, 2.5: 0.63 },
-  P14dx: { 1.5: 0.447, 2: 0.514, 2.5: 0.565 },
-};
-const Wsag = (R, c) => R - Math.sqrt(Math.max(0, R * R - c * c));
-function WinterpR(table, W) {                       // interpolate dome DEPTH between measured widths
-  const ws = Object.keys(table).map(Number).sort((a, b) => a - b);
-  const sOf = (w) => Wsag(table[w], w / 2);
-  if (W <= ws[0]) return WdomeR(W / 2, sOf(ws[0]));
-  if (W >= ws[ws.length - 1]) return WdomeR(W / 2, sOf(ws[ws.length - 1]));
-  for (let i = 0; i < ws.length - 1; i++) if (W >= ws[i] && W <= ws[i + 1]) {
-    if (W === ws[i]) return table[ws[i]];
-    const t = (W - ws[i]) / (ws[i + 1] - ws[i]);
-    return WdomeR(W / 2, sOf(ws[i]) * (1 - t) + sOf(ws[i + 1]) * t);
+// One section loop → the (radius, width) Vector2 list the sweep revolves.
+// Sharp corners become two coincident points (separate vertices → separate
+// normals). The list starts on the 2nd copy of loop[start] and ends on its
+// 1st copy, so the closing point is a separate vertex too; a loop without any
+// hard point is closed plainly and welded afterwards (weldProfileClosure).
+function latheLoop(loop, innerR, start, weld) {
+  const n = loop.length, pts = [];
+  for (let k = 0; k < n; k++) {
+    const p = loop[(start + k) % n];
+    pts.push(new THREE.Vector2(innerR + p[1], p[0]));
+    if (p[2] && k > 0) pts.push(new THREE.Vector2(innerR + p[1], p[0]));
   }
-  return table[ws[0]];
-}
-function WinterpPair(table, W) {
-  const ws = Object.keys(table).map(Number).sort((a, b) => a - b);
-  if (W <= ws[0]) return table[ws[0]];
-  if (W >= ws[ws.length - 1]) return table[ws[ws.length - 1]];
-  for (let i = 0; i < ws.length - 1; i++) if (W >= ws[i] && W <= ws[i + 1]) {
-    const t = (W - ws[i]) / (ws[i + 1] - ws[i]);
-    return table[ws[i]].map((v, k) => v * (1 - t) + table[ws[i + 1]][k] * t);
-  }
-  return table[ws[0]];
-}
-function WinnerR(t, at5, W, H) {                     // inner dome: depth at (W, 1.5) scaled by the H ratio measured at W 5
-  if (H >= 2.4 && W >= 11.5 && t.inner25) return t.inner25[12];
-  const c = W / 2;
-  let s = Wsag(WinterpR(t.inner, W), c);
-  if (at5) {
-    const hs = Object.keys(at5).map(Number).sort((a, b) => a - b);
-    const s5 = (h) => Wsag(at5[h], 2.5);
-    const ref = at5[1.5] ? s5(1.5) : s5(hs[0]);
-    let k = 1;
-    if (H <= hs[0]) k = s5(hs[0]) / ref;
-    else if (H >= hs[hs.length - 1]) k = s5(hs[hs.length - 1]) / ref;
-    else for (let i = 0; i < hs.length - 1; i++) if (H >= hs[i] && H <= hs[i + 1]) {
-      const u = (H - hs[i]) / (hs[i + 1] - hs[i]);
-      k = (s5(hs[i]) * (1 - u) + s5(hs[i + 1]) * u) / ref;
-    }
-    s *= k;
-  }
-  return WdomeR(c, s);
-}
-const WnearestKey = (obj, v) => Object.keys(obj).map(Number).reduce((a, b) => (Math.abs(b - v) < Math.abs(a - v) ? b : a));
-
-// Construction spec per Wama id (§8). Ids we don't use (P3 concave) fall
-// back to P1.
-function wamaSpec(id, W, H) {
-  const c = W / 2;
-  switch (id) {
-    case 'P1':  return { top: { type: 'flat' }, rt: 0.3, inner: { type: 'flat' }, ri: 0.4 };
-    case 'P2':  return { top: { type: 'flat' }, rt: 0.3, inner: { type: 'dome', R: WdomeR(c, H / 2 - 0.10) }, ri: 0.4 };
-    case 'P4':  return { top: { type: 'dome', R: WdomeR(c, 0.305 * (H - 0.44)) }, rt: 0.3, inner: { type: 'dome', R: WdomeR(c, 0.695 * (H - 0.44)) }, ri: 0.3 };
-    case 'P5':  return { top: { type: 'chamfer', dx: 0.52, dy: 0.52 }, inner: { type: 'dome', R: WdomeR(c, H / 2 - 0.31) }, ri: 0.4 };
-    case 'P6':  return { top: { type: 'chamfer', dx: 0.52, dy: 0.52 }, inner: { type: 'flat' }, ri: H >= 1.2 ? 0.4 : (H >= 1.0 ? 0.3 : 0.28) };
-    case 'P7': { const [dx, dy] = WinterpPair(WTAB.slope78, W);
-      return { top: { type: 'chamfer', dx, dy }, inner: { type: 'dome', R: WinnerR(WTAB.P7, WTAB.P7.innerAt5, W, H) }, ri: 0.4 }; }
-    case 'P8': { const [dx, dy] = WinterpPair(WTAB.slope78, W);
-      return { top: { type: 'chamfer', dx, dy }, inner: { type: 'flat' }, ri: H >= 1.0 ? 0.4 : 0.3 }; }
-    case 'P9':  return { top: { type: 'dome', R: WdomeR(c, 0.42 * H) }, rt: 0.3, inner: { type: 'flat' }, ri: Math.min(c, Math.max(0.4, H / 2 - 0.2)) };
-    case 'P10': return { top: { type: 'dome', R: WdomeR(c, H / 2 - 0.21) }, rt: 0.3, inner: { type: 'dome', R: WdomeR(c, H / 2 - 0.21) }, ri: 0.3 };
-    case 'P11': return { top: { type: 'dome', R: WdomeR(c, 0.42 * H) }, rt: 0.3, inner: { type: 'flat' }, ri: 0.4 };
-    case 'P12': return { top: { type: 'flat' }, rt: 0.8, inner: { type: 'dome', R: H >= 1.5 ? WdomeR(c, H - 1.15) : 18 * (W / 5) }, ri: 0.4 };
-    case 'P13': return { top: { type: 'dome', R: WdomeR(c, H / 2 - 0.612) }, rt: 0.3,
-      inner: { type: 'slope', wall: 0.4, dx: WTAB.P13dx[WnearestKey(WTAB.P13dx, H)], R: WRs(c, 0.263) } };
-    case 'P14': return { top: { type: 'flat' }, rt: 0.3,
-      inner: { type: 'slope', wall: H / 2 - 0.25, dx: WTAB.P14dx[WnearestKey(WTAB.P14dx, H)], R: WRs(c, 0.263) } };
-    default: {
-      const t = WTAB[id];
-      if (!t) return wamaSpec('P1', W, H);
-      return { top: { type: 'dome', R: WinterpR(t.top, W) }, rt: 0.3, inner: { type: 'dome', R: WinnerR(t, WTAB.at5[id], W, H) }, ri: 0.4 };
-    }
-  }
-}
-
-// Arc sampling: chord error ≤ 0.007 mm (so a section measured 0.25 mm from
-// the side, across two fillets, stays within ±0.02 of Wama — FAZA3 §10.3.6)
-// and ≤ 30° per step; domes ≤ 4° per step so the per-vertex reflection stays
-// a smooth sweep. Every step stays under HARD_EDGE_DEG, so arcs are never
-// mistaken for corners.
-function arcSteps(r, sweep) {
-  const chord = 2 * Math.acos(Math.max(-1, 1 - 0.007 / r));
-  const max = Math.min(Math.PI / 6, chord, r > 1.2 ? (4 * Math.PI) / 180 : Math.PI);
-  return Math.max(1, Math.ceil(Math.abs(sweep) / max));
-}
-
-// Half section (right side), internal y DOWN with y = 0 at mid-H; returns
-// [{x, y, hard}], outer apex → inner apex.
-function wamaHalf(W, H, spec) {
-  const c = W / 2, PI = Math.PI;
-  const out = [];
-  out.fits = true;
-  const pt = (x, y, hard) => out.push({ x, y, hard: !!hard });
-  const arc = (cx, cy, r, a0, a1) => {             // shortest sweep, start included, end excluded
-    let da = a1 - a0; while (da > PI) da -= 2 * PI; while (da < -PI) da += 2 * PI;
-    const n = arcSteps(r, da);
-    for (let k = 0; k < n; k++) { const a = a0 + (da * k) / n; pt(cx + r * Math.cos(a), cy + r * Math.sin(a)); }
-  };
-  const ang = (x, y, cx, cy) => Math.atan2(y - cy, x - cx);
-
-  let ytSide;
-  const T = spec.top, rt = spec.rt ?? 0.3;
-  if (T.type === 'flat') {
-    const yt = -H / 2; pt(0, yt); arc(c - rt, yt + rt, rt, -PI / 2, 0); ytSide = yt + rt;
-  } else if (T.type === 'dome') {
-    const R = T.R, yc = -H / 2 + R, d = R - rt, fx = c - rt, fy = yc - Math.sqrt(Math.max(0, d * d - fx * fx));
-    const tx = (fx * R) / d, ty = yc + ((fy - yc) * R) / d;
-    arc(0, yc, R, -PI / 2, ang(tx, ty, 0, yc)); arc(fx, fy, rt, ang(tx, ty, fx, fy), 0); ytSide = fy;
-  } else {                                          // chamfer: both of its ends are sharp
-    const yt = -H / 2; pt(0, yt); pt(c - T.dx, yt, true); ytSide = yt + T.dy; pt(c, ytSide, true);
-  }
-  const startSide = () => { if (T.type !== 'chamfer') pt(c, ytSide); };
-
-  const I = spec.inner;
-  let ri = spec.ri ?? 0.4;
-  if (I.type === 'slope') {
-    const ys = ytSide + I.wall, R = I.R, yc = H / 2 - R, xe = c - I.dx, ye = yc + Math.sqrt(Math.max(0, R * R - xe * xe));
-    startSide(); pt(c, ys, true); pt(xe, ye, true); arc(0, yc, R, ang(xe, ye, 0, yc), PI / 2);
-  } else {
-    const sideY = (r) => {
-      if (I.type === 'flat') return H / 2 - r;
-      const R = I.R, yc = H / 2 - R, d = R - r, fx = c - r; return yc + Math.sqrt(Math.max(0, d * d - fx * fx));
-    };
-    if (sideY(0) < ytSide - 1e-9) out.fits = false;  // does not fit at this H (see wamaMinH)
-    if (sideY(ri) < ytSide) {                       // no room → shrink the inner fillet until the wall is 0
-      let lo = 0, hi = ri; for (let k = 0; k < 60; k++) { const m = (lo + hi) / 2; if (sideY(m) < ytSide) hi = m; else lo = m; } ri = lo;
-    }
-    const ybSide = sideY(ri);
-    if (ybSide - ytSide > 1e-6) startSide();       // straight wall (skipped when it has zero length)
-    else if (T.type === 'chamfer') { /* chamfer foot already emitted */ }
-    if (I.type === 'flat') { arc(c - ri, H / 2 - ri, ri, 0, PI / 2); pt(c - ri, H / 2); }
-    else {
-      const R = I.R, yc = H / 2 - R, d = R - ri, fx = c - ri, fy = ybSide, tx = (fx * R) / d, ty = yc + ((fy - yc) * R) / d;
-      arc(fx, fy, ri, 0, ang(tx, ty, fx, fy)); arc(0, yc, R, ang(tx, ty, 0, yc), PI / 2);
-    }
-  }
-  pt(0, H / 2);                                     // inner apex
-  return out;
-}
-
-// Thinnest buildable thickness (0.1 mm steps, 0.8–2.5) for a profile at a width.
-function wamaMinH(id, W) {
-  for (let k = 8; k <= 25; k++) {
-    const H = k / 10;
-    if (H >= (WAMA_MIN_H[id] || 0) - 1e-9 && wamaHalf(W, H, wamaSpec(id, W, H)).fits) return H;
-  }
-  return 2.5;
-}
-
-// Closed section loop [[x, z, hard], …] (z above the finger line), mirrored
-// from the right half; exactly collinear points on straight runs are dropped
-// (a flat top keeps only its 2 corner points, as in the reference mesh).
-function wamaSectionLoop(id, W, H) {
-  const right = wamaHalf(W, H, wamaSpec(id, W, H));
-  const left = right.slice(1, -1).reverse().map((p) => ({ x: -p.x, y: p.y, hard: p.hard }));
-  const all = right.concat(left).map((p) => [p.x, H / 2 - p.y, p.hard]);
-  const n = all.length;
-  return all.filter((p, i) => {
-    if (p[2]) return true;
-    const a = all[(i - 1 + n) % n], b = all[(i + 1) % n];
-    const cross = (p[0] - a[0]) * (b[1] - p[1]) - (p[1] - a[1]) * (b[0] - p[0]);
-    const dot = (p[0] - a[0]) * (b[0] - p[0]) + (p[1] - a[1]) * (b[1] - p[1]);
-    return !(Math.abs(cross) < 1e-12 && dot > 0);
-  });
-}
-
-const HARD_EDGE_DEG = 38;                           // fallback corner detection for raw outlines
-
-// Cross-section in the (radius, axial) plane: x = distance from the finger
-// axis, y = position across the width. Closed Vector2 loop (last == first),
-// inner face walked −y → +y, outer face +y → −y. Sharp corners come out as
-// two coincident points (see withHardEdges). Units: mm.
-function profilePoints(shape, innerR, thickness, width, outline, wamaId) {
-  const id = wamaId || SHAPE_WAMA[shape];
-  const pts = [];
-  if (id) {
-    // reversed: the Wama loop walks the outer face −x → +x
-    const loop = wamaSectionLoop(id, width, thickness).reverse();
-    for (const [x, z, hard] of loop) {
-      pts.push(new THREE.Vector2(innerR + z, x));
-      if (hard) pts.push(new THREE.Vector2(innerR + z, x));
-    }
-  } else if (Array.isArray(outline) && outline.length > 2) {
-    // legacy: normalised outline from configurator.js (nx width, ny thickness, ny=-1 outer)
-    for (let i = 0; i < outline.length; i++) {
-      pts.push(new THREE.Vector2(innerR + ((1 - outline[i][1]) / 2) * thickness, outline[i][0] * (width / 2)));
-    }
-  } else {
-    return profilePoints('flat', innerR, thickness, width, null, null);
-  }
-  if (pts.length && pts[0].distanceTo(pts[pts.length - 1]) > 1e-9) pts.push(pts[0].clone());
+  const p0 = loop[start % n];
+  if (!weld || pts[0].distanceTo(pts[pts.length - 1]) > 1e-9) pts.push(new THREE.Vector2(innerR + p0[1], p0[0]));
   return pts;
-}
-
-// Turns a closed profile loop into what buildBandFor feeds LatheGeometry:
-//   * explicit sharp corners (two coincident points) stay split → separate
-//     vertices → separate normals; the loop is rotated to start on one;
-//   * a loop without them (raw outline) gets corners from the turn angle
-//     (> HARD_EDGE_DEG);
-//   * a loop with no corner at all comes back with `weld: true` so its
-//     first/last row is joined and no crease runs round the ring.
-function withHardEdges(loop) {
-  const L = loop.slice(0, -1);                      // drop the closing copy
-  const n = L.length;
-  const same = (a, b) => a.distanceToSquared(b) < 1e-18;
-  let j = -1;
-  for (let i = 0; i < n; i++) if (same(L[i], L[(i - 1 + n) % n])) { j = i; break; }
-  if (j >= 0) {
-    // start on the 2nd point of a coincident pair; the loop then ends on the
-    // 1st one, which is the (separate-vertex) closing point
-    const out = [];
-    for (let k = 0; k < n; k++) out.push(L[(j + k) % n].clone());
-    return { pts: out, weld: false };
-  }
-  // no explicit corners → angle rule
-  const cosLim = Math.cos((HARD_EDGE_DEG * Math.PI) / 180);
-  const hard = [];
-  const u = new THREE.Vector2(), v = new THREE.Vector2();
-  for (let i = 0; i < n; i++) {
-    u.subVectors(L[i], L[(i - 1 + n) % n]);
-    v.subVectors(L[(i + 1) % n], L[i]);
-    hard[i] = u.lengthSq() > 1e-14 && v.lengthSq() > 1e-14 && u.normalize().dot(v.normalize()) < cosLim;
-  }
-  const start = hard.indexOf(true);
-  if (start < 0) return { pts: loop, weld: true };
-  const out = [];
-  for (let k = 0; k <= n; k++) {
-    const i = (start + k) % n;
-    out.push(L[i].clone());
-    if (hard[i] && k > 0 && k < n) out.push(L[i].clone());
-  }
-  return { pts: out, weld: false };
 }
 
 // Topological weld of a closed, corner-free profile: every vertex of the
@@ -598,16 +365,45 @@ function weldProfileClosure(geo, rows, segments) {
   geo.index.needsUpdate = true;
 }
 
-// Section area + centroid height (z above the finger line) of a profile —
-// for the weight formula (ρ · A · 2π · R_centroid).
-function sectionStats(loop) {
-  let A = 0, Cz = 0;
-  for (let i = 0; i < loop.length; i++) {
-    const [x1, z1] = loop[i], [x2, z2] = loop[(i + 1) % loop.length];
-    const cr = x1 * z2 - x2 * z1;
-    A += cr; Cz += (z1 + z2) * cr;
+// LatheGeometry generalised: slice i (angle φ = 2π·i/segments) uses its own
+// point list (all lists the same length) — a plain lathe when every slice is
+// the same list, a swept band when a wavy colour boundary moves the
+// separation grooves round the ring. Same vertex/index layout as
+// LatheGeometry (vertex = i·n + j), so the seam/profile welds work unchanged.
+function sweepGeometry(slices, segments) {
+  const n = slices[0].length;
+  const pos = new Float32Array((segments + 1) * n * 3);
+  for (let i = 0; i <= segments; i++) {
+    const phi = (i / segments) * Math.PI * 2, sn = Math.sin(phi), cs = Math.cos(phi);
+    const pts = slices[i] || slices[0];
+    for (let j = 0; j < n; j++) {
+      const o = (i * n + j) * 3;
+      pos[o] = pts[j].x * sn; pos[o + 1] = pts[j].y; pos[o + 2] = pts[j].x * cs;
+    }
   }
-  return { area: Math.abs(A) / 2, centroidZ: A ? Cz / (3 * A) : 0 };
+  const idx = new (pos.length / 3 > 65535 ? Uint32Array : Uint16Array)(segments * (n - 1) * 6);
+  let t = 0;
+  for (let i = 0; i < segments; i++) {
+    for (let j = 0; j < n - 1; j++) {
+      const a = j + i * n, b = a + n, c = a + n + 1, d = a + 1;
+      idx[t++] = a; idx[t++] = b; idx[t++] = d;
+      idx[t++] = c; idx[t++] = d; idx[t++] = b;
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setIndex(new THREE.BufferAttribute(idx, 1));
+  return geo;
+}
+
+// The geometry-relevant part of a ring state (what ring-geometry needs);
+// also the cache/rebuild key.
+function geomState(state) {
+  return {
+    width: state.width || 4, thickness: state.thickness || 1.4, size: state.size || 54,
+    profileShape: state.profileShape || 'flat', profileWama: state.profileWama || null, profileOutline: state.profileOutline || null,
+    grooves: state.grooves || [], edges: state.edges || null, division: state.division || null, separation: state.separation || null,
+  };
 }
 
 // Faza 2: min 2 even at DPR 1 (the LUT look lives in thin chamfer lines),
@@ -951,27 +747,36 @@ function create(canvas, opts = {}) {
     });
   }
 
-  // Materijal "Dve boje"/"Tri boje" multi-colour band (client, 2026-09-07,
-  // decisions.md #34→real): a custom per-vertex `aBandY` attribute (set in
-  // buildBandFor = that vertex's LOCAL width-axis position) lets the metal
-  // shader pick a zone LUT per fragment (createLutMetalMaterial). Only
-  // straight width-ratio splits (1:1, 1:2, 2:1…) are done this way —
-  // wave/diagonal/segment/axial need a per-angle coordinate and aren't
-  // implemented yet (configurator.js's colorZonesFor() returns null for those
-  // = ordinary single-metal ring). The old fake bottom-darkening ("Senčenje
-  // pri dnu") is gone with Faza 2 — it would bend the LUT colours.
-  // `zones` = { metals: [slug,...], stops: [mm,...] } | null.
-  function applyColorZones(mat, zones) {
-    const u = mat.userData.lut;
-    const metals = zones ? (zones.metals || []) : [];
-    u.uZoneCount.value = metals.length;
-    if (metals.length) {
-      u.uLut.value = lutFor(metals[0]);
-      u.uLutB.value = lutFor(metals[1]);
-      u.uLutC.value = lutFor(metals[2] || metals[1]);
-      u.uStop1.value = zones.stops[0] || 0;
-      u.uStop2.value = zones.stops[1] || 0;
+  // Colour bands (Faza 4, FAZA4 §7/§8): the ring is split ACROSS its width
+  // into 1–5 bands that each run the full 360°; boundaries are straight or a
+  // sine x = cut − A·sin(n·φ). The fragment picks its band's LUT column from
+  // its band-local position (createLutMetalMaterial), so seats and perlage
+  // beads follow too. A band change cross-fades from what is on screen.
+  // state.bandLuts = LUT key (or material slug) per band; state.division →
+  // RG.divisionOf (cuts in mm from the left edge).
+  function applyZones(rig, state) {
+    const u = rig.mat.userData.lut;
+    const dv = RG.divisionOf(geomState(state));
+    const list = (state.bandLuts && state.bandLuts.length ? state.bandLuts : [state.metal]).map(lutKeyFor);
+    const W = state.width || 4;
+    const cols = [];
+    for (let i = 0; i < MAX_ZONES; i++) cols.push(lutCol(list[Math.min(i, list.length - 1)]));
+    if (cols.some((c, i) => c !== u.uZoneCol.value[i])) {
+      for (let i = 0; i < MAX_ZONES; i++) {
+        // mid-fade: start the new fade from whichever LUT dominates now
+        u.uZonePrev.value[i] = u.uLutMix.value < 0.5 ? u.uZonePrev.value[i] : u.uZoneCol.value[i];
+        u.uZoneCol.value[i] = cols[i];
+      }
+      u.uLutMix.value = 0;
     }
+    u.uZoneCount.value = Math.min(MAX_ZONES, dv.bands);
+    for (let i = 0; i < MAX_ZONES - 1; i++) u.uCuts.value[i] = i < dv.cuts.length ? dv.cuts[i] - W / 2 : 1e3;
+    u.uWaveA.value = dv.A || 0;
+    u.uWaveN.value = dv.n || 0;
+    // the stone's seat tint follows the band the stone sits in
+    const wp = state.stone ? (state.stone.widthPos || 0) + W / 2 : W / 2;
+    let k = 0; for (const c of dv.cuts) if (wp > c) k++;
+    rig.stoneLut = list[Math.min(k, list.length - 1)];
   }
 
   const envs = getEnvs();
@@ -983,8 +788,11 @@ function create(canvas, opts = {}) {
     // uniforms), a touch rougher (drilled + burnished): reads partly from
     // the blurred studio, see loop().
     const seatMat = createLutMetalMaterial(envs, mat.userData.lut);
+    // Perlage beads: the band's own material state (LUT, zones, finish), no
+    // stone holes.
+    const beadMat = createLutMetalMaterial(envs, mat.userData.lut, false);
     return {
-      key, root, mat, seatMat, gemMat: null, stones: [], seats: [], band: null, stone: null, outer: 8,
+      key, root, mat, seatMat, beadMat, beadMeshes: [], stripMeshes: [], stoneLut: 'yellow', gemMat: null, stones: [], seats: [], band: null, stone: null, outer: 8,
       blob: pairMode ? makeContactBlob() : null,
       target: { blur: 0 },
     };
@@ -1001,79 +809,12 @@ function create(canvas, opts = {}) {
 
   const LATHE_SEGMENTS = 260;
 
-  // ---- grooves: cut a real channel INTO the band silhouette --------------
+  // ---- grooves (Faza 4, decisions #78) -------------------------------------
   //
-  // Client, 2026-09-10: the old grooves stood OUT (a raised applied ridge);
-  // a groove is a channel cut IN. Instead of per-profile-shape surgery this
-  // works on the finished band mesh: buildBandFor densifies the cross-section
-  // along its WIDTH (so there are enough vertex rows for crisp groove walls),
-  // then carveGroovesIntoGeometry() pushes the OUTER-surface vertices
-  // radially inward by a per-shape depth profile wherever they fall inside a
-  // groove's width span. The inner wall never moves. One code path for flat /
-  // round / court / d-comfort / all 14 param profiles. Grooves wrap the full
-  // circumference here; a partial-wrap 'horizontal'/'wave' groove stays a v2
-  // job (needs a per-angle cut).
-  function grooveCut(shape, t, depth) {
-    const s = Math.max(0, Math.min(1, t));               // position across groove width
-    switch (shape) {
-      case 'v90':
-      case 'vsharp':
-        return depth * (1 - Math.abs(2 * s - 1));        // sharp V
-      case 'angular':
-      case 'square':
-      case 'kanal': {
-        const r = 0.16;                                  // flat bottom, ramped walls
-        return depth * (s < r ? s / r : s > 1 - r ? (1 - s) / r : 1);
-      }
-      default:
-        return depth * Math.sqrt(Math.max(0, 1 - (2 * s - 1) ** 2)); // round U
-    }
-  }
-
-  function densifyLoop(pts, maxLen) {
-    const out = [];
-    for (let i = 0; i < pts.length - 1; i++) {
-      const a = pts[i], b = pts[i + 1];
-      out.push(a);
-      const d = a.distanceTo(b);
-      if (d > maxLen) {
-        const steps = Math.ceil(d / maxLen);
-        for (let k = 1; k < steps; k++) out.push(a.clone().lerp(b, k / steps));
-      }
-    }
-    out.push(pts[pts.length - 1]);
-    return out;
-  }
-
-  const _gv = new THREE.Vector3();
-  // geo: band LatheGeometry AFTER rotateY(-90°) — Y stays the width axis.
-  function carveGroovesIntoGeometry(geo, grooves, innerR, outerR) {
-    if (!grooves || !grooves.length) return;
-    const pos = geo.attributes.position;
-    const mid = (innerR + outerR) / 2;
-    const minR = innerR + 0.22;                          // keep a wall
-    for (let idx = 0; idx < pos.count; idx++) {
-      _gv.fromBufferAttribute(pos, idx);
-      const rad = Math.hypot(_gv.x, _gv.z);
-      if (rad <= mid) continue;                          // inner half — never carved
-      const w = _gv.y;                                   // mm from band centre (width axis)
-      const outerness = Math.min(1, (rad - mid) / Math.max(outerR - mid, 1e-4));
-      let sink = 0;
-      for (let g = 0; g < grooves.length; g++) {
-        const gr = grooves[g];
-        const gw = Math.max(gr.width || 0.3, 0.06);
-        const t = (w - ((gr.position || 0) - gw / 2)) / gw;
-        if (t < 0 || t > 1) continue;
-        sink = Math.max(sink, grooveCut(gr.shape, t, Math.max(gr.depth || 0.15, 0.03)));
-      }
-      if (sink <= 0) continue;
-      const f = Math.max(minR, rad - sink * outerness) / rad;
-      pos.setX(idx, _gv.x * f);
-      pos.setZ(idx, _gv.z * f);
-    }
-    pos.needsUpdate = true;
-    geo.computeVertexNormals();
-  }
+  // Grooves, edge steps and separation grooves are part of the SECTION now
+  // (RG.buildSection / RG.sweepSections: exact Wama outlines projected onto
+  // the profile, sharp where Wama is sharp), so the band is still a revolved
+  // section — no vertex pushing. Perlage beads are instanced ellipsoids.
 
   // World-space (minY, x, z) of a rig's actual lowest vertex. A plain Box3
   // only gives an AABB min corner — fine while every ring stood dead
@@ -1101,73 +842,86 @@ function create(canvas, opts = {}) {
     return { minY, maxY, x, z };
   }
 
-  // The band mesh for a ring state (profile → lathe → grooves carved in).
-  // Shared by buildBandFor (what is drawn) and ringVolume (what is priced),
-  // so the price always follows the exact geometry on screen.
+  // The band mesh for a ring state: section (profile + grooves + edges +
+  // straight separation grooves) revolved round the ring. A wave/diagonal
+  // division adds one swept "strip" per boundary = the separation groove
+  // walls following the sine (RG.sweepSections); the band surface above them
+  // is cut in the shader (uSepHalf, see createLutMetalMaterial).
   function makeBandGeometry(state) {
-    const size = state.size || 54;                 // EU size ≈ inner circumference mm
-    const innerR = size / (2 * Math.PI);
-    const thickness = state.thickness || 1.4;
+    const gs = geomState(state);
+    const innerR = gs.size / (2 * Math.PI);
+    const thickness = gs.thickness;
     const outerR = innerR + thickness;
-    const prof = withHardEdges(profilePoints(state.profileShape || 'flat', innerR, thickness, state.width || 4, state.profileOutline, state.profileWama));
-    let pts = prof.pts;
-    const grooves = state.grooves || [];
-    // Grooves are cut into the band itself now — densify the cross-section so
-    // the carve below has enough vertex rows for sharp groove walls.
-    if (grooves.length) pts = densifyLoop(pts, 0.18);
-    const geo = new THREE.LatheGeometry(pts, LATHE_SEGMENTS);
-    // Custom per-vertex attribute carrying each vertex's LOCAL width-axis
-    // position (same y profilePoints() already works in) — feeds the
-    // Materijal multi-colour shader hook (createLutMetalMaterial/applyColorZones)
-    // so it can pick a zone colour by width position. LatheGeometry's own
-    // vertex order is angular-slice-major, point-index-minor (index =
-    // i*pts.length + j) — rotateY() below only rotates X/Z, Y is untouched,
-    // so this doesn't need to be recomputed after it.
-    {
-      const n = pts.length;
-      const bandY = new Float32Array((LATHE_SEGMENTS + 1) * n);
-      for (let i = 0; i <= LATHE_SEGMENTS; i++) {
-        for (let j = 0; j < n; j++) bandY[i * n + j] = pts[j].y;
-      }
-      geo.setAttribute('aBandY', new THREE.BufferAttribute(bandY, 1));
-    }
-    geo.rotateY(-Math.PI / 2);     // move the lathe seam to the left silhouette edge
+    const sw = RG.sweepSections(gs, LATHE_SEGMENTS);
+    const hardAt = sw.loop.findIndex((p) => p[2]);
+    const weld = hardAt < 0, start = Math.max(0, hardAt);
+    const pts = latheLoop(sw.loop, innerR, start, weld);
+    const geo = sweepGeometry([pts], LATHE_SEGMENTS);
+    geo.rotateY(-Math.PI / 2);     // move the seam to the left silhouette edge
     mergeLatheSeamIndices(geo, pts.length, LATHE_SEGMENTS);
-    if (prof.weld) weldProfileClosure(geo, pts.length, LATHE_SEGMENTS);
+    if (weld) weldProfileClosure(geo, pts.length, LATHE_SEGMENTS);
     geo.computeVertexNormals();
-    carveGroovesIntoGeometry(geo, grooves, innerR, outerR);
-    return { geo, pts, innerR, thickness, outerR };
+    const strips = (sw.strips || []).map((slices) => {
+      const lists = slices.map((outline) => {
+        const out = [];
+        outline.forEach((p, k) => {
+          out.push(new THREE.Vector2(innerR + p[1], p[0]));
+          if (p[2] && k > 0 && k < outline.length - 1) out.push(new THREE.Vector2(innerR + p[1], p[0]));
+        });
+        return out;
+      });
+      const g = sweepGeometry(lists, LATHE_SEGMENTS);
+      g.rotateY(-Math.PI / 2);
+      mergeLatheSeamIndices(g, lists[0].length, LATHE_SEGMENTS);
+      g.computeVertexNormals();
+      return g;
+    });
+    return { geo, pts, innerR, thickness, outerR, beads: sw.beads, strips, stripHalf: sw.stripHalf || 0 };
   }
 
-  // Enclosed metal volume (mm³) of a ring state's band mesh: signed
-  // tetrahedra sum over the closed, indexed lathe mesh (grooves included;
-  // the shader-cut stone seats are not geometry and are ignored — a 2 mm
-  // stone's hole is < 1 % of the band). Cached per geometry-relevant state.
-  const volumeCache = new Map();
-  const _va = new THREE.Vector3(), _vb = new THREE.Vector3(), _vc = new THREE.Vector3();
-  function ringVolume(state) {
-    const k = JSON.stringify([state.size, state.thickness, state.width, state.profileShape, state.profileWama, state.profileOutline, state.grooves || []]);
-    if (volumeCache.has(k)) return volumeCache.get(k);
-    const { geo } = makeBandGeometry(state);
-    const pos = geo.attributes.position, idx = geo.index.array;
-    let v6 = 0;
-    for (let t = 0; t < idx.length; t += 3) {
-      _va.fromBufferAttribute(pos, idx[t]);
-      _vb.fromBufferAttribute(pos, idx[t + 1]);
-      _vc.fromBufferAttribute(pos, idx[t + 2]);
-      v6 += _va.dot(_vb.cross(_vc));
+  // Metal volume (mm³) of a ring state — exact section volume per colour band
+  // (RG.bandVolumes: grooves removed, beads added). The drawn mesh is the same
+  // section revolved (≈ 0.01 % less from its 260 chords).
+  function ringVolume(state) { return RG.ringVolume(geomState(state)); }
+  function bandVolumes(state) { return RG.bandVolumes(geomState(state)); }
+
+  // Perlage beads round each perlage groove / edge (FAZA4 §10): one instanced
+  // ellipsoid mesh per row, band-local frame (x' = −r·cosφ, z' = r·sinφ, the
+  // same φ as the swept band).
+  const beadGeo = new THREE.SphereGeometry(1, 14, 10);
+  const _bm = new THREE.Matrix4(), _bt = new THREE.Vector3(), _br = new THREE.Vector3(), _bu = new THREE.Vector3();
+  function buildBeadsFor(rig, beads, innerR) {
+    rig.beadMeshes.forEach((m) => { rig.root.remove(m); m.dispose(); });
+    rig.beadMeshes = [];
+    for (const b of beads || []) {
+      const mesh = new THREE.InstancedMesh(beadGeo, rig.beadMat, b.count);
+      const rc = innerR + b.centreZ;
+      for (let k = 0; k < b.count; k++) {
+        const phi = ((k + 0.5) / b.count) * Math.PI * 2;
+        _br.set(-Math.cos(phi), 0, Math.sin(phi));
+        _bt.set(Math.sin(phi), 0, Math.cos(phi)).multiplyScalar(b.a);
+        _bu.set(0, b.a, 0);
+        _bm.makeBasis(_bt, _bu, _br.clone().multiplyScalar(b.b));
+        _bm.setPosition(_br.x * rc, b.x, _br.z * rc);
+        mesh.setMatrixAt(k, _bm);
+      }
+      mesh.instanceMatrix.needsUpdate = true;
+      rig.root.add(mesh);
+      rig.beadMeshes.push(mesh);
     }
-    geo.dispose();
-    const vol = Math.abs(v6) / 6;
-    if (volumeCache.size > 200) volumeCache.clear();
-    volumeCache.set(k, vol);
-    return vol;
   }
 
   function buildBandFor(key, state) {
     const rig = rigs[key];
-    const { geo, pts, innerR, thickness, outerR } = makeBandGeometry(state);
+    const { geo, pts, innerR, thickness, outerR, beads, strips, stripHalf } = makeBandGeometry(state);
     rig.profilePts = pts;
+    buildBeadsFor(rig, beads, innerR);
+    // wavy separation groove walls (beadMat: same LUT/zones, no cut-outs)
+    rig.stripMeshes.forEach((m) => { rig.root.remove(m); m.geometry.dispose(); });
+    rig.stripMeshes = strips.map((g) => { const m = new THREE.Mesh(g, rig.beadMat); rig.root.add(m); return m; });
+    const H = rig.mat.userData.holes;
+    H.uSepHalf.value = strips.length ? Math.max(0, stripHalf - 0.002) : 0;
+    H.uSepMinR.value = innerR + 0.5 * thickness;
     rig.innerR = innerR;
     rig.thickness = thickness;
     if (rig.band) { rig.band.geometry.dispose(); rig.band.geometry = geo; }
@@ -1248,11 +1002,6 @@ function create(canvas, opts = {}) {
     for (let i = 0; i < N; i++) { const a = i * 2 + 1; idx.push(c0, a + 2, a); }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    // Width-axis position (= band-local y) so two/three-tone zones pick the
-    // same LUT on the seat wall as on the band around it.
-    const bandY = new Float32Array(pos.length / 3);
-    for (let i = 0; i < bandY.length; i++) bandY[i] = pos[i * 3 + 1];
-    g.setAttribute('aBandY', new THREE.BufferAttribute(bandY, 1));
     g.setIndex(idx);
     g.computeVertexNormals();
     return g;
@@ -1331,12 +1080,11 @@ function create(canvas, opts = {}) {
       holes.push({ ax: _ax.x, az: _ax.z, w: widthPos, r: r * P.holeTop, z: girdleZ - 0.05 });
     }
     setHoles(rig, holes);
-    rig.gemMat.uniforms.uSeatColor.value.copy(seatColorFor(rig.mat.userData.lut.uLut.value));
+    rig.gemMat.uniforms.uSeatColor.value.copy(seatColorFor(rig.stoneLut));
   }
 
-  // Grooves are cut straight into the band geometry — see
-  // carveGroovesIntoGeometry() up near profilePoints(). No separate groove
-  // meshes any more (client, 2026-09-10: a groove goes IN, not OUT).
+  // Grooves are part of the band section (makeBandGeometry); perlage beads
+  // are built with the band (buildBeadsFor).
 
 
   // --------------------------------------------------------------- engraving
@@ -1416,17 +1164,10 @@ function create(canvas, opts = {}) {
 
   function applyMaterialFor(key, state) {
     const rig = rigs[key];
-    const u = rig.mat.userData.lut;
-    // Metal switch: cross-fade from what's on screen now to the new LUT
-    // (uniform swap only, same program).
-    const lut = lutFor(state.metal);
-    if (lut !== u.uLut.value) {
-      u.uLutPrev.value = u.uLut.value;
-      u.uLut.value = lut;
-      u.uLutMix.value = 0;
-    }
+    // Metal / band switch: cross-fade from what's on screen now to the new
+    // LUT columns (uniform swap only, same program).
+    applyZones(rig, state);
     if (typeof state.roughness === 'number') rig.target.blur = state.roughness >= BLUR_ROUGHNESS ? 1 : 0;
-    applyColorZones(rig.mat, state.colorZones || null);
     invalidate(30); // tween runs inside the render loop
   }
 
@@ -1504,7 +1245,7 @@ function create(canvas, opts = {}) {
       if (u.uLutMix.value < 1) u.uLutMix.value = Math.min(1, u.uLutMix.value + 0.08);
       u.uBlurMix.value += (rig.target.blur - u.uBlurMix.value) * 0.12;
       rig.seatMat.userData.lut.uBlurMix.value = Math.max(0.5, u.uBlurMix.value);
-      if (rig.gemMat) rig.gemMat.uniforms.uSeatColor.value.lerp(seatColorFor(u.uLut.value), 0.09);
+      if (rig.gemMat) rig.gemMat.uniforms.uSeatColor.value.lerp(seatColorFor(rig.stoneLut), 0.09);
       // Grooves are part of the band geometry now, so they follow for free.
     });
     const moving = controls.update();       // true while damping / auto-rotating
@@ -1538,30 +1279,31 @@ function create(canvas, opts = {}) {
     if (pair.her) {
       rigs.her.root.visible = true;
       const s = pair.her, last = rigs.her.last || {};
-      const geomChanged = ['width', 'thickness', 'size', 'profileShape', 'profileKey'].some((k) => s[k] !== last[k]);
+      const gk = JSON.stringify([geomState(s), s.profileKey]);
+      const geomChanged = gk !== rigs.her.geomKey;
+      rigs.her.geomKey = gk;
       const stoneChanged = JSON.stringify(s.stone || null) !== JSON.stringify(last.stone || null);
-      const groovesChanged = JSON.stringify(s.grooves || null) !== JSON.stringify(last.grooves || null);
       const engChanged = JSON.stringify(s.engraving || null) !== JSON.stringify(last.engraving || null);
-      // Grooves are carved into the band geometry, so a groove change is a
-      // band rebuild now (was a separate ridge-mesh pass).
-      if (geomChanged || groovesChanged || !rigs.her.band) outerHer = buildBandFor('her', s);
+      // Grooves / edges / division are part of the band section → rebuild.
+      if (geomChanged || !rigs.her.band) outerHer = buildBandFor('her', s);
       if (geomChanged || stoneChanged) buildStoneFor('her', s);
       if (geomChanged || engChanged) buildEngravingFor('her', s);
       applyMaterialFor('her', s);
-      rigs.her.last = { ...s, stone: s.stone ? { ...s.stone } : null, grooves: s.grooves ? s.grooves.map((g) => ({ ...g })) : null, engraving: s.engraving ? { ...s.engraving } : null };
+      rigs.her.last = JSON.parse(JSON.stringify(s));
     }
     if (pair.his && pairMode) {
       rigs.his.root.visible = true;
       const s = pair.his, last = rigs.his.last || {};
-      const geomChanged = ['width', 'thickness', 'size', 'profileShape', 'profileKey'].some((k) => s[k] !== last[k]);
+      const gk = JSON.stringify([geomState(s), s.profileKey]);
+      const geomChanged = gk !== rigs.his.geomKey;
+      rigs.his.geomKey = gk;
       const stoneChanged = JSON.stringify(s.stone || null) !== JSON.stringify(last.stone || null);
-      const groovesChanged = JSON.stringify(s.grooves || null) !== JSON.stringify(last.grooves || null);
       const engChanged = JSON.stringify(s.engraving || null) !== JSON.stringify(last.engraving || null);
-      if (geomChanged || groovesChanged || !rigs.his.band) outerHis = buildBandFor('his', s);
+      if (geomChanged || !rigs.his.band) outerHis = buildBandFor('his', s);
       if (geomChanged || stoneChanged) buildStoneFor('his', s);
       if (geomChanged || engChanged) buildEngravingFor('his', s);
       applyMaterialFor('his', s);
-      rigs.his.last = { ...s, stone: s.stone ? { ...s.stone } : null, grooves: s.grooves ? s.grooves.map((g) => ({ ...g })) : null, engraving: s.engraving ? { ...s.engraving } : null };
+      rigs.his.last = JSON.parse(JSON.stringify(s));
     }
     if (!framed && (rigs.her.band || rigs.his.band)) {
       framed = true;
@@ -1650,8 +1392,8 @@ function create(canvas, opts = {}) {
   // `metal` = LUT key (yellow/red/white/manganese/white-pd); default = the
   // her ring's current LUT. Forced onto both rings for the test, restored after.
   function calib(metal) {
-    const luts = getLuts();
-    const lutKey = metal || Object.keys(LUT_STOPS).find((k) => luts[k] === rigs.her.mat.userData.lut.uLut.value) || 'yellow';
+    const atlas = getAtlas();
+    const lutKey = metal || LUT_KEYS[rigs.her.mat.userData.lut.uZoneCol.value[0]] || 'yellow';
     const bands = new Set([rigs.her.band, rigs.his.band].filter(Boolean));
     const vis = [];
     scene.traverse((o) => {
@@ -1660,10 +1402,10 @@ function create(canvas, opts = {}) {
     });
     const saved = ['her', 'his'].map((k) => {
       const u = rigs[k].mat.userData.lut;
-      return [u, u.uLut.value, u.uLutMix.value, u.uZoneCount.value, u.uBlurMix.value];
+      return [u, u.uZoneCol.value.slice(), u.uLutMix.value, u.uZoneCount.value, u.uBlurMix.value];
     });
-    const grab = (lut) => {
-      saved.forEach(([u]) => { u.uLut.value = lut; u.uLutMix.value = 1; u.uZoneCount.value = 0; u.uBlurMix.value = 0; });
+    const grab = (key) => {
+      saved.forEach(([u]) => { u.uZoneCol.value[0] = lutCol(key); u.uLutMix.value = 1; u.uZoneCount.value = 1; u.uBlurMix.value = 0; });
       renderer.render(scene, camera);
       const src = renderer.domElement;
       const c2 = document.createElement('canvas');
@@ -1678,23 +1420,22 @@ function create(canvas, opts = {}) {
     const pct = (arr, p) => arr[Math.min(arr.length - 1, Math.floor(p * (arr.length - 1)))];
     const r3 = (v) => Math.round(v * 1000) / 1000;
 
-    const lutTex = luts[lutKey];
-    const L = lutTex.image.data;
-    const a = grab(lutTex);
+    const L = atlas.ramps[lutKey];
+    const a = grab(lutKey);
     const dist = a.px.map((i) => {
       let best = 1e9;
       for (let j = 0; j < LUT_SIZE; j++) {
-        const dr = a.d[i] - L[j * 4], dg = a.d[i + 1] - L[j * 4 + 1], db = a.d[i + 2] - L[j * 4 + 2];
+        const dr = a.d[i] - L[j * 3], dg = a.d[i + 1] - L[j * 3 + 1], db = a.d[i + 2] - L[j * 3 + 2];
         const q = dr * dr + dg * dg + db * db;
         if (q < best) best = q;
       }
       return Math.sqrt(best);
     }).sort((x, y) => x - y);
-    const b = grab(luts.identity);
+    const b = grab('identity');
     const idx = b.px.map((i) => b.d[i] / 255).sort((x, y) => x - y);
 
     vis.forEach(([o, v]) => { o.visible = v; });
-    saved.forEach(([u, lut, mix, zc, blur]) => { u.uLut.value = lut; u.uLutMix.value = mix; u.uZoneCount.value = zc; u.uBlurMix.value = blur; });
+    saved.forEach(([u, cols, mix, zc, blur]) => { cols.forEach((c, i) => { u.uZoneCol.value[i] = c; }); u.uLutMix.value = mix; u.uZoneCount.value = zc; u.uBlurMix.value = blur; });
     invalidate(5);
 
     const med = pct(dist, 0.5), p75 = pct(dist, 0.75);
@@ -1777,7 +1518,10 @@ function create(canvas, opts = {}) {
       if (rg.engrave) { rg.engrave.geometry.dispose(); rg.engrave.material.dispose(); }
       if (rg.engraveTex) rg.engraveTex.dispose();
       (rg.seats || []).forEach((m) => m.geometry.dispose());
+      rg.beadMeshes.forEach((m) => m.dispose());
+      rg.stripMeshes.forEach((m) => m.geometry.dispose());
       rg.seatMat.dispose();
+      rg.beadMat.dispose();
       if (rg.gemMat) rg.gemMat.dispose();
     });
     contactTex.dispose();
@@ -1785,6 +1529,7 @@ function create(canvas, opts = {}) {
     ground.material.dispose();
     ground.geometry.dispose();
     gemGeo.dispose();
+    beadGeo.dispose();
     if (diamondEnvRT) diamondEnvRT.dispose();
     envRT.texture.dispose();
     pmrem.dispose();
@@ -1798,21 +1543,34 @@ function create(canvas, opts = {}) {
   }
 
   return {
-    setState, resize, dispose, screenshot, zoom, reset, setAutoRotate, setSolo, controls, renderer, ringVolume,
+    setState, resize, dispose, screenshot, zoom, reset, setAutoRotate, setSolo, controls, renderer, ringVolume, bandVolumes,
     debug: debugApi, // temporary — see comment above debugApi's definition
   };
 }
 
-// profileLoop: the exact cross-section the band is built from, for the UI's
-// 2D diagrams — [[y (width, mm, centred), d (mm above the inner face)], …].
+// profileLoop: the exact (ungrooved) cross-section the band is built from,
+// for the UI's 2D diagrams — [[x (width, mm, centred), z (mm above the inner
+// face)], …].
 function profileLoop(shape, width, thickness, outline, wamaId) {
-  return profilePoints(shape, 0, thickness, width, outline, wamaId).map((v) => [v.y, v.x]);
+  return RG.baseLoop({ width, thickness, profileShape: shape, profileOutline: outline, profileWama: wamaId }).map((p) => [p[0], p[1]]);
 }
 // profileStats: area (mm²) + centroid height above the finger line (mm) of
-// the exact section — configurator.js's weight formula.
+// the exact section — configurator.js's pre-scene weight fallback.
 function profileStats(shape, width, thickness, outline, wamaId) {
-  return sectionStats(profileLoop(shape, width, thickness, outline, wamaId));
+  return RG.sectionStats(RG.baseLoop({ width, thickness, profileShape: shape, profileOutline: outline, profileWama: wamaId }, true));
+}
+// sectionLoop: the grooved section of a whole ring state (grooves, edges,
+// straight separation grooves) for the Žlebovi step diagram.
+function sectionLoop(state) {
+  const gs = geomState(state), dv = RG.divisionOf(gs), sep = gs.separation || RG.SEPARATION_DEFAULT;
+  const seps = dv.bands > 1 && sep.active !== false ? dv.cuts.map((c) => ({ ...sep, pos: c })) : [];
+  const sec = RG.buildSection({ ...gs, separations: seps });
+  return { loop: sec.loop.map((p) => [p[0], p[1]]), beads: sec.beads, cuts: dv.cuts, wavy: !!dv.wavy };
 }
 
-window.ZSCScene = { create, profileLoop, profileStats, profileMinH: (shape, width, wamaId) => wamaMinH(wamaId || SHAPE_WAMA[shape] || 'P1', width) };
+window.ZSCScene = {
+  create, profileLoop, profileStats, sectionLoop,
+  profileMinH: (shape, width, wamaId) => RG.wamaMinH(wamaId || RG.SHAPE_WAMA[shape] || 'P1', width),
+  geometry: RG, // groove catalogue, placement rules, division, volumes, price class (configurator.js)
+};
 document.dispatchEvent(new Event('zsc:scene-ready'));

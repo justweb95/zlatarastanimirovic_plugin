@@ -1,0 +1,1024 @@
+{
+ "grooves": [
+  {
+   "id": "P1",
+   "W": 5,
+   "H": 1.5,
+   "form": "v-groove-90",
+   "g": {
+    "pos": 2.5,
+    "width": 0.2
+   },
+   "maxDev": 0,
+   "meanDev": 0,
+   "area_mm2": 0.01,
+   "removed_g_585": 0.00947,
+   "outline": [
+    [
+     2.4,
+     1.5
+    ],
+    [
+     2.5,
+     1.4
+    ],
+    [
+     2.6,
+     1.5
+    ]
+   ]
+  },
+  {
+   "id": "P1",
+   "W": 5,
+   "H": 1.5,
+   "form": "v-groove-60",
+   "g": {
+    "pos": 1,
+    "width": 0.5
+   },
+   "maxDev": 0,
+   "meanDev": 0,
+   "area_mm2": 0.10825,
+   "removed_g_585": 0.10153,
+   "outline": [
+    [
+     0.75,
+     1.5
+    ],
+    [
+     1,
+     1.067
+    ],
+    [
+     1.25,
+     1.5
+    ]
+   ]
+  },
+  {
+   "id": "P1",
+   "W": 5,
+   "H": 1.5,
+   "form": "u-groove",
+   "g": {
+    "pos": 2.6,
+    "width": 1.2,
+    "depth": 0.6
+   },
+   "maxDev": 0,
+   "meanDev": 0,
+   "area_mm2": 0.57745,
+   "removed_g_585": 0.53603
+  },
+  {
+   "id": "P1",
+   "W": 5,
+   "H": 1.5,
+   "form": "square-groove",
+   "g": {
+    "pos": 4,
+    "width": 0.5,
+    "depth": 0.3
+   },
+   "maxDev": 0,
+   "meanDev": 0,
+   "area_mm2": 0.16,
+   "removed_g_585": 0.15008,
+   "outline": [
+    [
+     3.65,
+     1.5
+    ],
+    [
+     3.75,
+     1.4
+    ],
+    [
+     3.75,
+     1.2
+    ],
+    [
+     4.25,
+     1.2
+    ],
+    [
+     4.25,
+     1.4
+    ],
+    [
+     4.35,
+     1.5
+    ]
+   ]
+  },
+  {
+   "id": "P1",
+   "W": 8,
+   "H": 2,
+   "form": "convex-u-groove",
+   "g": {
+    "pos": 1.5,
+    "width": 1.5,
+    "depth": 0.1
+   },
+   "maxDev": 0.0001,
+   "meanDev": 0,
+   "area_mm2": 0.04965,
+   "removed_g_585": 0.04911
+  },
+  {
+   "id": "P1",
+   "W": 8,
+   "H": 2,
+   "form": "u-groove",
+   "g": {
+    "pos": 3.3,
+    "width": 1,
+    "depth": 0.27
+   },
+   "maxDev": 0,
+   "meanDev": 0,
+   "area_mm2": 0.2001,
+   "removed_g_585": 0.19653
+  },
+  {
+   "id": "P1",
+   "W": 8,
+   "H": 2,
+   "form": "u-groove",
+   "g": {
+    "pos": 4.6,
+    "width": 0.35,
+    "depth": 0.03
+   },
+   "maxDev": 0,
+   "meanDev": 0,
+   "area_mm2": 0.01054,
+   "removed_g_585": 0.01044
+  },
+  {
+   "id": "P1",
+   "W": 8,
+   "H": 2,
+   "form": "perlage",
+   "g": {
+    "pos": 6.5,
+    "width": 1.2
+   },
+   "maxDev": 0,
+   "meanDev": 0,
+   "area_mm2": 0.1225,
+   "removed_g_585": 0.12098,
+   "outline": [
+    [
+     5.85,
+     2
+    ],
+    [
+     5.9,
+     1.95
+    ],
+    [
+     5.9,
+     1.9
+    ],
+    [
+     7.1,
+     1.9
+    ],
+    [
+     7.1,
+     1.95
+    ],
+    [
+     7.15,
+     2
+    ]
+   ]
+  },
+  {
+   "id": "P16",
+   "W": 6,
+   "H": 2,
+   "form": "v-groove-90",
+   "g": {
+    "pos": 1.5,
+    "width": 0.5
+   },
+   "maxDev": 0.0005,
+   "meanDev": 0.0003,
+   "area_mm2": 0.06358,
+   "removed_g_585": 0.062,
+   "outline": [
+    [
+     1.25,
+     1.8452
+    ],
+    [
+     1.5,
+     1.6332
+    ],
+    [
+     1.75,
+     1.9213
+    ]
+   ]
+  },
+  {
+   "id": "P16",
+   "W": 6,
+   "H": 2,
+   "form": "u-groove",
+   "g": {
+    "pos": 3,
+    "width": 0.8,
+    "depth": 0.15
+   },
+   "maxDev": 0.0001,
+   "meanDev": 0.0001,
+   "area_mm2": 0.09449,
+   "removed_g_585": 0.09316
+  },
+  {
+   "id": "P16",
+   "W": 6,
+   "H": 2,
+   "form": "square-groove",
+   "g": {
+    "pos": 4.4,
+    "width": 0.3,
+    "depth": 0.5
+   },
+   "maxDev": 0.0004,
+   "meanDev": 0.0002,
+   "area_mm2": 0.17172,
+   "removed_g_585": 0.16521,
+   "outline": [
+    [
+     4.15,
+     1.9334
+    ],
+    [
+     4.25,
+     1.8334
+    ],
+    [
+     4.25,
+     1.3625
+    ],
+    [
+     4.55,
+     1.3625
+    ],
+    [
+     4.55,
+     1.7625
+    ],
+    [
+     4.65,
+     1.8625
+    ]
+   ]
+  },
+  {
+   "id": "P16",
+   "W": 6,
+   "H": 2,
+   "form": "convex-u-groove",
+   "g": {
+    "pos": 1.3,
+    "width": 1.5,
+    "depth": 0.1
+   },
+   "maxDev": 0.001,
+   "meanDev": 0.0003,
+   "area_mm2": 0.03595,
+   "removed_g_585": 0.0351
+  },
+  {
+   "id": "P16",
+   "W": 5,
+   "H": 1.8,
+   "form": "square-groove",
+   "g": {
+    "pos": 3.9,
+    "width": 0.3,
+    "depth": 0.3
+   },
+   "maxDev": 0,
+   "meanDev": 0,
+   "area_mm2": 0.1169,
+   "removed_g_585": 0.11098,
+   "outline": [
+    [
+     3.65,
+     1.7049
+    ],
+    [
+     3.75,
+     1.6049
+    ],
+    [
+     3.75,
+     1.3028
+    ],
+    [
+     4.05,
+     1.3028
+    ],
+    [
+     4.05,
+     1.5028
+    ],
+    [
+     4.15,
+     1.6028
+    ]
+   ]
+  },
+  {
+   "id": "P16",
+   "W": 5,
+   "H": 1.8,
+   "form": "v-groove-90",
+   "g": {
+    "pos": 2.5,
+    "width": 0.5
+   },
+   "maxDev": 0,
+   "meanDev": 0,
+   "area_mm2": 0.06399,
+   "removed_g_585": 0.06193,
+   "outline": [
+    [
+     2.25,
+     1.7955
+    ],
+    [
+     2.5,
+     1.5455
+    ],
+    [
+     2.75,
+     1.7955
+    ]
+   ]
+  },
+  {
+   "id": "P16",
+   "W": 5,
+   "H": 1.8,
+   "form": "u-groove",
+   "g": {
+    "pos": 1.2,
+    "width": 1,
+    "depth": 0.27
+   },
+   "maxDev": 0.0037,
+   "meanDev": 0.0014,
+   "area_mm2": 0.21206,
+   "removed_g_585": 0.20241
+  },
+  {
+   "id": "P11",
+   "W": 5,
+   "H": 1.8,
+   "form": "v-groove-60",
+   "g": {
+    "pos": 3.8,
+    "width": 0.5
+   },
+   "maxDev": 0.0001,
+   "meanDev": 0,
+   "area_mm2": 0.11089,
+   "removed_g_585": 0.10497,
+   "outline": [
+    [
+     3.55,
+     1.6761
+    ],
+    [
+     3.8,
+     1.1677
+    ],
+    [
+     4.05,
+     1.5254
+    ]
+   ]
+  },
+  {
+   "id": "P11",
+   "W": 5,
+   "H": 1.8,
+   "form": "square-groove",
+   "g": {
+    "pos": 1.3,
+    "width": 0.5,
+    "depth": 0.3
+   },
+   "maxDev": 0.0001,
+   "meanDev": 0,
+   "area_mm2": 0.21555,
+   "removed_g_585": 0.20366,
+   "outline": [
+    [
+     0.95,
+     1.5254
+    ],
+    [
+     1.05,
+     1.4254
+    ],
+    [
+     1.05,
+     1.2254
+    ],
+    [
+     1.55,
+     1.2254
+    ],
+    [
+     1.55,
+     1.6192
+    ],
+    [
+     1.65,
+     1.7192
+    ]
+   ]
+  }
+ ],
+ "weights": [
+  {
+   "id": "P1",
+   "W": 5,
+   "H": 1.5,
+   "cuts": [],
+   "alloys": [
+    "yellow/585"
+   ],
+   "model": [
+    6.56096
+   ],
+   "measured": [
+    6.560941993004
+   ],
+   "maxRelErr": 0.00000216
+  },
+  {
+   "id": "P1",
+   "W": 5,
+   "H": 1.5,
+   "cuts": [],
+   "alloys": [
+    "yellow/333"
+   ],
+   "model": [
+    5.37702
+   ],
+   "measured": [
+    5.377012610808
+   ],
+   "maxRelErr": 0.00000216
+  },
+  {
+   "id": "P1",
+   "W": 5,
+   "H": 1.5,
+   "cuts": [],
+   "alloys": [
+    "yellow/375"
+   ],
+   "model": [
+    5.52502
+   ],
+   "measured": [
+    5.525003783582
+   ],
+   "maxRelErr": 0.00000216
+  },
+  {
+   "id": "P1",
+   "W": 5,
+   "H": 1.5,
+   "cuts": [],
+   "alloys": [
+    "yellow/750"
+   ],
+   "model": [
+    7.64623
+   ],
+   "measured": [
+    7.64621059335
+   ],
+   "maxRelErr": 0.00000216
+  },
+  {
+   "id": "P1",
+   "W": 5,
+   "H": 1.5,
+   "cuts": [],
+   "alloys": [
+    "manganese/585"
+   ],
+   "model": [
+    6.01832
+   ],
+   "measured": [
+    6.018307692831
+   ],
+   "maxRelErr": 0.00000216
+  },
+  {
+   "id": "P1",
+   "W": 5,
+   "H": 1.5,
+   "cuts": [],
+   "alloys": [
+    "white-pd/585"
+   ],
+   "model": [
+    7.30091
+   ],
+   "measured": [
+    7.300897856876
+   ],
+   "maxRelErr": 0.00000216
+  },
+  {
+   "id": "P1",
+   "W": 5,
+   "H": 1.5,
+   "cuts": [
+    2.5
+   ],
+   "alloys": [
+    "yellow/585",
+    "white/585"
+   ],
+   "model": [
+    3.28048,
+    3.28048
+   ],
+   "measured": [
+    3.280470996502,
+    3.280470996502
+   ],
+   "maxRelErr": 0.00000216
+  },
+  {
+   "id": "P1",
+   "W": 5,
+   "H": 1.5,
+   "cuts": [
+    1.666666666667
+   ],
+   "alloys": [
+    "yellow/585",
+    "white/585"
+   ],
+   "model": [
+    2.17138,
+    4.38955
+   ],
+   "measured": [
+    2.17138,
+    4.38956
+   ],
+   "maxRelErr": 0.00000213
+  },
+  {
+   "id": "P1",
+   "W": 5,
+   "H": 1.5,
+   "cuts": [
+    3,
+    4
+   ],
+   "alloys": [
+    "yellow/585",
+    "white/585",
+    "yellow/585"
+   ],
+   "model": [
+    3.94593,
+    1.33091,
+    1.28411
+   ],
+   "measured": [
+    3.94593,
+    1.33091,
+    1.2841
+   ],
+   "maxRelErr": 0.00000768
+  },
+  {
+   "id": "P1",
+   "W": 5,
+   "H": 1.5,
+   "cuts": [
+    2.5
+   ],
+   "alloys": [
+    "yellow/585",
+    "white-pd/585"
+   ],
+   "model": [
+    3.28048,
+    3.65046
+   ],
+   "measured": [
+    3.28047,
+    3.65045
+   ],
+   "maxRelErr": 0.00000247
+  },
+  {
+   "id": "P1",
+   "W": 6,
+   "H": 1.5,
+   "cuts": [
+    1.5,
+    4.5
+   ],
+   "alloys": [
+    "yellow/585",
+    "white-pd/585",
+    "red/585"
+   ],
+   "model": [
+    1.94957,
+    4.44305,
+    1.94957
+   ],
+   "measured": [
+    1.949558836343,
+    4.443045106095,
+    1.949558836343
+   ],
+   "maxRelErr": 0.00000364
+  },
+  {
+   "id": "P18",
+   "W": 6,
+   "H": 1.5,
+   "cuts": [],
+   "alloys": [
+    "white/750"
+   ],
+   "model": [
+    7.0494
+   ],
+   "measured": [
+    7.122361047049
+   ],
+   "maxRelErr": 0.0102
+  },
+  {
+   "id": "P4",
+   "W": 3,
+   "H": 2,
+   "cuts": [],
+   "alloys": [
+    "white/750"
+   ],
+   "model": [
+    4.9562
+   ],
+   "measured": [
+    5.052521284931
+   ],
+   "maxRelErr": 0.0191
+  },
+  {
+   "id": "P16",
+   "W": 6,
+   "H": 2,
+   "cuts": [],
+   "alloys": [
+    "yellow/585"
+   ],
+   "model": [
+    9.31772
+   ],
+   "measured": [
+    9.320636923004
+   ],
+   "maxRelErr": 0.000313
+  },
+  {
+   "id": "P1",
+   "W": 8,
+   "H": 1.5,
+   "cuts": [],
+   "alloys": [
+    "yellow/585"
+   ],
+   "model": [
+    10.55369
+   ],
+   "measured": [
+    10.55368
+   ],
+   "maxRelErr": 0.0000012
+  }
+ ],
+ "prices": [
+  {
+   "bands": [
+    "yellow/585/6.560941993004"
+   ],
+   "cls": "simple",
+   "surfaces": [
+    "polished"
+   ],
+   "rh": false,
+   "model": 5988,
+   "ek": 2434.109,
+   "measured": 5988,
+   "diff": 0
+  },
+  {
+   "bands": [
+    "yellow/333/5.377012610808"
+   ],
+   "cls": "simple",
+   "surfaces": [
+    "polished"
+   ],
+   "rh": false,
+   "model": 3135,
+   "ek": 1274.352,
+   "measured": 3135,
+   "diff": 0
+  },
+  {
+   "bands": [
+    "yellow/750/7.64621059335"
+   ],
+   "cls": "simple",
+   "surfaces": [
+    "polished"
+   ],
+   "rh": false,
+   "model": 8634,
+   "ek": 3509.611,
+   "measured": 8634,
+   "diff": 0
+  },
+  {
+   "bands": [
+    "white/585/6.560941993004"
+   ],
+   "cls": "simple",
+   "surfaces": [
+    "polished"
+   ],
+   "rh": true,
+   "model": 6111,
+   "ek": 2484.109,
+   "measured": 6111,
+   "diff": 0
+  },
+  {
+   "bands": [
+    "manganese/585/6.018307692831"
+   ],
+   "cls": "simple",
+   "surfaces": [
+    "polished"
+   ],
+   "rh": false,
+   "model": 5616,
+   "ek": 2282.792,
+   "measured": 5616,
+   "diff": 0
+  },
+  {
+   "bands": [
+    "white-pd/585/7.300897856876"
+   ],
+   "cls": "simple",
+   "surfaces": [
+    "polished"
+   ],
+   "rh": false,
+   "model": 7561,
+   "ek": 3073.678,
+   "measured": 7561,
+   "diff": 0
+  },
+  {
+   "bands": [
+    "yellow/585/6.560941993004"
+   ],
+   "cls": "simple",
+   "surfaces": [
+    "hammered"
+   ],
+   "rh": false,
+   "model": 6185,
+   "ek": 2514.109,
+   "measured": 6185,
+   "diff": 0
+  },
+  {
+   "bands": [
+    "yellow/585/6.560941993004"
+   ],
+   "cls": "simple",
+   "surfaces": [
+    "sand-matt"
+   ],
+   "rh": false,
+   "model": 6025,
+   "ek": 2449.109,
+   "measured": 6025,
+   "diff": 0
+  },
+  {
+   "bands": [
+    "yellow/585/6.560941993004"
+   ],
+   "cls": "simple",
+   "surfaces": [
+    "bark-style-2"
+   ],
+   "rh": false,
+   "model": 6074,
+   "ek": 2469.109,
+   "measured": 6074,
+   "diff": 0
+  },
+  {
+   "bands": [
+    "yellow/585/6.560941993004"
+   ],
+   "cls": "simple",
+   "surfaces": [
+    "hammered-matt"
+   ],
+   "rh": false,
+   "model": 6172,
+   "ek": 2509.109,
+   "measured": 6172,
+   "diff": 0
+  },
+  {
+   "bands": [
+    "yellow/585/6.560941993004"
+   ],
+   "cls": "special",
+   "surfaces": [
+    "polished"
+   ],
+   "rh": false,
+   "model": 6198,
+   "ek": 2519.402,
+   "measured": 6198,
+   "diff": 0
+  },
+  {
+   "bands": [
+    "yellow/750/7.64621059335"
+   ],
+   "cls": "special",
+   "surfaces": [
+    "polished"
+   ],
+   "rh": false,
+   "model": 8859,
+   "ek": 3601.365,
+   "measured": 8859,
+   "diff": 0
+  },
+  {
+   "bands": [
+    "yellow/333/5.377012610808"
+   ],
+   "cls": "special",
+   "surfaces": [
+    "polished"
+   ],
+   "rh": false,
+   "model": 3347,
+   "ek": 1360.384,
+   "measured": 3347,
+   "diff": 0
+  },
+  {
+   "bands": [
+    "yellow/585/3.280470996502",
+    "white/585/3.280470996502"
+   ],
+   "cls": "multi",
+   "surfaces": [
+    "polished",
+    "polished"
+   ],
+   "rh": false,
+   "model": 6424,
+   "ek": 2611.255,
+   "measured": 6424,
+   "diff": 0
+  },
+  {
+   "bands": [
+    "yellow/585/3.280470996502",
+    "white/585/3.280470996502"
+   ],
+   "cls": "wavy",
+   "surfaces": [
+    "polished",
+    "polished"
+   ],
+   "rh": false,
+   "model": 6892,
+   "ek": 2801.522,
+   "measured": 6892,
+   "diff": 0
+  },
+  {
+   "bands": [
+    "yellow/750/3.823105296675",
+    "white/750/3.823105296675"
+   ],
+   "cls": "multi",
+   "surfaces": [
+    "polished",
+    "polished"
+   ],
+   "rh": false,
+   "model": 9085,
+   "ek": 3693.12,
+   "measured": 9085,
+   "diff": 0
+  },
+  {
+   "bands": [
+    "yellow/585/3.28047",
+    "white-pd/585/3.65045"
+   ],
+   "cls": "multi",
+   "surfaces": [
+    "polished",
+    "polished"
+   ],
+   "rh": false,
+   "model": 7235,
+   "ek": 2941.029,
+   "measured": 7235,
+   "diff": 0
+  },
+  {
+   "bands": [
+    "yellow/585/3.280470996502",
+    "white/585/3.280470996502"
+   ],
+   "cls": "multi",
+   "surfaces": [
+    "hammered",
+    "polished"
+   ],
+   "rh": true,
+   "model": 6743,
+   "ek": 2741.255,
+   "measured": 6743,
+   "diff": 0
+  },
+  {
+   "bands": [
+    "yellow/585/1.949558836343",
+    "white-pd/585/4.443045106095",
+    "red/585/1.949558836343"
+   ],
+   "cls": "multi",
+   "surfaces": [
+    "polished",
+    "polished",
+    "polished"
+   ],
+   "rh": false,
+   "model": 8714,
+   "ek": 3542.333,
+   "measured": 8714,
+   "diff": 0
+  },
+  {
+   "bands": [
+    "yellow/585/10.55368"
+   ],
+   "cls": "simple",
+   "surfaces": [
+    "hammered"
+   ],
+   "rh": false,
+   "model": 9829,
+   "ek": 3995.415,
+   "measured": 9829,
+   "diff": 0
+  }
+ ]
+}
