@@ -49,7 +49,11 @@ updated_at    DATETIME
 > u `Seeder.php`. Šema (kolone gore) je nepromenjena, menjano je samo kako
 > se admin UI odnosi prema njima.
 
-Globalna podešavanja (spot cena metala po finoći, email primaoci, HDRI URL, CDN baza) → jedan `wp_option` `zs_settings` (JSON).
+Globalna podešavanja → jedan `wp_option` `zs_settings` (JSON): valuta, email primaoci, HDRI URL, CDN baza, i **cene** (decisions #77):
+- `spot_prices` — RSD/g po ključu (`au_14k`, `au_18k`, `au_22k`, `au_24k`, `pt_950`, `pd_950`). Ime „spot“ je istorijsko: vrednosti **unosi admin ručno**, nema online cene.
+- `finoce` — finoće u konfiguratoru: `{id:'585', label, sub:'14K', price_key:'au_14k', enabled, deepen, density:{zuto,belo,crveno}}`. Uređuje se u adminu (Podešavanja → „Cena zlata po gramu“), u payload ide `pricing.finoce` (samo aktivne).
+
+`zs_data_version` (wp_option) — verzija jednokratne nadogradnje postojećih redova (`Seeder::upgrade_data`, trenutno 2).
 
 MODEL i (ako ih bude) jedinstvene GLAVE mogu biti CPT `zs_ring_model` / `zs_head` ako klijentu treba bogatiji editor (slike, opis) — odluka u `decisions.md`. Ostatak ostaje u tabeli.
 
@@ -111,23 +115,25 @@ MODEL i (ako ih bude) jedinstvene GLAVE mogu biti CPT `zs_ring_model` / `zs_head
 > **Ažurirano 2026-09-14** (decisions #60): grupa "Šiljati profili" (Nožasti,
 > Šiljati oval) izbačena iz ponude — `enabled=0`, redovi ostaju u bazi.
 
-## Cena — formula (skica)
+## Cena — formula (implementirano 2026-10-01, decisions #77)
+
+Po prstenu, u `configurator.js` (`ringVolume` → `ringWeight` → `_ringPrice`):
 
 ```
-masa_g   = zapremina_shank(width, thickness, size) * density(material) * purity(material)
-           + masa_glave(model, material)
-cena =  model.basePrice
-      + masa_g * material.pricePerGram
-      + finish.amount
-      + Σ diamond.amount * count
-      + engraving.amount
+volume_mm3 = zapremina mreže trake koju scena crta (scene.ringVolume:
+             profil (Wama pravila) × širina × debljina × veličina, žlebovi usečeni)
+mass_g     = volume_mm3 / 1000 × density(metal, finoća)         ← CMS (zs_settings.finoce)
+raw        = mass_g × pricePerGram(finoća)                       ← CMS (zs_settings.spot_prices), bez množenja čistoćom
+           + finish.amount + diamond.amount × kom + engraving.amount
+cenaPrstena = Math.ceil(raw)                                     ← uvek naviše, ceo RSD
+cenaPara    = ceil(rawA) + ceil(rawB)                            ← NE ceil(rawA + rawB)
 ```
 
-- Zapremina shank-a: proceduralna geometrija je već u three.js → izračunaj mesh volumen (signed tetrahedra), pošalji nazad ili duplo računaj i na serveru.
-- `masa_glave` po materijalu: izvezi iz CAD-a kao grame, čuvaj u `params_json` glave.
-- Prikaz: **live, jedno polje** u konfiguratoru.
-- Autoritativno: `POST /inquiry` ponovo izračuna na serveru (ne veruj klijentu).
-- Spot cena metala: `zs_settings` polje + ručni "osveži" ili cron na besplatni gold-price API; kasnije iz ERPNext-a.
+- Masa se nikad ne zaokružuje pre cene; prikaz mase 2 decimale (samo prikaz).
+- Prikaz: `Intl.NumberFormat('sr-RS')`, „Ukupno“ + „Cena prvog prstena“ (Njena) / „Cena drugog prstena“ (Njegova).
+- Cena 0 ili gustina 0 → „Cena na upit“.
+- Poznata pojednostavljenja: Dve/Tri boje koriste gustinu glavnog metala; ležište kamena (shader rupa) nije oduzeto od zapremine (< 1 %); `model.basePrice` se ne koristi (svi su 0).
+- **Još nije urađeno:** autoritativni obračun na serveru pri upitu (Faza 5) — mora da ponovi istu zapreminu (presek po Wama pravilima × Pappus ili ista mreža).
 
 ## Keširanje / verzionisanje
 

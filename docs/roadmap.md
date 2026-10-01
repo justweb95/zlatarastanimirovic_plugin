@@ -35,7 +35,7 @@ Faze su inkrementalne; svaka se može demonstrirati. Acceptance = merljiv kriter
 - [x] 4 profila (`flat`/`court`/`d-comfort`/`round`) → funkcije koje vraćaju presek
 - [x] Materijali: 3 zlata × 3 finiša (boja + roughness iz V-Ray vrednosti), cross-fade lerp
 - [x] Flush kamen — **fasetiran round brilliant** (`makeBrilliantGeometry`, 12 strana, per-faseta normale = sjaj), flush na SPOLJNU površinu, `scale` ograničen na debljinu trake da kulet ne probije unutrašnji zid; pozicija po širini (Levo/Centar/Desno/Slobodno) (2026-09-09, decisions #46/#47)
-- [x] DPR cap (≤2), `ResizeObserver`, fallback na render sliku ako nema `ZSCScene`
+- [x] DPR 2–3 (bilo ≤2; Faza 2 LUT), `ResizeObserver`, fallback na render sliku ako nema `ZSCScene`
 - [x] Rail/toolbar: auto-rotacija, reset pogleda, zoom ±, screenshot, pun ekran
 - [x] Šav na `LatheGeometry` — `weldLatheSeam()` (2026-09-04)
 - [x] Prikaz oba prstena istovremeno + **♂/♀ prekidač u toolbaru + „vidi samo jednu"** (`setSolo`, isti kadar) (2026-09-08, decisions #44)
@@ -48,6 +48,8 @@ Faze su inkrementalne; svaka se može demonstrirati. Acceptance = merljiv kriter
 - [x] **Dijamant v2** (2026-09-24, decisions #73): 57-faseta brilijant, lom svetla + disperzija u shaderu (radi i na SwiftShader-u), zaseban oštar studio za kamen, pravo utisnuto ležište, prava veličina. Odobreno naspram WamaGold-a.
 - [x] **Admin bez reloada** (Opcije tab inline AJAX) + **ceo admin rebrendiran** (Belleza/Lato, zlatna/mastilo, logo header) (2026-09-11, decisions #56/#57)
 - [x] **Wheel-zoom isključen** na sceni; klik u navigaciji ne skroluje stranicu (2026-09-11, decisions #58)
+- [x] **Izgled metala = LUT** (2026-10-01, decisions #74): siva cube mapa `assets/env/studio-v3` → gradijent po metalu, bez PBR/svetala/tone mappinga; Mat/Grebano → `studio-v3-blur`; Dve/Tri boje = LUT po zoni; dev test `?calib=1`. Paket: `faza2/` (Downloads, nije u repou).
+- [x] **Dijamant v2 spojen sa LUT metalom** (rupe ležišta u LUT shaderu, zid ležišta = LUT); centar kamena podignut na pola puta do vrha prstena (`stoneParams.lift` 0,5) (decisions #75)
 - [ ] Normal mape za "Grebano" (anizotropno) i "Čekićano"; brušeni pravac
 - [ ] `dispose()` na unmount — delimično (gravura se čisti; band/mat dispose još nije zakačen za unmount); WebGL2 fallback poruka
 
@@ -58,7 +60,14 @@ Faze su inkrementalne; svaka se može demonstrirati. Acceptance = merljiv kriter
 
 **Acceptance:** klizači menjaju geometriju live bez frame drop-a; promena metala instant; 60 fps na test Androidu; render staje kad nema interakcije.
 
-## Faza 3 — 3D sadržaj
+## Faza 3 (paket `docs/faza3/`) — geometrija profila + cena — URAĐENO 2026-10-01, v0.7.0
+- [x] Svih 12 profila po **Wama Gold pravilima** (`wamaSpec`/`wamaSectionLoop`, `params.wama` P1–P24), odstupanje ≤ 0,0105 mm od reference (W 3–8, H 0,8–2,5); debljina = unutrašnji vrh → spoljašnji vrh; HeightAdaptation (decisions #76)
+- [x] Kamera kao Wama: FOV 14°, isti kadar (≈ 145 mm) (decisions #76)
+- [x] Debljina 0,8–2,5 / 0,1; podrazumevano njegov 5 × 1,2 vel. 62, njena 5 × 1,0 vel. 54
+- [x] **Cena**: RSD/g po finoći iz WP admina (Podešavanja), masa iz zapremine 3D mreže (žlebovi uključeni), `Math.ceil` po prstenu, par = zbir; „Ukupno / Cena prvog / drugog prstena“ (decisions #77)
+- [x] Jednokratna nadogradnja postojećih redova na live (`Seeder::upgrade_data`, `zs_data_version` 2)
+
+## Faza 3b — 3D sadržaj
 - [ ] Odluka A (tip prstenja) → pipeline za glave: proceduralni setovi i/ili GLB komponente + socket
 - [x] Diamond materijal — urađeno drugačije: ray-trace shader (decisions #73)
 - [ ] InstancedMesh za pavé (> 8 kamenova)

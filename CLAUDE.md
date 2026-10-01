@@ -3,6 +3,11 @@
 3D konfigurator prstenja za zlataru, isporučen kao **jedan samostalan WordPress plugin**.
 Real-time WebGL (three.js). Uzor kvaliteta: ijewel3d.com/products/ring-configurator.
 
+> **Počni od `docs/STATUS.md`** — trenutna grana, šta je urađeno poslednje,
+> šta je otvoreno i kako testiramo. Danas (2026-10-01): metal = LUT (#74),
+> profili po Wama pravilima (#76), cena iz admina (#77), v0.7.0 na grani
+> `faza2-lut-dijamant`.
+
 ## Golden rules (ne kršiti bez eksplicitne odluke u `docs/decisions.md`)
 
 1. **Lagan plugin.** Ovo je glavni zahtev klijenta.
@@ -52,6 +57,7 @@ Plugin verzija u `zs-configurator.php` header-u = cache-bust za enqueue.
 - Frontend (bez `app/` build-a još): vanilla `assets/js/configurator.js` +
   `assets/js/scene.module.js`. Posle izmena: `node -c` na oba, pa vizuelna
   provera u browseru.
+- `playwright-core` NIJE u projektu — instalirati u temp folder (`npm i playwright-core@1`), detalji u `docs/STATUS.md`. Dev test boje metala: `?calib=1`.
 - **Headless browser radi u ovom okruženju** (decisions.md #48): Playwright
   Chromium je preinstaliran (`~/.cache/ms-playwright/`), renderuje WebGL
   (SwiftShader — three.js transmisija/refrakcija se NE vide, ali dijamant v2
@@ -69,7 +75,9 @@ Plugin verzija u `zs-configurator.php` header-u = cache-bust za enqueue.
 - `docs/design-system.md` — brend-kit (re-skin banner: zlatna/mastilo, Belleza + Lato; Figma paleta / Fraunces+Inter ispod = istorija), ličnost brenda, komponente, spacing/grid; `docs/reference/` screenshotovi iz Figme
 - `docs/data-model.md` — 7 grupa opcija, polja, stock, REST payload, cena
 - `docs/3d.md` — rendering, proceduralni shank, glave, materijali, gravura, asset budžet, premium checklist
+- `docs/STATUS.md` — **gde smo stali** (grane, live, otvoreno, kako testirati)
 - `docs/decisions.md` — sve odluke + razlozi + otvorena pitanja
+- `docs/faza3/` — Wama referenca za geometriju profila (izvor istine za profile)
 - `docs/roadmap.md` — faze isporuke sa acceptance kriterijumima
 
 ## Otvorena pitanja koja blokiraju (detalji u decisions.md)
